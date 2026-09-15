@@ -1,0 +1,28 @@
+{
+  "title": "DOEMS",
+  "config": {
+    "step": {
+      "user": {
+        "title": "DOEMS instellen",
+        "description": "Maak de schone DOEMS-configuratie aan. In stap 0 zijn geen installatie-specifieke gegevens nodig."
+      }
+    },
+    "abort": {
+      "already_configured": "DOEMS is al geconfigureerd."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "DOEMS-opties",
+        "description": "Pas alleen optionele weergave-instellingen aan. Functionele invoer wordt per onderdeel toegevoegd wanneer dat onderdeel wordt gebouwd.",
+        "data": {
+          "instance_name": "Weergavenaam"
+        },
+        "data_description": {
+          "instance_name": "Optionele naam voor het DOEMS-apparaat in Home Assistant."
+        }
+      }
+    }
+  }
+}
