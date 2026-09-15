@@ -1,0 +1,28 @@
+{
+  "title": "DOEMS",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up DOEMS",
+        "description": "Create the clean DOEMS configuration. Step 0 does not require installation-specific data."
+      }
+    },
+    "abort": {
+      "already_configured": "DOEMS is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "DOEMS options",
+        "description": "Change optional presentation settings only. Functional inputs are added per component when that component is built.",
+        "data": {
+          "instance_name": "Display name"
+        },
+        "data_description": {
+          "instance_name": "Optional name for the DOEMS device in Home Assistant."
+        }
+      }
+    }
+  }
+}
