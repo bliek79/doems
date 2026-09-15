@@ -1,28 +1,5 @@
 {
   "title": "DOEMS",
-  "config": {
-    "step": {
-      "user": {
-        "title": "DOEMS instellen",
-        "description": "Maak de schone DOEMS-configuratie aan. In stap 0 zijn geen installatie-specifieke gegevens nodig."
-      }
-    },
-    "abort": {
-      "already_configured": "DOEMS is al geconfigureerd."
-    }
-  },
-  "options": {
-    "step": {
-      "init": {
-        "title": "DOEMS-opties",
-        "description": "Pas alleen optionele weergave-instellingen aan. Functionele invoer wordt per onderdeel toegevoegd wanneer dat onderdeel wordt gebouwd.",
-        "data": {
-          "instance_name": "Weergavenaam"
-        },
-        "data_description": {
-          "instance_name": "Optionele naam voor het DOEMS-apparaat in Home Assistant."
-        }
-      }
-    }
-  }
+  "config": {"step": {"user": {"title": "DOEMS instellen", "description": "Maak de schone DOEMS-configuratie aan. Invoer voor onderdelen wordt later via Opties ingesteld."}}, "abort": {"already_configured": "DOEMS is al geconfigureerd."}},
+  "options": {"step": {"init": {"title": "DOEMS-opties", "description": "Activeer alleen de onderdelen die je nu wilt configureren.", "data": {"instance_name": "Weergavenaam", "energy_forecast_enabled": "Energy Forecast activeren"}}, "energy_forecast": {"title": "Energy Forecast", "description": "Kies de Home Power-bronroute en het eerste leerprofiel.", "data": {"energy_source_mode": "Home Power-bronmodus", "energy_start_profile": "Startprofiel voor leren"}}, "energy_direct": {"title": "Direct Home Power", "description": "Kies één sensor die het actuele werkelijke woningverbruik weergeeft.", "data": {"home_power_entity": "Home Power-sensor"}}, "energy_balance": {"title": "Power Balance", "description": "Bouw Home Power op uit net, solar en optioneel batterijvermogen.", "data": {"grid_net_power_entity": "Bidirectionele netvermogenssensor", "grid_sign_convention": "Tekenconventie van netvermogen", "solar_power_entity": "Totaal actueel solarvermogen", "battery_present": "Batterij maakt deel uit van de lokale vermogensbalans"}}, "energy_battery": {"title": "Batterijvermogen", "description": "Kies positieve laad- en ontlaadvermogenssensoren.", "data": {"battery_charge_power_entity": "Batterij laadvermogen", "battery_discharge_power_entity": "Batterij ontlaadvermogen"}}}, "error": {"source_required": "Selecteer een bronsensor.", "doems_source_not_allowed": "Een DOEMS-uitvoerentiteit mag niet als eigen invoer worden gebruikt.", "source_not_found": "De gekozen entiteit bestaat niet.", "unsupported_unit": "De gekozen sensor moet W of kW gebruiken.", "negative_value_not_allowed": "Deze bron moet een positieve vermogensgrootheid zijn."}}
 }

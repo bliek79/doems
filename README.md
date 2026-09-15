@@ -1,60 +1,60 @@
 # DOEMS
 
-DOEMS is a clean Home Assistant Energy Management System integration built as a new technical identity.
+DOEMS is a clean Home Assistant Energy Management System integration built component by component under the technical identity `doems`.
 
 ## Current stage
 
-`0.1.0-alpha.1` is **Step 0 - Clean Foundation**.
+`0.1.0-alpha.2` is **P2.1 - Energy Forecast**.
 
-This release intentionally contains only:
+This release adds the first functional component on top of the clean Step 0 foundation:
 
-- the new Home Assistant domain `doems`;
-- a clean config entry and optional display-name setting;
-- a foundation status sensor;
-- no forecast logic yet;
-- no EMS decision logic yet;
+- native 15-minute Energy Forecast;
+- 72-hour horizon / 288 forecast slots;
+- clean `doems.*` component-owned history storage;
+- Normal and Away learning profiles;
+- two generic Home Power input routes;
+- no Solar Forecast yet;
+- no Prices yet;
+- no EMS decision/execution chain yet;
 - no physical battery control.
 
-Step 0 requires **no installation-specific input**. Each future component is reviewed separately before it is added, so third-party users are only asked for data that component actually needs.
+## Installation and upgrade
 
-## Installation
-
-1. Install the repository as a custom integration (manual installation or as a custom HACS repository during alpha development).
+1. Install `0.1.0-alpha.2` through HACS or manually.
 2. Restart Home Assistant.
-3. Open **Settings > Devices & services > Add integration**.
-4. Search for **DOEMS**.
-5. Confirm setup. No functional fields are required in Step 0.
+3. Add **DOEMS** if it is a new installation. Existing Alpha1 installations keep their clean config entry.
+4. Open **Settings > Devices & services > DOEMS > Configure**.
+5. Enable **Energy Forecast** and complete only the fields required by the chosen Home Power source mode.
 
-After setup, DOEMS creates a foundation status entity. Its safety attributes must show that forecast and EMS functionality are disabled and that physical execution authority is false.
+### Direct Home Power
 
-## Identity contract
+Use this route when Home Assistant already has a reliable sensor that represents actual current home load. The selected sensor must use W or kW and should normally be non-negative.
 
-The active integration uses only the new technical identity:
+### Power Balance
 
-- package: `custom_components/doems`
-- Home Assistant domain: `doems`
-- logger namespace: `custom_components.doems.*`
-- storage namespace prefix: `doems.*`
-- device identity: `doems`
+Use this route when Home Power must be reconstructed from local power flows. Configure grid power, grid sign convention, total current solar power, and optionally positive battery charge/discharge power.
 
-Legacy implementation identities are not allowed in the active integration runtime.
+DOEMS normalizes the balance to:
 
-## Development order
+`home = solar + grid_import + battery_discharge - grid_export - battery_charge`
 
-DOEMS is rebuilt component by component. The planned order starts with:
+No location, PV geometry, electricity price, SOC, battery capacity or EMS settings are requested in this component step.
 
-1. clean foundation;
-2. Energy Forecast;
-3. Solar Forecast;
-4. Prices;
-5. supporting forecast data and validation;
-6. planner input and time contract;
-7. EMS decision and execution chain in shadow mode;
-8. parity and live shadow validation before any physical cutover.
+## Public entities
 
-## Safety
+Every public DOEMS object ID starts with `doems_`. This naming contract allows installations to exclude DOEMS entities from Home Assistant Recorder with `*.doems_*` entity globs while DOEMS keeps only the component-owned history it needs for learning.
 
-Alpha releases are development builds. Step 0 cannot send commands to a battery or other physical equipment.
+## Energy Forecast behaviour
+
+The model uses a history hierarchy of weekday+quarter, day-type+quarter, quarter-of-day and finally profile mean, with 28-day recency half-life weighting. Normal and Away history are kept separate. A profile with no own valid history does not silently borrow another profile.
+
+Changing the configured source semantics changes the source signature. Incompatible stored learning history is then reset instead of being mixed into the new source contract.
+
+## Identity and safety contract
+
+The active integration uses only the new technical identity: package `custom_components/doems`, domain `doems`, storage prefix `doems.*`, and public object-id prefix `doems_`.
+
+P2.1 is observer-only. `ems_enabled` remains false and physical execution authority remains false. No Home Assistant service calls to physical equipment are present.
 
 ## License
 
