@@ -23,7 +23,7 @@ def _load_pure_module(name: str):
 
 def test_manifest_and_clean_identity_contract() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["domain"] == "doems" and manifest["name"] == "DOEMS" and manifest["version"] == "0.1.0-alpha.4"
+    assert manifest["domain"] == "doems" and manifest["name"] == "DOEMS" and manifest["version"] == "0.1.0-alpha.5"
     for path in INTEGRATION.rglob("*"):
         if not path.is_file() or path.suffix not in {".py", ".json", ".yaml", ".yml"}: continue
         text = path.read_text(encoding="utf-8")
@@ -54,8 +54,13 @@ def test_no_physical_control_surface() -> None:
 
 def test_install_contract_is_component_scoped() -> None:
     text=(INTEGRATION / "config_flow.py").read_text(encoding="utf-8")
-    for token in ("direct_home_power","power_balance","grid_sign_convention","battery_present","energy_start_profile"): assert token in text or token in (INTEGRATION / "const.py").read_text(encoding="utf-8")
-    for forbidden in ("solar_latitude","solar_longitude","tariff_supplier","battery_capacity_kwh","physical_execution"): assert forbidden not in text
+    const=(INTEGRATION / "const.py").read_text(encoding="utf-8")
+    for token in ("direct_home_power","power_balance","grid_sign_convention","battery_present","energy_start_profile"):
+        assert token in text or token in const
+    for token in ("solar_foundation_enabled","solar_location_source","solar_inverter_groups","solar_arrays","solar_latitude","solar_longitude"):
+        assert token in text or token in const
+    for forbidden in ("tariff_supplier","battery_capacity_kwh","physical_execution"):
+        assert forbidden not in text
 
 
 def test_alpha41_equivalent_forecast_shape_and_hierarchy() -> None:
