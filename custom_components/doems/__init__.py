@@ -10,6 +10,8 @@ from homeassistant.helpers.event import async_track_state_change_event
 
 from .const import CONF_ENERGY_FORECAST_ENABLED, DOMAIN, PLATFORMS
 from .energy_coordinator import DOEMSEnergyCoordinator
+from .solar_forecast import SolarForecastManager
+from .solar_foundation import SolarFoundationManager
 from .solar_reference_freeze_runtime import SolarReferenceFreezeManager
 
 
@@ -26,10 +28,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
     freeze_manager = SolarReferenceFreezeManager(hass)
     await freeze_manager.async_setup()
 
+    foundation = SolarFoundationManager(hass, entry)
+    await foundation.async_setup()
+    solar_forecast = SolarForecastManager(hass, foundation)
+    await solar_forecast.async_setup()
+
     entry.runtime_data = coordinator
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "energy_forecast_enabled": coordinator is not None,
         "solar_reference_freeze": freeze_manager,
+        "solar_foundation": foundation,
+        "solar_forecast": solar_forecast,
     }
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -86,6 +95,14 @@ async def async_unload_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> bo
         await coordinator.async_shutdown()
 
     entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    solar_forecast = entry_data.get("solar_forecast")
+    if isinstance(solar_forecast, SolarForecastManager):
+        await solar_forecast.async_shutdown()
+
+    foundation = entry_data.get("solar_foundation")
+    if isinstance(foundation, SolarFoundationManager):
+        await foundation.async_shutdown()
+
     freeze_manager = entry_data.get("solar_reference_freeze")
     if isinstance(freeze_manager, SolarReferenceFreezeManager):
         await freeze_manager.async_shutdown()
