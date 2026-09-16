@@ -4,7 +4,7 @@ from __future__ import annotations
 
 DOMAIN = "doems"
 NAME = "DOEMS"
-VERSION = "0.1.0-alpha.3"
+VERSION = "0.1.0-alpha.4"
 
 CONF_INSTANCE_NAME = "instance_name"
 DEFAULT_INSTANCE_NAME = NAME
@@ -48,10 +48,12 @@ MIN_VALID_COVERAGE = 0.90
 STORAGE_VERSION = 1
 STORAGE_KEY = f"{DOMAIN}.energy_forecast"
 ENERGY_STORE_SCHEMA_VERSION = 1
+SOLAR_REFERENCE_FREEZE_STORAGE_VERSION = 1
+SOLAR_REFERENCE_FREEZE_STORAGE_KEY = f"{DOMAIN}.solar_reference_freeze"
 
-PLATFORMS = ["sensor", "select"]
+PLATFORMS = ["sensor", "select", "binary_sensor", "button"]
 DEVICE_IDENTIFIER = "main"
-FOUNDATION_PHASE = "p2_1_energy_forecast"
+FOUNDATION_PHASE = "solar_reference_freeze_gate"
 CANONICAL_HOME_POWER_ENTITY = "sensor.doems_source_home_power"
 
 PUBLIC_OBJECT_ID_PREFIX = "doems_"
