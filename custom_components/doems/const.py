@@ -4,7 +4,7 @@ from __future__ import annotations
 
 DOMAIN = "doems"
 NAME = "DOEMS"
-VERSION = "0.1.0-alpha.4"
+VERSION = "0.1.0-alpha.5"
 
 CONF_INSTANCE_NAME = "instance_name"
 DEFAULT_INSTANCE_NAME = NAME
@@ -36,6 +36,25 @@ PROFILE_MIXED = "mixed"
 PROFILE_LEARNING_OPTIONS = [PROFILE_NORMAL, PROFILE_AWAY]
 PROFILE_OPTIONS = [PROFILE_NORMAL, PROFILE_AWAY, PROFILE_UNCLASSIFIED]
 
+# Solar P3.0 Foundation install/topology contract.
+CONF_SOLAR_FOUNDATION_ENABLED = "solar_foundation_enabled"
+CONF_SOLAR_LOCATION_SOURCE = "solar_location_source"
+CONF_SOLAR_LATITUDE = "solar_latitude"
+CONF_SOLAR_LONGITUDE = "solar_longitude"
+CONF_SOLAR_INVERTER_GROUP_COUNT = "solar_inverter_group_count"
+CONF_SOLAR_ARRAY_COUNT = "solar_array_count"
+CONF_SOLAR_TOTAL_ACTUAL_POWER_ENTITY = "solar_total_actual_power_entity"
+CONF_SOLAR_INVERTER_GROUPS = "solar_inverter_groups"
+CONF_SOLAR_ARRAYS = "solar_arrays"
+SOLAR_LOCATION_HOME_ASSISTANT = "home_assistant"
+SOLAR_LOCATION_OVERRIDE = "override"
+SOLAR_PROVIDER = "open_meteo"
+SOLAR_FOUNDATION_SCHEMA_VERSION = 1
+SOLAR_FOUNDATION_STORAGE_VERSION = 1
+SOLAR_FOUNDATION_STORAGE_KEY = f"{DOMAIN}.solar_foundation"
+SOLAR_MAX_INVERTER_GROUPS = 8
+SOLAR_MAX_ARRAYS = 32
+
 QUARTER_MINUTES = 15
 QUARTER_SECONDS = QUARTER_MINUTES * 60
 QUARTERS_PER_DAY = 96
@@ -53,7 +72,7 @@ SOLAR_REFERENCE_FREEZE_STORAGE_KEY = f"{DOMAIN}.solar_reference_freeze"
 
 PLATFORMS = ["sensor", "select", "binary_sensor", "button"]
 DEVICE_IDENTIFIER = "main"
-FOUNDATION_PHASE = "solar_reference_freeze_gate"
+FOUNDATION_PHASE = "solar_p3_0_foundation"
 CANONICAL_HOME_POWER_ENTITY = "sensor.doems_source_home_power"
 
 PUBLIC_OBJECT_ID_PREFIX = "doems_"
