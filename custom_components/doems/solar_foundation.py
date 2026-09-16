@@ -24,6 +24,7 @@ class SolarFoundationManager:
             SOLAR_FOUNDATION_STORAGE_KEY,
         )
         self.snapshot: dict[str, Any] = {}
+        self.forecast_runtime_active = False
 
     async def async_setup(self) -> None:
         self.snapshot = build_solar_foundation_snapshot(
