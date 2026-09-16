@@ -1,0 +1,163 @@
+name: Alpha3 maintenance builder
+
+on:
+  push:
+    branches: [alpha3-maintenance]
+
+permissions:
+  contents: write
+
+jobs:
+  build-alpha3:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: alpha3-maintenance
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install build dependencies
+        run: python -m pip install --upgrade pip pytest pillow
+      - name: Apply Alpha3 maintenance changes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+          import json
+          import struct
+          from pathlib import Path
+          from PIL import Image, ImageDraw, ImageFont
+
+          root = Path('.')
+          integration = root / 'custom_components' / 'doems'
+
+          # Version bump only; forecast/storage contracts remain unchanged.
+          const_path = integration / 'const.py'
+          text = const_path.read_text(encoding='utf-8')
+          text = text.replace('VERSION = "0.1.0-alpha.2"', 'VERSION = "0.1.0-alpha.3"')
+          const_path.write_text(text, encoding='utf-8')
+
+          manifest_path = integration / 'manifest.json'
+          manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+          manifest['version'] = '0.1.0-alpha.3'
+          manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+
+          # Fix the observed post-restart diagnostic lag without waking the full
+          # forecast chain on every power sample: only notify entities when source
+          # availability actually changes.
+          coordinator_path = integration / 'energy_coordinator.py'
+          text = coordinator_path.read_text(encoding='utf-8')
+          old = '''        self._quarter_profile = PROFILE_UNCLASSIFIED\n        self._profile_changed_in_quarter = False\n        self._unsubs: list[Any] = []\n'''
+          new = '''        self._quarter_profile = PROFILE_UNCLASSIFIED\n        self._profile_changed_in_quarter = False\n        self._last_source_available: bool | None = None\n        self._unsubs: list[Any] = []\n'''
+          if old not in text:
+              raise SystemExit('alpha3 patch failed: coordinator init marker not found')
+          text = text.replace(old, new, 1)
+
+          old = '''        self._last_power_w = self.current_home_power_w\n        self._last_sample_time = now\n        await self._async_save()\n'''
+          new = '''        self._last_power_w = self.current_home_power_w\n        self._last_sample_time = now\n        self._last_source_available = self.source_available\n        await self._async_save()\n'''
+          if old not in text:
+              raise SystemExit('alpha3 patch failed: setup marker not found')
+          text = text.replace(old, new, 1)
+
+          old = '''    @callback\n    def _async_source_changed(self, event: Event[EventStateChangedData]) -> None:\n        """Integrate the previous Home Power until the source change."""\n        now = dt_util.utcnow()\n        self._integrate_until(now)\n        self._last_power_w = self.current_home_power_w\n        self._last_sample_time = now\n'''
+          new = '''    @callback\n    def _async_source_changed(self, event: Event[EventStateChangedData]) -> None:\n        """Integrate Home Power and refresh diagnostics on availability transitions."""\n        previous_available = self._last_source_available\n        now = dt_util.utcnow()\n        self._integrate_until(now)\n        self._last_power_w = self.current_home_power_w\n        self._last_sample_time = now\n        current_available = self.source_available\n        self._last_source_available = current_available\n        if previous_available is not None and current_available != previous_available:\n            self._notify()\n'''
+          if old not in text:
+              raise SystemExit('alpha3 patch failed: source-change marker not found')
+          text = text.replace(old, new, 1)
+          coordinator_path.write_text(text, encoding='utf-8')
+
+          # Brand assets. Home Assistant 2026.3+ loads custom integration images
+          # from custom_components/<domain>/brand/.
+          brand = integration / 'brand'
+          brand.mkdir(exist_ok=True)
+          NAVY=(10,28,48,255); CYAN=(0,204,255,255); WHITE=(245,249,252,255)
+          def font(size: int):
+              p = Path('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf')
+              return ImageFont.truetype(str(p), size) if p.exists() else ImageFont.load_default()
+          def make_icon(size: int):
+              scale=size/512
+              im=Image.new('RGBA',(size,size),(0,0,0,0)); d=ImageDraw.Draw(im)
+              s=lambda v:int(round(v*scale))
+              d.rounded_rectangle((s(40),s(40),s(472),s(472)),radius=s(104),fill=NAVY,outline=CYAN,width=s(14))
+              d.line([(s(132),s(255)),(s(256),s(148)),(s(380),s(255))],fill=WHITE,width=s(24),joint='curve')
+              d.line((s(153),s(244),s(153),s(366)),fill=WHITE,width=s(24))
+              d.line((s(359),s(244),s(359),s(366)),fill=WHITE,width=s(24))
+              d.line((s(153),s(366),s(359),s(366)),fill=WHITE,width=s(24))
+              bolt=[(s(282),s(210)),(s(230),s(289)),(s(274),s(289)),(s(237),s(355)),(s(324),s(263)),(s(278),s(263))]
+              d.polygon(bolt,fill=CYAN)
+              return im
+          def make_logo(w: int,h: int,dark: bool=False):
+              im=Image.new('RGBA',(w,h),(0,0,0,0)); icon_size=int(h*0.88)
+              im.alpha_composite(make_icon(icon_size),(0,(h-icon_size)//2)); d=ImageDraw.Draw(im)
+              fg=WHITE if dark else NAVY; x=icon_size+int(h*0.12); y=int(h*0.24)
+              d.text((x,y),'DOEMS',font=font(int(h*0.37)),fill=fg)
+              line_y=int(h*0.74)
+              d.rounded_rectangle((x,line_y,w-int(h*0.05),line_y+max(3,int(h*0.025))),radius=2,fill=CYAN)
+              return im
+          make_icon(256).save(brand/'icon.png',optimize=True)
+          make_icon(512).save(brand/'icon@2x.png',optimize=True)
+          make_icon(256).save(brand/'dark_icon.png',optimize=True)
+          make_icon(512).save(brand/'dark_icon@2x.png',optimize=True)
+          make_logo(640,192,False).save(brand/'logo.png',optimize=True)
+          make_logo(1280,384,False).save(brand/'logo@2x.png',optimize=True)
+          make_logo(640,192,True).save(brand/'dark_logo.png',optimize=True)
+          make_logo(1280,384,True).save(brand/'dark_logo@2x.png',optimize=True)
+
+          # Keep HACS settings conservative; Alpha3 is published as a normal release.
+          # Update documentation for the validated live state.
+          readme_path = root / 'README.md'
+          readme = readme_path.read_text(encoding='utf-8')
+          readme = readme.replace('`0.1.0-alpha.2` is **P2.1 - Energy Forecast**.', '`0.1.0-alpha.3` is **P2.1 - Energy Forecast (live green maintenance)**.')
+          readme = readme.replace('Install `0.1.0-alpha.2` through HACS or manually.', 'Install `0.1.0-alpha.3` through HACS or manually.')
+          marker = 'This release adds the first functional component on top of the clean Step 0 foundation:\n'
+          addition = ('This maintenance build keeps the forecast model and storage contract unchanged, '
+                      'adds local DOEMS brand images, and refreshes the history-status diagnostic immediately '
+                      'when its source availability changes after startup.\n\n')
+          if addition not in readme:
+              readme = readme.replace(marker, addition + marker)
+          readme_path.write_text(readme, encoding='utf-8')
+
+          notes = '''# DOEMS 0.1.0-alpha.3 - P2.1 Live Green Maintenance\n\n## Scope\nThis is a narrow maintenance release after the live and restart/storage acceptance of P2.1 Energy Forecast.\n\n## Changes\n- Adds local Home Assistant brand assets under `custom_components/doems/brand/` (light/dark icon and logo, including @2x variants).\n- Fixes the observed post-restart `Energy History Status` lag by notifying diagnostics when Home Power source availability changes.\n- Keeps the Energy Forecast model, 15-minute / 72-hour / 288-slot contract, source signature, storage schema and learning logic unchanged.\n- Version bumped to `0.1.0-alpha.3`.\n\n## Live acceptance carried forward\n- Home Power parity with the Alpha41 reference: PASS.\n- Native timeline: 288 slots: PASS.\n- Own `doems.energy_forecast` history: PASS.\n- Restart/storage persistence: PASS.\n- No DOEMS runtime errors during the observed multi-hour run: PASS.\n\n## Safety\n- EMS remains disabled.\n- Physical execution authority remains false.\n- No physical Home Assistant service calls are introduced.\n\n## Release channel\nPublished as a normal GitHub Release (not GitHub prerelease) while retaining the alpha semantic version, so HACS version handling can be verified without changing forecast behaviour.\n'''
+          (root/'RELEASE_NOTES_0.1.0-alpha.3.md').write_text(notes,encoding='utf-8')
+
+          # Regression contract updates.
+          test_path = root/'tests'/'test_energy_forecast_contract.py'
+          test = test_path.read_text(encoding='utf-8')
+          test = test.replace('manifest["version"] == "0.1.0-alpha.2"', 'manifest["version"] == "0.1.0-alpha.3"')
+          extra = '''\n\ndef test_startup_source_availability_transition_notifies_diagnostics() -> None:\n    text=(INTEGRATION / "energy_coordinator.py").read_text(encoding="utf-8")\n    assert "self._last_source_available = self.source_available" in text\n    assert "current_available != previous_available" in text\n    assert "self._notify()" in text\n'''
+          if 'test_startup_source_availability_transition_notifies_diagnostics' not in test:
+              test += extra
+          test_path.write_text(test,encoding='utf-8')
+
+          foundation_path = root/'tests'/'test_foundation_contract.py'
+          ftest = foundation_path.read_text(encoding='utf-8')
+          fextra = '''\n\ndef _png_dimensions(path: Path) -> tuple[int, int]:\n    data = path.read_bytes()\n    assert data[:8] == b"\\x89PNG\\r\\n\\x1a\\n"\n    return int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")\n\n\ndef test_local_brand_assets_are_valid_pngs() -> None:\n    brand = INTEGRATION / "brand"\n    expected = {\n        "icon.png": (256, 256),\n        "icon@2x.png": (512, 512),\n        "dark_icon.png": (256, 256),\n        "dark_icon@2x.png": (512, 512),\n        "logo.png": (640, 192),\n        "logo@2x.png": (1280, 384),\n        "dark_logo.png": (640, 192),\n        "dark_logo@2x.png": (1280, 384),\n    }\n    assert {p.name for p in brand.glob("*.png")} == set(expected)\n    for name, dims in expected.items():\n        assert _png_dimensions(brand / name) == dims\n'''
+          if 'test_local_brand_assets_are_valid_pngs' not in ftest:
+              ftest += fextra
+          foundation_path.write_text(ftest,encoding='utf-8')
+
+          # Release workflow: validate on PR/main, publish Alpha3 as a normal release.
+          workflow = '''name: P2.1 Energy Forecast CI and Alpha3 Release\n\non:\n  pull_request:\n  push:\n    branches: [main]\n  workflow_dispatch:\n\npermissions:\n  contents: write\n\njobs:\n  validate:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-python@v5\n        with:\n          python-version: "3.13"\n      - run: python -m pip install --upgrade pip pytest\n      - run: python -m compileall -q custom_components/doems\n      - run: pytest -q\n      - name: Validate JSON files\n        run: |\n          python - <<'JSONPY'\n          import json\n          from pathlib import Path\n          for path in Path('custom_components/doems').rglob('*.json'):\n              json.loads(path.read_text(encoding='utf-8'))\n              print(f'valid: {path}')\n          JSONPY\n\n  publish-alpha3:\n    if: github.event_name == 'push' && github.ref == 'refs/heads/main'\n    needs: validate\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - name: Build release archive\n        run: |\n          zip -r doems.zip custom_components/doems LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.3.md\n          sha256sum doems.zip > SHA256SUMS.txt\n          cat SHA256SUMS.txt\n      - name: Publish normal Alpha3 release if missing\n        env:\n          GH_TOKEN: ${{ github.token }}\n        run: |\n          if gh release view 0.1.0-alpha.3 >/dev/null 2>&1; then\n            echo "Release 0.1.0-alpha.3 already exists; leaving it unchanged."\n          else\n            gh release create 0.1.0-alpha.3 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.3 - P2.1 Live Green Maintenance" --notes-file RELEASE_NOTES_0.1.0-alpha.3.md\n          fi\n'''
+          (root/'.github'/'workflows'/'p2-energy-forecast-release.yml').write_text(workflow,encoding='utf-8')
+          PY
+      - name: Compile and test candidate
+        run: |
+          python -m compileall -q custom_components/doems
+          pytest -q
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for path in Path('custom_components/doems').rglob('*.json'):
+              json.loads(path.read_text(encoding='utf-8'))
+              print(f'valid: {path}')
+          PY
+      - name: Commit prepared Alpha3 candidate
+        run: |
+          rm .github/workflows/alpha3-maintenance-build.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Prepare DOEMS 0.1.0-alpha.3 maintenance release"
+          git push origin HEAD:alpha3-maintenance
