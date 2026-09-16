@@ -1,0 +1,37 @@
+type: vertical-stack
+cards:
+  - type: markdown
+    content: |-
+      ## ☀️ DOEMS Solar P3.1
+      {% set f = 'binary_sensor.doems_solar_foundation_ready' %}
+      {% set s = 'sensor.doems_solar_source_status' %}
+      {% set t = 'sensor.doems_solar_forecast_timeline' %}
+      **Foundation:** `{{ states(f) }}` · **Runtime:** `{{ state_attr(f, 'forecast_runtime_active') }}` · **Open-Meteo:** `{{ states(s) }}`
+
+      | Forecastcontract | Waarde |
+      |---|---:|
+      | Resolutie | {{ state_attr(t, 'resolution_minutes') or '-' }} min |
+      | Horizon | {{ state_attr(t, 'horizon_hours') or '-' }} uur |
+      | Slots | {{ state_attr(t, 'point_count') or 0 }} / {{ state_attr(t, 'slot_count') or 288 }} |
+      | Laatste update | {{ state_attr(s, 'last_successful_update') or '-' }} |
+      | Leeftijd | {{ state_attr(s, 'age_minutes') if state_attr(s, 'age_minutes') is not none else '-' }} min |
+      | Laatste fout | {{ state_attr(s, 'last_error') or 'geen' }} |
+
+      **Topology:** `{{ state_attr(t, 'topology_signature') or state_attr(f, 'topology_signature') or '-' }}`
+
+  - type: entities
+    title: Solar Forecast
+    show_header_toggle: false
+    entities:
+      - entity: sensor.doems_solar_forecast_next_quarter
+        name: Volgend kwartier
+      - entity: sensor.doems_solar_forecast_today_total
+        name: Vandaag totaal
+      - entity: sensor.doems_solar_forecast_tomorrow_total
+        name: Morgen totaal
+      - entity: sensor.doems_solar_forecast_timeline
+        name: Timeline slots
+      - entity: sensor.doems_solar_forecast_model
+        name: Model
+      - entity: sensor.doems_solar_source_status
+        name: Bronstatus

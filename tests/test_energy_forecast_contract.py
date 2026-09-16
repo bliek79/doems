@@ -23,7 +23,7 @@ def _load_pure_module(name: str):
 
 def test_manifest_and_clean_identity_contract() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["domain"] == "doems" and manifest["name"] == "DOEMS" and manifest["version"] == "0.1.0-alpha.5.2"
+    assert manifest["domain"] == "doems" and manifest["name"] == "DOEMS" and manifest["version"] == "0.1.0-alpha.6"
     for path in INTEGRATION.rglob("*"):
         if not path.is_file() or path.suffix not in {".py", ".json", ".yaml", ".yml"}: continue
         text = path.read_text(encoding="utf-8")
@@ -32,7 +32,7 @@ def test_manifest_and_clean_identity_contract() -> None:
 
 def test_public_entity_object_ids_are_doems_prefixed() -> None:
     suggested=[]; unique=[]
-    for path in [INTEGRATION / "sensor.py", INTEGRATION / "select.py", INTEGRATION / "binary_sensor.py", INTEGRATION / "button.py"]:
+    for path in [INTEGRATION / "sensor.py", INTEGRATION / "solar_sensor.py", INTEGRATION / "select.py", INTEGRATION / "binary_sensor.py", INTEGRATION / "button.py"]:
         tree=ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node,(ast.Assign,ast.AnnAssign)): continue

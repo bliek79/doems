@@ -31,8 +31,10 @@ def test_doems_status_option_count_is_safe_for_unhashable_values() -> None:
     assert configured_fields == 2
 
 
-def test_alpha5_2_version_contract_is_consistent() -> None:
+def test_alpha5_2_status_fix_is_carried_forward_into_alpha6() -> None:
     const_text = (INTEGRATION / "const.py").read_text(encoding="utf-8")
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    assert 'VERSION = "0.1.0-alpha.5.2"' in const_text
-    assert manifest["version"] == "0.1.0-alpha.5.2"
+    assert 'VERSION = "0.1.0-alpha.6"' in const_text
+    assert manifest["version"] == "0.1.0-alpha.6"
+    sensor = (INTEGRATION / "sensor.py").read_text(encoding="utf-8")
+    assert 'value not in {None, ""}' not in sensor
