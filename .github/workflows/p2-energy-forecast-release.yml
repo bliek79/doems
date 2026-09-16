@@ -1,4 +1,4 @@
-name: DOEMS CI and Alpha5.1 Solar Options Hotfix Release
+name: DOEMS CI and Alpha6 Solar P3.1 Release
 
 on:
   pull_request:
@@ -29,8 +29,15 @@ jobs:
               json.loads(path.read_text(encoding='utf-8'))
               print(f'valid: {path}')
           PY
+      - name: Validate Alpha6 release contract
+        run: |
+          test -f RELEASE_NOTES_0.1.0-alpha.6.md
+          test -f examples/solar_p3_1_forecast_card.yaml
+          grep -F 'VERSION = "0.1.0-alpha.6"' custom_components/doems/const.py
+          grep -F '"version": "0.1.0-alpha.6"' custom_components/doems/manifest.json
+          grep -F 'sensor.doems_solar_forecast_timeline' examples/solar_p3_1_forecast_card.yaml
 
-  publish-alpha5-1:
+  publish-alpha6:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
@@ -38,31 +45,18 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - name: Validate approved DOEMS brand variants
-        run: |
-          python -m pip install --upgrade pillow pytest
-          python scripts/build_brand_assets.py
-          pytest -q tests/test_foundation_contract.py tests/test_alpha5_1_hotfix_contract.py
-      - name: Commit approved brand assets when changed
-        run: |
-          if git diff --quiet -- custom_components/doems/brand; then
-            echo "Brand assets already match the approved artwork."
-          else
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add custom_components/doems/brand
-            git commit -m "Restore approved DOEMS brand assets [skip ci]"
-            git push origin HEAD:main
-          fi
       - name: Build release archive
         run: |
-          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.5.1.md
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.6.md
           sha256sum doems.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
-      - name: Verify approved DOEMS icon assets are packaged
+      - name: Verify Solar P3.1 runtime is packaged
+        run: |
+          unzip -l doems.zip | grep -F 'custom_components/doems/solar_forecast.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/solar_forecast_model.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/solar_sensor.py'
+          unzip -l doems.zip | grep -F 'examples/solar_p3_1_forecast_card.yaml'
+      - name: Verify existing DOEMS brand assets are packaged unchanged by this release step
         run: |
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/icon.png'
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/icon@2x.png'
@@ -70,12 +64,12 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/dark_icon@2x.png'
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/logo.png'
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/dark_logo.png'
-      - name: Publish normal Alpha5.1 release if missing
+      - name: Publish normal Alpha6 release if missing
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view 0.1.0-alpha.5.1 >/dev/null 2>&1; then
-            echo "Release 0.1.0-alpha.5.1 already exists; leaving it unchanged."
+          if gh release view 0.1.0-alpha.6 >/dev/null 2>&1; then
+            echo "Release 0.1.0-alpha.6 already exists; leaving it unchanged."
           else
-            gh release create 0.1.0-alpha.5.1 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.5.1 - Solar Options Hotfix" --notes-file RELEASE_NOTES_0.1.0-alpha.5.1.md
+            gh release create 0.1.0-alpha.6 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.6 - Solar P3.1 Open-Meteo Runtime" --notes-file RELEASE_NOTES_0.1.0-alpha.6.md
           fi
