@@ -31,6 +31,8 @@ from .const import (
 )
 from .energy_coordinator import DOEMSEnergyCoordinator
 from .energy_forecast import EnergyBaselineForecast, ceil_quarter
+from .solar_forecast import SolarForecastManager
+from .solar_sensor import build_solar_sensors
 
 SUPPORTED_SOURCES = {"weekday_quarter", "day_type_quarter", "quarter_of_day"}
 
@@ -50,7 +52,7 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the foundation and, when configured, Energy Forecast sensors."""
+    """Set up DOEMS foundation, Energy Forecast and Solar Forecast sensors."""
     entities: list[SensorEntity] = [DOEMSFoundationStatusSensor(entry)]
     coordinator = entry.runtime_data
     if isinstance(coordinator, DOEMSEnergyCoordinator):
@@ -68,6 +70,11 @@ async def async_setup_entry(
                 DOEMSEnergyForecastConfidenceSensor(entry, coordinator),
             ]
         )
+
+    solar_forecast = hass.data.get(DOMAIN, {}).get(entry.entry_id, {}).get("solar_forecast")
+    if isinstance(solar_forecast, SolarForecastManager):
+        entities.extend(build_solar_sensors(entry, solar_forecast))
+
     async_add_entities(entities)
 
 
@@ -94,7 +101,9 @@ class DOEMSFoundationStatusSensor(SensorEntity):
         configured_fields = sum(
             1
             for key, value in self.entry.options.items()
-            if key not in {CONF_INSTANCE_NAME, CONF_ENERGY_FORECAST_ENABLED} and value not in {None, ""}
+            if key not in {CONF_INSTANCE_NAME, CONF_ENERGY_FORECAST_ENABLED}
+            and value is not None
+            and value != ""
         )
         return {
             "phase": FOUNDATION_PHASE,
