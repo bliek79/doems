@@ -1,4 +1,4 @@
-name: DOEMS CI and Alpha4 Solar Freeze Release
+name: DOEMS CI and Alpha5 Solar Foundation Release
 
 on:
   pull_request:
@@ -30,7 +30,7 @@ jobs:
               print(f'valid: {path}')
           PY
 
-  publish-alpha4:
+  publish-alpha5:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
@@ -41,12 +41,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Restore approved DOEMS brand variants
+      - name: Validate approved DOEMS brand variants
         run: |
           python -m pip install --upgrade pillow pytest
           python scripts/build_brand_assets.py
           pytest -q tests/test_foundation_contract.py
-      - name: Commit restored brand assets when changed
+      - name: Commit approved brand assets when changed
         run: |
           if git diff --quiet -- custom_components/doems/brand; then
             echo "Brand assets already match the approved artwork."
@@ -59,15 +59,15 @@ jobs:
           fi
       - name: Build release archive
         run: |
-          zip -r doems.zip custom_components/doems examples/alpha41_solar_freeze_dashboard.yaml LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.4.md
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.5.md
           sha256sum doems.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
-      - name: Publish normal Alpha4 release if missing
+      - name: Publish normal Alpha5 release if missing
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view 0.1.0-alpha.4 >/dev/null 2>&1; then
-            echo "Release 0.1.0-alpha.4 already exists; leaving it unchanged."
+          if gh release view 0.1.0-alpha.5 >/dev/null 2>&1; then
+            echo "Release 0.1.0-alpha.5 already exists; leaving it unchanged."
           else
-            gh release create 0.1.0-alpha.4 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.4 - Alpha41 Solar Reference Freeze" --notes-file RELEASE_NOTES_0.1.0-alpha.4.md
+            gh release create 0.1.0-alpha.5 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.5 - Solar P3.0 Foundation" --notes-file RELEASE_NOTES_0.1.0-alpha.5.md
           fi

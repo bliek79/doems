@@ -1,5 +1,35 @@
 {
   "title": "DOEMS",
-  "config": {"step": {"user": {"title": "Set up DOEMS", "description": "Create the clean DOEMS configuration. Component-specific input is configured later from Options."}}, "abort": {"already_configured": "DOEMS is already configured."}},
-  "options": {"step": {"init": {"title": "DOEMS options", "description": "Enable only the components you want to configure now.", "data": {"instance_name": "Display name", "energy_forecast_enabled": "Enable Energy Forecast"}}, "energy_forecast": {"title": "Energy Forecast", "description": "Choose the Home Power input route and the initial learning profile.", "data": {"energy_source_mode": "Home Power source mode", "energy_start_profile": "Initial learning profile"}}, "energy_direct": {"title": "Direct Home Power", "description": "Select one sensor that represents actual current home load.", "data": {"home_power_entity": "Home Power sensor"}}, "energy_balance": {"title": "Power Balance", "description": "Build Home Power from grid, solar and optionally battery power.", "data": {"grid_net_power_entity": "Grid net power sensor", "grid_sign_convention": "Grid sign convention", "solar_power_entity": "Total solar power sensor", "battery_present": "Battery is part of the local power balance"}}, "energy_battery": {"title": "Battery power", "description": "Select positive charge and discharge power magnitudes.", "data": {"battery_charge_power_entity": "Battery charge power sensor", "battery_discharge_power_entity": "Battery discharge power sensor"}}}, "error": {"source_required": "Select a source sensor.", "doems_source_not_allowed": "A DOEMS output entity cannot be used as its own input.", "source_not_found": "The selected entity does not exist.", "unsupported_unit": "The selected sensor must use W or kW.", "negative_value_not_allowed": "This source must be a positive power magnitude."}}
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up DOEMS",
+        "description": "Create the clean DOEMS configuration. Component-specific input is configured later from Options."
+      }
+    },
+    "abort": {"already_configured": "DOEMS is already configured."}
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "DOEMS options",
+        "description": "Enable only the components you want to configure now.",
+        "data": {
+          "instance_name": "Display name",
+          "energy_forecast_enabled": "Enable Energy Forecast",
+          "solar_foundation_enabled": "Enable Solar Foundation"
+        }
+      },
+      "energy_forecast": {"title": "Energy Forecast", "description": "Choose the Home Power input route and the initial learning profile.", "data": {"energy_source_mode": "Home Power source mode", "energy_start_profile": "Initial learning profile"}},
+      "energy_direct": {"title": "Direct Home Power", "description": "Select one sensor that represents actual current home load.", "data": {"home_power_entity": "Home Power sensor"}},
+      "energy_balance": {"title": "Power Balance", "description": "Build Home Power from grid, solar and optionally battery power.", "data": {"grid_net_power_entity": "Grid net power sensor", "grid_sign_convention": "Grid sign convention", "solar_power_entity": "Total solar power sensor", "battery_present": "Battery is part of the local power balance"}},
+      "energy_battery": {"title": "Battery power", "description": "Select positive charge and discharge power magnitudes.", "data": {"battery_charge_power_entity": "Battery charge power sensor", "battery_discharge_power_entity": "Battery discharge power sensor"}},
+      "solar_system": {"title": "Solar Foundation", "description": "Configure the generic Solar system contract. Open-Meteo remains the fixed primary provider for the next forecast phase.", "data": {"solar_location_source": "Location source", "solar_inverter_group_count": "Number of inverter groups", "solar_array_count": "Number of PV arrays", "solar_total_actual_power_entity": "Optional total actual solar power sensor"}},
+      "solar_location_override": {"title": "Solar location override", "description": "Use an explicit location instead of the Home Assistant location.", "data": {"solar_latitude": "Latitude", "solar_longitude": "Longitude"}},
+      "solar_inverter_group": {"title": "Inverter group {index} of {count}", "description": "Configure one stable inverter group. AC limit 0 means unknown/not enforced in P3.0.", "data": {"name": "Display name", "ac_limit_kw": "AC limit"}},
+      "solar_array": {"title": "PV array {index} of {count}", "description": "Configure provider-neutral geometry. Azimuth is clockwise from true north: 0=N, 90=E, 180=S, 270=W.", "data": {"name": "Display name", "group_id": "Inverter group", "dc_kwp": "DC capacity", "tilt_deg": "Tilt", "azimuth_deg": "Azimuth", "actual_power_entity": "Optional array actual power sensor"}}
+    },
+    "error": {"source_required": "Select a source sensor.", "doems_source_not_allowed": "A DOEMS output entity cannot be used as its own input.", "source_not_found": "The selected entity does not exist.", "unsupported_unit": "The selected sensor must use W or kW.", "negative_value_not_allowed": "This source must be a positive power magnitude.", "duplicate_actual_source": "This actual source is already assigned to another array.", "total_actual_reused_as_array": "For a multi-array system, the total actual source cannot also be assigned to one array."},
+    "abort": {"solar_foundation_invalid": "The Solar Foundation topology did not pass structural validation."}
+  }
 }
