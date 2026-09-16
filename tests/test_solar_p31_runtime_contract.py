@@ -39,11 +39,11 @@ def test_public_solar_sensor_contract_is_doems_prefixed_and_native() -> None:
         "doems_solar_source_status",
         "doems_solar_forecast_timeline",
         "doems_solar_forecast_next_quarter",
-        "doems_solar_forecast_today_total",
-        "doems_solar_forecast_tomorrow_total",
         "doems_solar_forecast_model",
     ):
         assert object_id in text
+    assert 'day not in {"today", "tomorrow"}' in text
+    assert 'object_id = f"doems_solar_forecast_{day}_total"' in text
     assert '"slot_count": SOLAR_FORECAST_SLOTS' in text
     assert '"resolution_minutes": SOLAR_RESOLUTION_MINUTES' in text
     assert '"horizon_hours": SOLAR_HORIZON_HOURS' in text
