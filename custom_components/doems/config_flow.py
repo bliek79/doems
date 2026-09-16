@@ -64,16 +64,22 @@ def _select(options: list[tuple[str, str]]) -> selector.SelectSelector:
     )
 
 
-def _number(minimum: float, maximum: float, step: float, unit: str | None = None) -> selector.NumberSelector:
-    return selector.NumberSelector(
-        selector.NumberSelectorConfig(
-            min=minimum,
-            max=maximum,
-            step=step,
-            mode=selector.NumberSelectorMode.BOX,
-            unit_of_measurement=unit,
-        )
-    )
+def _number(
+    minimum: float,
+    maximum: float,
+    step: float,
+    unit: str | None = None,
+) -> selector.NumberSelector:
+    """Build a numeric selector without serializing a null unit."""
+    config: selector.NumberSelectorConfig = {
+        "min": minimum,
+        "max": maximum,
+        "step": step,
+        "mode": selector.NumberSelectorMode.BOX,
+    }
+    if unit is not None:
+        config["unit_of_measurement"] = unit
+    return selector.NumberSelector(config)
 
 
 def _required_entity(key: str, current: str | None) -> vol.Marker:
