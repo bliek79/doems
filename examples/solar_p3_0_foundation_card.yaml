@@ -1,0 +1,19 @@
+type: markdown
+content: |-
+  ## ☀️ DOEMS Solar Foundation
+  {% set e = 'binary_sensor.doems_solar_foundation_ready' %}
+  **Ready:** `{{ states(e) }}` · **Status:** `{{ state_attr(e, 'status') or '-' }}` · **Provider:** `{{ state_attr(e, 'provider') or '-' }}`
+
+  | Install contract | Waarde |
+  |---|---:|
+  | Schema | {{ state_attr(e, 'schema_version') or '-' }} |
+  | Locatiebron | {{ state_attr(e, 'location_source') or '-' }} |
+  | Invertergroepen | {{ state_attr(e, 'inverter_group_count') or 0 }} |
+  | Arrays | {{ state_attr(e, 'array_count') or 0 }} |
+  | Totaal DC | {{ state_attr(e, 'total_dc_kwp') or 0 }} kWp |
+  | Bekende AC-limiet | {{ state_attr(e, 'known_ac_limit_kw') or 0 }} kW |
+  | Actual totaal | {{ 'ja' if state_attr(e, 'total_actual_configured') else 'nee' }} |
+  | Per-array actual | {{ state_attr(e, 'per_array_actual_count') or 0 }} |
+
+  **Blockers:** `{{ (state_attr(e, 'blockers') or []) | join(', ') if state_attr(e, 'blockers') else 'geen' }}`  
+  **Topology:** `{{ state_attr(e, 'topology_signature') or '-' }}`
