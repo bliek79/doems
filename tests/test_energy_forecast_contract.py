@@ -23,7 +23,7 @@ def _load_pure_module(name: str):
 
 def test_manifest_and_clean_identity_contract() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["domain"] == "doems" and manifest["name"] == "DOEMS" and manifest["version"] == "0.1.0-alpha.2"
+    assert manifest["domain"] == "doems" and manifest["name"] == "DOEMS" and manifest["version"] == "0.1.0-alpha.3"
     for path in INTEGRATION.rglob("*"):
         if not path.is_file() or path.suffix not in {".py", ".json", ".yaml", ".yml"}: continue
         text = path.read_text(encoding="utf-8")
@@ -88,3 +88,12 @@ def test_source_signature_changes_when_semantics_change() -> None:
     base={"energy_source_mode":"power_balance","grid_net_power_entity":"sensor.grid","grid_sign_convention":"positive_import_negative_export","solar_power_entity":"sensor.solar","battery_present":False}
     flipped=dict(base); flipped["grid_sign_convention"]="positive_export_negative_import"
     assert s.source_signature(base)!=s.source_signature(flipped)
+
+
+def test_startup_source_recovery_refresh_is_one_shot_and_component_scoped() -> None:
+    text=(INTEGRATION / "__init__.py").read_text(encoding="utf-8")
+    assert "async_track_state_change_event" in text
+    assert "if not coordinator.source_available" in text
+    assert "coordinator._notify()" in text
+    assert "remove_listener()" in text
+    assert "Energy History Status" in text

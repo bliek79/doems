@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
+from homeassistant.helpers.event import async_track_state_change_event
 
 from .const import CONF_ENERGY_FORECAST_ENABLED, DOMAIN, PLATFORMS
 from .energy_coordinator import DOEMSEnergyCoordinator
@@ -25,6 +28,49 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
     }
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # During a Home Assistant restart, DOEMS can finish setup before all selected
+    # power-source entities are restored. Energy History Status then correctly
+    # starts as source_unavailable, but Alpha2 only refreshed quarter-driven
+    # diagnostics at the next 15-minute boundary. Subscribe once while the source
+    # is unavailable and refresh the diagnostics immediately when the complete
+    # canonical Home Power source becomes available again.
+    if coordinator is not None and coordinator.source_entities and not coordinator.source_available:
+        remove_listener: Callable[[], None] | None = None
+
+        @callback
+        def _refresh_when_source_recovers(event: Event[EventStateChangedData]) -> None:
+            """Refresh quarter-driven diagnostics once the full source recovers."""
+            nonlocal remove_listener
+            if not coordinator.source_available:
+                return
+            coordinator._notify()
+            if remove_listener is not None:
+                remove_listener()
+                remove_listener = None
+
+        @callback
+        def _remove_recovery_listener() -> None:
+            """Remove the temporary recovery listener when the entry unloads."""
+            nonlocal remove_listener
+            if remove_listener is not None:
+                remove_listener()
+                remove_listener = None
+
+        remove_listener = async_track_state_change_event(
+            hass,
+            coordinator.source_entities,
+            _refresh_when_source_recovers,
+        )
+        entry.async_on_unload(_remove_recovery_listener)
+
+        # Close the small race where the source recovers between the check above
+        # and registering the state-change listener.
+        if coordinator.source_available:
+            coordinator._notify()
+            remove_listener()
+            remove_listener = None
+
     return True
 
 
