@@ -29,6 +29,10 @@ def _freeze_manager(hass: HomeAssistant, entry: ConfigEntry) -> SolarReferenceFr
     return hass.data[DOMAIN][entry.entry_id]["solar_reference_freeze"]
 
 
+def _foundation_manager(hass: HomeAssistant, entry: ConfigEntry) -> SolarFoundationManager:
+    return hass.data[DOMAIN][entry.entry_id]["solar_foundation"]
+
+
 def _device_info(entry: ConfigEntry) -> DeviceInfo:
     return DeviceInfo(
         identifiers={(DOMAIN, DEVICE_IDENTIFIER)},
@@ -44,13 +48,10 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    foundation = SolarFoundationManager(hass, entry)
-    await foundation.async_setup()
-    hass.data[DOMAIN][entry.entry_id]["solar_foundation"] = foundation
     async_add_entities(
         [
             DOEMSAlpha41SolarFreezeCapturedSensor(entry, _freeze_manager(hass, entry)),
-            DOEMSSolarFoundationReadySensor(entry, foundation),
+            DOEMSSolarFoundationReadySensor(entry, _foundation_manager(hass, entry)),
         ]
     )
 
@@ -171,10 +172,6 @@ class DOEMSSolarFoundationReadySensor(BinarySensorEntity):
             "inverter_groups": snapshot.get("inverter_groups", []),
             "arrays": snapshot.get("arrays", []),
             "storage_key": SOLAR_FOUNDATION_STORAGE_KEY,
-            "forecast_runtime_active": False,
+            "forecast_runtime_active": self.manager.forecast_runtime_active,
             "physical_execution_authority": False,
         }
-
-    async def async_will_remove_from_hass(self) -> None:
-        await self.manager.async_shutdown()
-        await super().async_will_remove_from_hass()
