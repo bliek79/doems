@@ -94,7 +94,9 @@ class DOEMSFoundationStatusSensor(SensorEntity):
         configured_fields = sum(
             1
             for key, value in self.entry.options.items()
-            if key not in {CONF_INSTANCE_NAME, CONF_ENERGY_FORECAST_ENABLED} and value not in {None, ""}
+            if key not in {CONF_INSTANCE_NAME, CONF_ENERGY_FORECAST_ENABLED}
+            and value is not None
+            and value != ""
         )
         return {
             "phase": FOUNDATION_PHASE,
