@@ -1,25 +1,9 @@
 {
   "title": "DOEMS",
-  "config": {
-    "step": {
-      "user": {
-        "title": "Set up DOEMS",
-        "description": "Create the clean DOEMS configuration. Component-specific input is configured later from Options."
-      }
-    },
-    "abort": {"already_configured": "DOEMS is already configured."}
-  },
+  "config": {"step": {"user": {"title": "Set up DOEMS", "description": "Create the clean DOEMS configuration. Component-specific input is configured later from Options."}}, "abort": {"already_configured": "DOEMS is already configured."}},
   "options": {
     "step": {
-      "init": {
-        "title": "DOEMS options",
-        "description": "Enable only the components you want to configure now.",
-        "data": {
-          "instance_name": "Display name",
-          "energy_forecast_enabled": "Enable Energy Forecast",
-          "solar_foundation_enabled": "Enable Solar Foundation"
-        }
-      },
+      "init": {"title": "DOEMS options", "description": "Enable only the components you want to configure now.", "data": {"instance_name": "Display name", "energy_forecast_enabled": "Enable Energy Forecast", "solar_foundation_enabled": "Enable Solar Foundation", "prices_enabled": "Enable Prices Forecast"}},
       "energy_forecast": {"title": "Energy Forecast", "description": "Choose the Home Power input route and the initial learning profile.", "data": {"energy_source_mode": "Home Power source mode", "energy_start_profile": "Initial learning profile"}},
       "energy_direct": {"title": "Direct Home Power", "description": "Select one sensor that represents actual current home load.", "data": {"home_power_entity": "Home Power sensor"}},
       "energy_balance": {"title": "Power Balance", "description": "Build Home Power from grid, solar and optionally battery power.", "data": {"grid_net_power_entity": "Grid net power sensor", "grid_sign_convention": "Grid sign convention", "solar_power_entity": "Total solar power sensor", "battery_present": "Battery is part of the local power balance"}},
@@ -27,7 +11,9 @@
       "solar_system": {"title": "Solar Foundation", "description": "Configure the generic Solar system contract. Open-Meteo remains the fixed primary provider for the next forecast phase.", "data": {"solar_location_source": "Location source", "solar_inverter_group_count": "Number of inverter groups", "solar_array_count": "Number of PV arrays", "solar_total_actual_power_entity": "Optional total actual solar power sensor"}},
       "solar_location_override": {"title": "Solar location override", "description": "Use an explicit location instead of the Home Assistant location.", "data": {"solar_latitude": "Latitude", "solar_longitude": "Longitude"}},
       "solar_inverter_group": {"title": "Inverter group {index} of {count}", "description": "Configure one stable inverter group. AC limit 0 means unknown/not enforced in P3.0.", "data": {"name": "Display name", "ac_limit_kw": "AC limit"}},
-      "solar_array": {"title": "PV array {index} of {count}", "description": "Configure provider-neutral geometry. Azimuth is clockwise from true north: 0=N, 90=E, 180=S, 270=W.", "data": {"name": "Display name", "group_id": "Inverter group", "dc_kwp": "DC capacity", "tilt_deg": "Tilt", "azimuth_deg": "Azimuth", "actual_power_entity": "Optional array actual power sensor"}}
+      "solar_array": {"title": "PV array {index} of {count}", "description": "Configure provider-neutral geometry. Azimuth is clockwise from true north: 0=N, 90=E, 180=S, 270=W.", "data": {"name": "Display name", "group_id": "Inverter group", "dc_kwp": "DC capacity", "tilt_deg": "Tilt", "azimuth_deg": "Azimuth", "actual_power_entity": "Optional array actual power sensor"}},
+      "prices": {"title": "Prices Forecast", "description": "Configure the generic electricity price contract. Stroomvoorspeller supplies the market source; your supplier, tax and import/export components remain local configuration.", "data": {"prices_resolution_preference": "Known-price resolution", "tariff_profile_id": "Tariff profile ID", "tariff_supplier": "Supplier label", "tariff_valid_from": "Valid from", "vat_percent": "VAT percentage", "electricity_import_supplier_incl_vat": "Import supplier component incl. VAT", "electricity_import_tax_incl_vat": "Import tax component incl. VAT", "electricity_export_supplier_incl_vat": "Export supplier component incl. VAT", "electricity_export_tax_incl_vat": "Export tax component incl. VAT", "electricity_fixed_supply_per_day": "Fixed electricity supply cost per day", "electricity_grid_per_day": "Grid cost per day", "electricity_tax_credit_per_day": "Electricity tax credit per day", "gas_prices_enabled": "Also publish optional gas prices"}},
+      "prices_gas": {"title": "Optional gas prices", "description": "Gas remains optional and uses a Home Assistant market-price sensor selected by the user.", "data": {"gas_market_entity": "Gas market price sensor", "gas_supplier_incl_vat": "Gas supplier component incl. VAT", "gas_tax_incl_vat": "Gas tax component incl. VAT", "gas_fixed_supply_per_day": "Fixed gas supply cost per day", "gas_grid_per_day": "Gas grid cost per day"}}
     },
     "error": {"source_required": "Select a source sensor.", "doems_source_not_allowed": "A DOEMS output entity cannot be used as its own input.", "source_not_found": "The selected entity does not exist.", "unsupported_unit": "The selected sensor must use W or kW.", "negative_value_not_allowed": "This source must be a positive power magnitude.", "duplicate_actual_source": "This actual source is already assigned to another array.", "total_actual_reused_as_array": "For a multi-array system, the total actual source cannot also be assigned to one array."},
     "abort": {"solar_foundation_invalid": "The Solar Foundation topology did not pass structural validation."}
