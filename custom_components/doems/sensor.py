@@ -31,6 +31,8 @@ from .const import (
 )
 from .energy_coordinator import DOEMSEnergyCoordinator
 from .energy_forecast import EnergyBaselineForecast, ceil_quarter
+from .prices import DOEMSPricesManager
+from .prices_sensor import build_prices_sensors
 from .solar_forecast import SolarForecastManager
 from .solar_sensor import build_solar_sensors
 
@@ -52,7 +54,7 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up DOEMS foundation, Energy Forecast and Solar Forecast sensors."""
+    """Set up DOEMS foundation, Energy, Solar and Prices sensors."""
     entities: list[SensorEntity] = [DOEMSFoundationStatusSensor(entry)]
     coordinator = entry.runtime_data
     if isinstance(coordinator, DOEMSEnergyCoordinator):
@@ -71,9 +73,14 @@ async def async_setup_entry(
             ]
         )
 
-    solar_forecast = hass.data.get(DOMAIN, {}).get(entry.entry_id, {}).get("solar_forecast")
+    entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    solar_forecast = entry_data.get("solar_forecast")
     if isinstance(solar_forecast, SolarForecastManager):
         entities.extend(build_solar_sensors(entry, solar_forecast))
+
+    prices = entry_data.get("prices")
+    if isinstance(prices, DOEMSPricesManager):
+        entities.extend(build_prices_sensors(entry, prices))
 
     async_add_entities(entities)
 
