@@ -1,4 +1,4 @@
-name: DOEMS CI and Alpha7 Prices P4 Release
+name: DOEMS CI and Alpha7.1 Prices Config Flow Hotfix Release
 
 on:
   pull_request:
@@ -29,19 +29,20 @@ jobs:
               json.loads(path.read_text(encoding='utf-8'))
               print(f'valid: {path}')
           PY
-      - name: Validate Alpha7 release contract
+      - name: Validate Alpha7.1 release contract
         run: |
-          test -f RELEASE_NOTES_0.1.0-alpha.7.md
+          test -f RELEASE_NOTES_0.1.0-alpha.7.1.md
           test -f examples/prices_p4_forecast_card.yaml
           test -f custom_components/doems/prices.py
           test -f custom_components/doems/prices_model.py
-          grep -F 'VERSION = "0.1.0-alpha.7"' custom_components/doems/const.py
-          grep -F '"version": "0.1.0-alpha.7"' custom_components/doems/manifest.json
+          grep -F 'VERSION = "0.1.0-alpha.7.1"' custom_components/doems/const.py
+          grep -F '"version": "0.1.0-alpha.7.1"' custom_components/doems/manifest.json
+          grep -F 'step: any' RELEASE_NOTES_0.1.0-alpha.7.1.md
           grep -F 'sensor.doems_prices_timeline' examples/prices_p4_forecast_card.yaml
           grep -F 'import_all_in' examples/prices_p4_forecast_card.yaml
           grep -F 'export_all_in' examples/prices_p4_forecast_card.yaml
 
-  publish-alpha7:
+  publish-alpha7-1:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
@@ -51,13 +52,14 @@ jobs:
           fetch-depth: 0
       - name: Build release archive
         run: |
-          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.7.md
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.7.1.md
           sha256sum doems.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - name: Verify Prices P4 runtime is packaged
         run: |
           unzip -l doems.zip | grep -F 'custom_components/doems/prices.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/prices_model.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/config_flow.py'
           unzip -l doems.zip | grep -F 'examples/prices_p4_forecast_card.yaml'
       - name: Verify existing DOEMS brand assets are packaged unchanged by this release step
         run: |
@@ -67,12 +69,12 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/dark_icon@2x.png'
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/logo.png'
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/dark_logo.png'
-      - name: Publish normal Alpha7 release if missing
+      - name: Publish normal Alpha7.1 release if missing
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view 0.1.0-alpha.7 >/dev/null 2>&1; then
-            echo "Release 0.1.0-alpha.7 already exists; leaving it unchanged."
+          if gh release view 0.1.0-alpha.7.1 >/dev/null 2>&1; then
+            echo "Release 0.1.0-alpha.7.1 already exists; leaving it unchanged."
           else
-            gh release create 0.1.0-alpha.7 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7 - Prices P4 Runtime" --notes-file RELEASE_NOTES_0.1.0-alpha.7.md
+            gh release create 0.1.0-alpha.7.1 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.1 - Prices Config Flow Hotfix" --notes-file RELEASE_NOTES_0.1.0-alpha.7.1.md
           fi
