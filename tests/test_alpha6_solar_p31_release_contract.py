@@ -7,16 +7,15 @@ ROOT = Path(__file__).resolve().parents[1]
 INTEGRATION = ROOT / "custom_components" / "doems"
 
 
-def test_alpha6_version_and_release_material_are_aligned() -> None:
+def test_alpha6_solar_contract_is_carried_forward_into_alpha7() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
     const = (INTEGRATION / "const.py").read_text(encoding="utf-8")
     notes = (ROOT / "RELEASE_NOTES_0.1.0-alpha.6.md").read_text(encoding="utf-8")
     workflow = (ROOT / ".github/workflows/p2-energy-forecast-release.yml").read_text(encoding="utf-8")
-    assert manifest["version"] == "0.1.0-alpha.6"
-    assert 'VERSION = "0.1.0-alpha.6"' in const
+    assert manifest["version"] == "0.1.0-alpha.7"
+    assert 'VERSION = "0.1.0-alpha.7"' in const
     assert "DOEMS 0.1.0-alpha.6 - Solar P3.1 Open-Meteo Runtime" in notes
-    assert "gh release create 0.1.0-alpha.6" in workflow
-    assert 'title "DOEMS 0.1.0-alpha.6 - Solar P3.1 Open-Meteo Runtime"' in workflow
+    assert "gh release create 0.1.0-alpha.7" in workflow
 
 
 def test_alpha6_contains_public_solar_runtime_and_dashboard_contract() -> None:
@@ -43,11 +42,11 @@ def test_alpha6_contains_public_solar_runtime_and_dashboard_contract() -> None:
         assert entity_id in dashboard
 
 
-def test_alpha6_keeps_safety_and_open_branding_scope_explicit() -> None:
+def test_alpha7_keeps_solar_safety_and_branding_scope() -> None:
     active_text = "\n".join(path.read_text(encoding="utf-8") for path in INTEGRATION.rglob("*.py"))
-    notes = (ROOT / "RELEASE_NOTES_0.1.0-alpha.6.md").read_text(encoding="utf-8")
+    notes = (ROOT / "RELEASE_NOTES_0.1.0-alpha.7.md").read_text(encoding="utf-8")
     workflow = (ROOT / ".github/workflows/p2-energy-forecast-release.yml").read_text(encoding="utf-8")
     assert "async_call(" not in active_text
     assert '"physical_execution_authority": False' in active_text
-    assert "branding/icon acceptance issue" in notes
+    assert "approved DOEMS branding" in notes
     assert "build_brand_assets.py" not in workflow

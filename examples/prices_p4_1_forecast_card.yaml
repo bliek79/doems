@@ -1,0 +1,73 @@
+type: custom:apexcharts-card
+update_interval: 15min
+graph_span: 72h
+span:
+  start: hour
+header:
+  show: true
+  title: DOEMS · Prices Forecast
+  show_states: false
+now:
+  show: true
+  label: Nu
+  color: '#00E5FF'
+card_mod:
+  style: |
+    ha-card {
+      border-radius: 20px !important;
+      background: rgba(17,38,54,0.78) !important;
+      border: 1px solid rgba(0,229,255,0.18) !important;
+      box-shadow: inset 0 0 18px rgba(0,229,255,0.035) !important;
+      overflow: hidden !important;
+    }
+apex_config:
+  chart:
+    height: 410
+    toolbar:
+      show: false
+    animations:
+      enabled: false
+  legend:
+    show: true
+    position: top
+    horizontalAlign: right
+  stroke:
+    curve: smooth
+  grid:
+    borderColor: rgba(126,143,163,0.12)
+  xaxis:
+    type: datetime
+    labels:
+      datetimeUTC: false
+  tooltip:
+    x:
+      format: dd MMM HH:mm
+yaxis:
+  - decimals: 3
+    apex_config:
+      title:
+        text: EUR / kWh
+series:
+  - entity: sensor.doems_prices_timeline
+    name: Import all-in
+    type: line
+    color: '#00E5FF'
+    stroke_width: 2
+    extend_to: false
+    data_generator: |
+      const points = entity.attributes.points || [];
+      return points
+        .filter(p => p && p.valid === true && p.import_all_in !== null)
+        .map(p => [new Date(p.time).getTime(), Number(p.import_all_in)]);
+
+  - entity: sensor.doems_prices_timeline
+    name: Export all-in
+    type: line
+    color: '#B8C7D9'
+    stroke_width: 2
+    extend_to: false
+    data_generator: |
+      const points = entity.attributes.points || [];
+      return points
+        .filter(p => p && p.valid === true && p.export_all_in !== null)
+        .map(p => [new Date(p.time).getTime(), Number(p.export_all_in)]);
