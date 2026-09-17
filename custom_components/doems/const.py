@@ -105,7 +105,7 @@ SOLAR_REFERENCE_FREEZE_STORAGE_KEY = f"{DOMAIN}.solar_reference_freeze"
 
 PLATFORMS = ["sensor", "select", "binary_sensor", "button"]
 DEVICE_IDENTIFIER = "main"
-FOUNDATION_PHASE = "prices_p4_runtime"
+FOUNDATION_PHASE = "solar_p3_0_foundation"
 CANONICAL_HOME_POWER_ENTITY = "sensor.doems_source_home_power"
 
 PUBLIC_OBJECT_ID_PREFIX = "doems_"
