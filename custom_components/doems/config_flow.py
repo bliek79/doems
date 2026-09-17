@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 import voluptuous as vol
@@ -90,7 +90,12 @@ def _select(options: list[tuple[str, str]]) -> selector.SelectSelector:
     )
 
 
-def _number(minimum: float, maximum: float, step: float, unit: str | None = None) -> selector.NumberSelector:
+def _number(
+    minimum: float,
+    maximum: float,
+    step: float | Literal["any"],
+    unit: str | None = None,
+) -> selector.NumberSelector:
     config: selector.NumberSelectorConfig = {
         "min": minimum,
         "max": maximum,
@@ -318,8 +323,8 @@ class DOEMSOptionsFlow(OptionsFlow):
         return self.async_show_form(
             step_id="solar_location_override",
             data_schema=vol.Schema({
-                vol.Required(CONF_SOLAR_LATITUDE, default=float(self._current(CONF_SOLAR_LATITUDE, self.hass.config.latitude))): _number(-90, 90, 0.000001, "°"),
-                vol.Required(CONF_SOLAR_LONGITUDE, default=float(self._current(CONF_SOLAR_LONGITUDE, self.hass.config.longitude))): _number(-180, 180, 0.000001, "°"),
+                vol.Required(CONF_SOLAR_LATITUDE, default=float(self._current(CONF_SOLAR_LATITUDE, self.hass.config.latitude))): _number(-90, 90, "any", "°"),
+                vol.Required(CONF_SOLAR_LONGITUDE, default=float(self._current(CONF_SOLAR_LONGITUDE, self.hass.config.longitude))): _number(-180, 180, "any", "°"),
             }),
         )
 
@@ -392,9 +397,14 @@ class DOEMSOptionsFlow(OptionsFlow):
                 }
                 if index < len(self._solar_arrays): self._solar_arrays[index] = item
                 else: self._solar_arrays.append(item)
-                self._solar_array_index += 1
-                if self._solar_array_index < count:
+                if index + 1 < count:
+                    self._solar_array_index = index + 1
                     return await self.async_step_solar_array()
+                # Keep the cursor pinned to the last configured array while
+                # transitioning to the next options step. If a later form
+                # cannot render, Home Assistant must never expose a phantom
+                # "array 3 of 2" screen.
+                self._solar_array_index = max(0, count - 1)
                 self._solar_arrays = self._solar_arrays[:count]
                 self._pending[CONF_SOLAR_INVERTER_GROUPS] = self._solar_groups
                 self._pending[CONF_SOLAR_ARRAYS] = self._solar_arrays
@@ -437,13 +447,13 @@ class DOEMSOptionsFlow(OptionsFlow):
                 vol.Required(CONF_TARIFF_SUPPLIER, default=str(self._current(CONF_TARIFF_SUPPLIER, "unconfigured"))): str,
                 vol.Optional(CONF_TARIFF_VALID_FROM, default=str(self._current(CONF_TARIFF_VALID_FROM, ""))): str,
                 vol.Required(CONF_VAT_PERCENT, default=float(self._current(CONF_VAT_PERCENT, 21.0))): _number(0, 100, 0.01, "%"),
-                vol.Required(CONF_ELECTRICITY_IMPORT_SUPPLIER, default=float(self._current(CONF_ELECTRICITY_IMPORT_SUPPLIER, 0.0))): _number(-10, 10, 0.00001, "EUR/kWh"),
-                vol.Required(CONF_ELECTRICITY_IMPORT_TAX, default=float(self._current(CONF_ELECTRICITY_IMPORT_TAX, 0.0))): _number(-10, 10, 0.00001, "EUR/kWh"),
-                vol.Required(CONF_ELECTRICITY_EXPORT_SUPPLIER, default=float(self._current(CONF_ELECTRICITY_EXPORT_SUPPLIER, 0.0))): _number(-10, 10, 0.00001, "EUR/kWh"),
-                vol.Required(CONF_ELECTRICITY_EXPORT_TAX, default=float(self._current(CONF_ELECTRICITY_EXPORT_TAX, 0.0))): _number(-10, 10, 0.00001, "EUR/kWh"),
-                vol.Required(CONF_ELECTRICITY_FIXED_SUPPLY_PER_DAY, default=float(self._current(CONF_ELECTRICITY_FIXED_SUPPLY_PER_DAY, 0.0))): _number(-100, 100, 0.00001, "EUR/day"),
-                vol.Required(CONF_ELECTRICITY_GRID_PER_DAY, default=float(self._current(CONF_ELECTRICITY_GRID_PER_DAY, 0.0))): _number(-100, 100, 0.00001, "EUR/day"),
-                vol.Required(CONF_ELECTRICITY_TAX_CREDIT_PER_DAY, default=float(self._current(CONF_ELECTRICITY_TAX_CREDIT_PER_DAY, 0.0))): _number(-100, 100, 0.00001, "EUR/day"),
+                vol.Required(CONF_ELECTRICITY_IMPORT_SUPPLIER, default=float(self._current(CONF_ELECTRICITY_IMPORT_SUPPLIER, 0.0))): _number(-10, 10, "any", "EUR/kWh"),
+                vol.Required(CONF_ELECTRICITY_IMPORT_TAX, default=float(self._current(CONF_ELECTRICITY_IMPORT_TAX, 0.0))): _number(-10, 10, "any", "EUR/kWh"),
+                vol.Required(CONF_ELECTRICITY_EXPORT_SUPPLIER, default=float(self._current(CONF_ELECTRICITY_EXPORT_SUPPLIER, 0.0))): _number(-10, 10, "any", "EUR/kWh"),
+                vol.Required(CONF_ELECTRICITY_EXPORT_TAX, default=float(self._current(CONF_ELECTRICITY_EXPORT_TAX, 0.0))): _number(-10, 10, "any", "EUR/kWh"),
+                vol.Required(CONF_ELECTRICITY_FIXED_SUPPLY_PER_DAY, default=float(self._current(CONF_ELECTRICITY_FIXED_SUPPLY_PER_DAY, 0.0))): _number(-100, 100, "any", "EUR/day"),
+                vol.Required(CONF_ELECTRICITY_GRID_PER_DAY, default=float(self._current(CONF_ELECTRICITY_GRID_PER_DAY, 0.0))): _number(-100, 100, "any", "EUR/day"),
+                vol.Required(CONF_ELECTRICITY_TAX_CREDIT_PER_DAY, default=float(self._current(CONF_ELECTRICITY_TAX_CREDIT_PER_DAY, 0.0))): _number(-100, 100, "any", "EUR/day"),
                 vol.Required(CONF_GAS_PRICES_ENABLED, default=bool(self._current(CONF_GAS_PRICES_ENABLED, False))): bool,
             }),
         )
@@ -461,10 +471,10 @@ class DOEMSOptionsFlow(OptionsFlow):
             step_id="prices_gas",
             data_schema=vol.Schema({
                 _required_entity(CONF_GAS_MARKET_ENTITY, self._current(CONF_GAS_MARKET_ENTITY)): _sensor_selector(),
-                vol.Required(CONF_GAS_SUPPLIER, default=float(self._current(CONF_GAS_SUPPLIER, 0.0))): _number(-10, 10, 0.00001, "EUR/m3"),
-                vol.Required(CONF_GAS_TAX, default=float(self._current(CONF_GAS_TAX, 0.0))): _number(-10, 10, 0.00001, "EUR/m3"),
-                vol.Required(CONF_GAS_FIXED_SUPPLY_PER_DAY, default=float(self._current(CONF_GAS_FIXED_SUPPLY_PER_DAY, 0.0))): _number(-100, 100, 0.00001, "EUR/day"),
-                vol.Required(CONF_GAS_GRID_PER_DAY, default=float(self._current(CONF_GAS_GRID_PER_DAY, 0.0))): _number(-100, 100, 0.00001, "EUR/day"),
+                vol.Required(CONF_GAS_SUPPLIER, default=float(self._current(CONF_GAS_SUPPLIER, 0.0))): _number(-10, 10, "any", "EUR/m3"),
+                vol.Required(CONF_GAS_TAX, default=float(self._current(CONF_GAS_TAX, 0.0))): _number(-10, 10, "any", "EUR/m3"),
+                vol.Required(CONF_GAS_FIXED_SUPPLY_PER_DAY, default=float(self._current(CONF_GAS_FIXED_SUPPLY_PER_DAY, 0.0))): _number(-100, 100, "any", "EUR/day"),
+                vol.Required(CONF_GAS_GRID_PER_DAY, default=float(self._current(CONF_GAS_GRID_PER_DAY, 0.0))): _number(-100, 100, "any", "EUR/day"),
             }),
             errors=errors,
         )
