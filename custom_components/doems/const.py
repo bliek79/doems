@@ -1,10 +1,9 @@
 """Constants for DOEMS."""
-
 from __future__ import annotations
 
 DOMAIN = "doems"
 NAME = "DOEMS"
-VERSION = "0.1.0-alpha.6"
+VERSION = "0.1.0-alpha.7"
 
 CONF_INSTANCE_NAME = "instance_name"
 DEFAULT_INSTANCE_NAME = NAME
@@ -23,7 +22,6 @@ CONF_BATTERY_DISCHARGE_POWER_ENTITY = "battery_discharge_power_entity"
 ENERGY_SOURCE_DIRECT = "direct_home_power"
 ENERGY_SOURCE_BALANCE = "power_balance"
 ENERGY_SOURCE_MODES = [ENERGY_SOURCE_DIRECT, ENERGY_SOURCE_BALANCE]
-
 GRID_SIGN_POSITIVE_IMPORT = "positive_import_negative_export"
 GRID_SIGN_POSITIVE_EXPORT = "positive_export_negative_import"
 GRID_SIGN_OPTIONS = [GRID_SIGN_POSITIVE_IMPORT, GRID_SIGN_POSITIVE_EXPORT]
@@ -55,6 +53,38 @@ SOLAR_FOUNDATION_STORAGE_KEY = f"{DOMAIN}.solar_foundation"
 SOLAR_MAX_INVERTER_GROUPS = 8
 SOLAR_MAX_ARRAYS = 32
 
+# Prices P4.1 install contract.
+CONF_PRICES_ENABLED = "prices_enabled"
+CONF_PRICE_RESOLUTION_PREFERENCE = "price_resolution_preference"
+PRICE_RESOLUTION_AUTO = "auto"
+PRICE_RESOLUTION_15_MIN = "15_min"
+PRICE_RESOLUTION_60_MIN = "60_min"
+PRICE_RESOLUTION_OPTIONS = [PRICE_RESOLUTION_AUTO, PRICE_RESOLUTION_15_MIN, PRICE_RESOLUTION_60_MIN]
+PRICES_PROVIDER = "stroomvoorspeller"
+PRICES_SOURCE_ATTRIBUTION = "Data provided by Stroomvoorspeller.nl (CC BY 4.0)"
+PRICES_REFRESH_MINUTES = 30
+PRICES_STALE_HOURS = 28
+PRICE_BUFFER_HOURS = 76
+PRICE_BUFFER_SLOT_COUNT = PRICE_BUFFER_HOURS * 60 // 15
+
+CONF_TARIFF_PROFILE_ID = "tariff_profile_id"
+CONF_TARIFF_SUPPLIER = "tariff_supplier"
+CONF_TARIFF_VALID_FROM = "tariff_valid_from"
+CONF_VAT_PERCENT = "vat_percent"
+CONF_ELECTRICITY_IMPORT_SUPPLIER = "electricity_import_supplier_incl_vat"
+CONF_ELECTRICITY_IMPORT_TAX = "electricity_import_tax_incl_vat"
+CONF_ELECTRICITY_EXPORT_SUPPLIER = "electricity_export_supplier_incl_vat"
+CONF_ELECTRICITY_EXPORT_TAX = "electricity_export_tax_incl_vat"
+CONF_ELECTRICITY_FIXED_SUPPLY_PER_DAY = "electricity_fixed_supply_per_day"
+CONF_ELECTRICITY_GRID_PER_DAY = "electricity_grid_per_day"
+CONF_ELECTRICITY_TAX_CREDIT_PER_DAY = "electricity_tax_credit_per_day"
+CONF_GAS_PRICES_ENABLED = "gas_prices_enabled"
+CONF_GAS_MARKET_ENTITY = "gas_market_entity"
+CONF_GAS_SUPPLIER = "gas_supplier_incl_vat"
+CONF_GAS_TAX = "gas_tax_incl_vat"
+CONF_GAS_FIXED_SUPPLY_PER_DAY = "gas_fixed_supply_per_day"
+CONF_GAS_GRID_PER_DAY = "gas_grid_per_day"
+
 QUARTER_MINUTES = 15
 QUARTER_SECONDS = QUARTER_MINUTES * 60
 QUARTERS_PER_DAY = 96
@@ -74,5 +104,4 @@ PLATFORMS = ["sensor", "select", "binary_sensor", "button"]
 DEVICE_IDENTIFIER = "main"
 FOUNDATION_PHASE = "solar_p3_0_foundation"
 CANONICAL_HOME_POWER_ENTITY = "sensor.doems_source_home_power"
-
 PUBLIC_OBJECT_ID_PREFIX = "doems_"
