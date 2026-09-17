@@ -4,7 +4,7 @@ from __future__ import annotations
 
 DOMAIN = "doems"
 NAME = "DOEMS"
-VERSION = "0.1.0-alpha.6"
+VERSION = "0.1.0-alpha.7"
 
 CONF_INSTANCE_NAME = "instance_name"
 DEFAULT_INSTANCE_NAME = NAME
@@ -54,6 +54,45 @@ SOLAR_FOUNDATION_STORAGE_VERSION = 1
 SOLAR_FOUNDATION_STORAGE_KEY = f"{DOMAIN}.solar_foundation"
 SOLAR_MAX_INVERTER_GROUPS = 8
 SOLAR_MAX_ARRAYS = 32
+
+# Prices P4.1 install/runtime contract.
+CONF_PRICES_FORECAST_ENABLED = "prices_forecast_enabled"
+CONF_PRICES_PROVIDER = "prices_provider"
+CONF_PRICES_RESOLUTION = "prices_resolution"
+CONF_TARIFF_PROFILE_ID = "tariff_profile_id"
+CONF_TARIFF_SUPPLIER = "tariff_supplier"
+CONF_TARIFF_VALID_FROM = "tariff_valid_from"
+CONF_VAT_PERCENT = "vat_percent"
+CONF_ELECTRICITY_IMPORT_SUPPLIER = "electricity_import_supplier_incl_vat"
+CONF_ELECTRICITY_IMPORT_TAX = "electricity_import_tax_incl_vat"
+CONF_ELECTRICITY_EXPORT_SUPPLIER = "electricity_export_supplier_incl_vat"
+CONF_ELECTRICITY_EXPORT_TAX = "electricity_export_tax_incl_vat"
+CONF_ELECTRICITY_FIXED_SUPPLY_PER_DAY = "electricity_fixed_supply_per_day"
+CONF_ELECTRICITY_GRID_PER_DAY = "electricity_grid_per_day"
+CONF_ELECTRICITY_TAX_CREDIT_PER_DAY = "electricity_tax_credit_per_day"
+CONF_GAS_PRICES_ENABLED = "gas_prices_enabled"
+CONF_GAS_MARKET_ENTITY = "gas_market_entity"
+CONF_GAS_SUPPLIER = "gas_supplier_incl_vat"
+CONF_GAS_TAX = "gas_tax_incl_vat"
+CONF_GAS_FIXED_SUPPLY_PER_DAY = "gas_fixed_supply_per_day"
+CONF_GAS_GRID_PER_DAY = "gas_grid_per_day"
+PRICES_PROVIDER_STROOMVOORSPELLER = "stroomvoorspeller"
+PRICES_PROVIDER_OPTIONS = [PRICES_PROVIDER_STROOMVOORSPELLER]
+PRICES_RESOLUTION_AUTO = "auto"
+PRICES_RESOLUTION_15_MIN = "15_min"
+PRICES_RESOLUTION_60_MIN = "60_min"
+PRICES_RESOLUTION_OPTIONS = [
+    PRICES_RESOLUTION_AUTO,
+    PRICES_RESOLUTION_15_MIN,
+    PRICES_RESOLUTION_60_MIN,
+]
+PRICES_URL = "https://stroomvoorspeller.nl/data/prices.json"
+PRICES_FORECAST_URL = "https://stroomvoorspeller.nl/data/forecast.json"
+PRICES_SOURCE_ATTRIBUTION = "Data provided by Stroomvoorspeller.nl (CC BY 4.0)"
+PRICE_BUFFER_HOURS = 76
+PRICE_BUFFER_SLOT_COUNT = PRICE_BUFFER_HOURS * 60 // 15
+PRICES_REFRESH_MINUTES = 30
+PRICES_STALE_AFTER_HOURS = 28
 
 QUARTER_MINUTES = 15
 QUARTER_SECONDS = QUARTER_MINUTES * 60
