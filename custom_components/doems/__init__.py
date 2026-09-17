@@ -10,7 +10,7 @@ from homeassistant.helpers.event import async_track_state_change_event
 
 from .const import CONF_ENERGY_FORECAST_ENABLED, CONF_PRICES_ENABLED, DOMAIN, PLATFORMS
 from .energy_coordinator import DOEMSEnergyCoordinator
-from .prices import DOEMSPricesManager
+from .prices_runtime import DOEMSRegisteredPricesManager
 from .solar_forecast import SolarForecastManager
 from .solar_foundation import SolarFoundationManager
 from .solar_reference_freeze_runtime import SolarReferenceFreezeManager
@@ -34,9 +34,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
     solar_forecast = SolarForecastManager(hass, foundation)
     await solar_forecast.async_setup()
 
-    prices: DOEMSPricesManager | None = None
+    prices: DOEMSRegisteredPricesManager | None = None
     if entry.options.get(CONF_PRICES_ENABLED, False):
-        prices = DOEMSPricesManager(hass, entry)
+        prices = DOEMSRegisteredPricesManager(hass, entry)
         await prices.async_setup()
 
     entry.runtime_data = coordinator
@@ -89,7 +89,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> bo
 
     entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
     prices = entry_data.get("prices")
-    if isinstance(prices, DOEMSPricesManager):
+    if isinstance(prices, DOEMSRegisteredPricesManager):
         await prices.async_shutdown()
 
     solar_forecast = entry_data.get("solar_forecast")
