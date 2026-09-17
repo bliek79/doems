@@ -3,16 +3,44 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_alpha7_1_versions_and_prices_files():
+def test_alpha7_2_versions_prices_files_and_registered_entities():
     const = (ROOT / "custom_components/doems/const.py").read_text()
     manifest = (ROOT / "custom_components/doems/manifest.json").read_text()
     init = (ROOT / "custom_components/doems/__init__.py").read_text()
+    sensor = (ROOT / "custom_components/doems/sensor.py").read_text()
     prices = (ROOT / "custom_components/doems/prices.py").read_text()
+    prices_sensor = (ROOT / "custom_components/doems/prices_sensor.py").read_text()
+    prices_runtime = (ROOT / "custom_components/doems/prices_runtime.py").read_text()
     config_flow = (ROOT / "custom_components/doems/config_flow.py").read_text()
     example = (ROOT / "examples/prices_p4_forecast_card.yaml").read_text()
-    assert 'VERSION = "0.1.0-alpha.7.1"' in const
-    assert '"version": "0.1.0-alpha.7.1"' in manifest
-    assert "DOEMSPricesManager" in init
+
+    assert 'VERSION = "0.1.0-alpha.7.2"' in const
+    assert '"version": "0.1.0-alpha.7.2"' in manifest
+    assert "DOEMSRegisteredPricesManager" in init
+    assert "build_prices_sensors" in sensor
+    assert 'entry_data.get("prices")' in sensor
+
+    for object_id in (
+        "doems_prices_status",
+        "doems_prices_market_current",
+        "doems_prices_import_current",
+        "doems_prices_export_current",
+        "doems_prices_timeline",
+        "doems_prices_tariff_profile",
+        "doems_prices_gas_market",
+        "doems_prices_gas_all_in",
+    ):
+        assert object_id in prices_sensor
+
+    # Runtime ownership is now the SensorEntity platform. The Alpha7/7.1
+    # direct-state publisher remains only in the legacy base implementation
+    # and is suppressed by the actual Alpha7.2 runtime manager.
+    assert "class DOEMSRegisteredPricesManager" in prices_runtime
+    assert "def _publish_states(self) -> None:" in prices_runtime
+    assert "SensorEntity owns public state output" in prices_runtime
+    assert "async_remove" not in prices_runtime
+
+    # Existing Prices P4 data semantics remain present.
     for entity in (
         "sensor.doems_prices_status",
         "sensor.doems_prices_market_current",
@@ -27,8 +55,6 @@ def test_alpha7_1_versions_and_prices_files():
     assert example.count("type: line") == 2
 
     # Home Assistant NumberSelector requires step >= 0.001 unless step='any'.
-    # High precision tariff/location fields therefore must use the supported
-    # free precision mode, otherwise the Prices form fails to render.
     assert "0.00001" not in config_flow
     assert "0.000001" not in config_flow
     assert 'Literal["any"]' in config_flow
