@@ -1,0 +1,35 @@
+type: custom:apexcharts-card
+update_interval: 15min
+graph_span: 72h
+span:
+  start: hour
+header:
+  show: true
+  title: DOEMS · Prices Forecast
+  show_states: false
+now:
+  show: true
+  label: Nu
+series:
+  - entity: sensor.doems_prices_timeline
+    name: Import
+    type: line
+    unit: EUR/kWh
+    stroke_width: 2
+    extend_to: false
+    data_generator: |
+      const pts = entity.attributes.points || [];
+      return pts
+        .filter(p => p && p.time && Number.isFinite(Number(p.import_all_in)))
+        .map(p => [new Date(p.time).getTime(), Number(p.import_all_in)]);
+  - entity: sensor.doems_prices_timeline
+    name: Export
+    type: line
+    unit: EUR/kWh
+    stroke_width: 2
+    extend_to: false
+    data_generator: |
+      const pts = entity.attributes.points || [];
+      return pts
+        .filter(p => p && p.time && Number.isFinite(Number(p.export_all_in)))
+        .map(p => [new Date(p.time).getTime(), Number(p.export_all_in)]);
