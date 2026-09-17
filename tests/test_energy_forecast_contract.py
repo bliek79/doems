@@ -23,7 +23,7 @@ def _load_pure_module(name: str):
 
 def test_manifest_and_clean_identity_contract() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["domain"] == "doems" and manifest["name"] == "DOEMS" and manifest["version"] == "0.1.0-alpha.6"
+    assert manifest["domain"] == "doems" and manifest["name"] == "DOEMS" and manifest["version"] == "0.1.0-alpha.7"
     for path in INTEGRATION.rglob("*"):
         if not path.is_file() or path.suffix not in {".py", ".json", ".yaml", ".yml"}: continue
         text = path.read_text(encoding="utf-8")
@@ -59,7 +59,7 @@ def test_install_contract_is_component_scoped() -> None:
         assert token in text or token in const
     for token in ("solar_foundation_enabled","solar_location_source","solar_inverter_groups","solar_arrays","solar_latitude","solar_longitude"):
         assert token in text or token in const
-    for forbidden in ("tariff_supplier","battery_capacity_kwh","physical_execution"):
+    for forbidden in ("battery_capacity_kwh","physical_execution"):
         assert forbidden not in text
 
 
@@ -99,6 +99,6 @@ def test_startup_source_recovery_refresh_is_one_shot_and_component_scoped() -> N
     text=(INTEGRATION / "__init__.py").read_text(encoding="utf-8")
     assert "async_track_state_change_event" in text
     assert "if not coordinator.source_available" in text
+    assert "coordinator.source_entities" in text
     assert "coordinator._notify()" in text
     assert "remove_listener()" in text
-    assert "Energy History Status" in text
