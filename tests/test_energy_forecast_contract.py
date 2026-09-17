@@ -99,6 +99,6 @@ def test_startup_source_recovery_refresh_is_one_shot_and_component_scoped() -> N
     text=(INTEGRATION / "__init__.py").read_text(encoding="utf-8")
     assert "async_track_state_change_event" in text
     assert "if not coordinator.source_available" in text
+    assert "coordinator.source_entities" in text
     assert "coordinator._notify()" in text
     assert "remove_listener()" in text
-    assert "Energy History Status" in text
