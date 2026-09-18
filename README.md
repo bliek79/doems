@@ -4,7 +4,7 @@ DOEMS is a Home Assistant Energy Management System integration built component b
 
 ## Current stage
 
-`0.1.0-alpha.7.3` adds explicit **Prices P4 gas market source semantics** on top of the live Energy Forecast, Solar P3.1 runtime and the Alpha7.2 registered Prices entities.
+`0.1.0-alpha.7.4` adds a read-only **gas versus electricity price comparison sensor** on top of the live Prices P4 gas-source semantics from Alpha7.3.
 
 The current integration provides:
 
@@ -15,6 +15,7 @@ The current integration provides:
 - Prices P4 with Stroomvoorspeller market data, known-price priority, a 76-hour internal buffer and an exact 72-hour / 288-slot public timeline;
 - user-configurable tariff profiles with separate import and export components;
 - optional gas market/all-in publication with explicit source semantics: either the official EnergyZero market action (`MARKET_WITH_VAT`) or a validated generic Home Assistant EUR/m³ market-price sensor;
+- optional `sensor.doems_prices_gas_vs_electricity`, normalizing gas all-in to EUR/kWh with a fixed 9.77 kWh/m³ higher-heating-value basis and exposing the current electricity/gas price ratio;
 - approved local DOEMS branding assets;
 - no EMS physical execution authority.
 
@@ -61,16 +62,19 @@ Public Prices interface:
 - `sensor.doems_prices_timeline`
 - `sensor.doems_prices_tariff_profile`
 - optional gas market/all-in states when gas publication is enabled
+- optional `sensor.doems_prices_gas_vs_electricity` when gas publication is enabled
 
 Each timeline point is provider-neutral and exposes timestamp, market price, import all-in, export all-in, source kind, source resolution and available forecast metadata. `examples/prices_p4_forecast_card.yaml` renders exactly two primary lines: **Import all-in** and **Export all-in**.
 
 Optional gas publication keeps the all-in formula explicit: gas market price including VAT + locally configured supplier component + locally configured tax component. EnergyZero mode calls `energyzero.get_gas_prices` with VAT included so DOEMS receives an explicitly requested market price instead of relying on the semantics of EnergyZero's convenience sensor. Generic sensor mode remains available for third-party providers and validates that the selected sensor uses EUR/m³.
 
+When gas is enabled, `sensor.doems_prices_gas_vs_electricity` exposes the gas all-in price normalized to EUR/kWh using a fixed 9.77 kWh/m³ higher heating value. Its attributes also expose the current electricity import all-in price and the ratio `electricity_import / gas_equivalent`. This is an energy-carrier price comparison only; boiler efficiency and heat-pump COP are intentionally excluded.
+
 ## Identity and safety
 
 All public DOEMS object IDs start with `doems_`. Active integration code lives under `custom_components/doems`, domain `doems`, and component-owned storage uses `doems.*` namespaces.
 
-Forecast modules are data/configuration layers. `physical_execution_authority` remains false. Alpha7.3 introduces one read-only Home Assistant data-action call (`energyzero.get_gas_prices`) and no battery, inverter or other physical equipment service calls.
+Forecast modules are data/configuration layers. `physical_execution_authority` remains false. Alpha7.4 retains the single read-only Home Assistant data-action call (`energyzero.get_gas_prices`) and no battery, inverter or other physical equipment service calls.
 
 ## License
 
