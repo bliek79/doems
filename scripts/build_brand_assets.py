@@ -1,8 +1,9 @@
-"""Rebuild DOEMS local brand variants from the approved light logo artwork."""
+"""Rebuild DOEMS brand variants from the single approved brand logo."""
 
 from __future__ import annotations
 
 import hashlib
+import shutil
 from pathlib import Path
 
 from PIL import Image
@@ -27,13 +28,8 @@ def main() -> None:
     if logo.size != (640, 192):
         raise SystemExit(f"Unexpected approved logo dimensions: {logo.size}")
 
-    artwork = logo.crop((13, 25, 156, 168))
-    icon_base = Image.new("RGBA", (192, 192), (0, 0, 0, 0))
-    icon_base.alpha_composite(artwork, ((192 - artwork.width) // 2, (192 - artwork.height) // 2))
-    _save(icon_base.resize((256, 256), Image.Resampling.LANCZOS), "icon.png")
-    _save(icon_base.resize((512, 512), Image.Resampling.LANCZOS), "icon@2x.png")
-    _save(icon_base.resize((256, 256), Image.Resampling.LANCZOS), "dark_icon.png")
-    _save(icon_base.resize((512, 512), Image.Resampling.LANCZOS), "dark_icon@2x.png")
+    # DOEMS has one brand logo. The Home Assistant icon roles reuse that
+    # complete artwork; no cropped sub-mark or second logo is generated.
     _save(logo.resize((1280, 384), Image.Resampling.LANCZOS), "logo@2x.png")
 
     dark_logo = logo.copy()
@@ -45,6 +41,11 @@ def main() -> None:
                 pixels[x, y] = (245, 248, 250, alpha)
     _save(dark_logo, "dark_logo.png")
     _save(dark_logo.resize((1280, 384), Image.Resampling.LANCZOS), "dark_logo@2x.png")
+
+    shutil.copyfile(BRAND / "logo.png", BRAND / "icon.png")
+    shutil.copyfile(BRAND / "logo@2x.png", BRAND / "icon@2x.png")
+    shutil.copyfile(BRAND / "dark_logo.png", BRAND / "dark_icon.png")
+    shutil.copyfile(BRAND / "dark_logo@2x.png", BRAND / "dark_icon@2x.png")
 
 
 if __name__ == "__main__":

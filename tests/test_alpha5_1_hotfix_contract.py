@@ -34,3 +34,16 @@ def test_approved_doems_brand_assets_remain_present() -> None:
         "dark_logo@2x.png",
     }
     assert {path.name for path in brand.glob("*.png")} == expected
+
+
+
+def test_doems_uses_one_complete_brand_logo_for_icon_roles() -> None:
+    brand = INTEGRATION / "brand"
+    assert (brand / "icon.png").read_bytes() == (brand / "logo.png").read_bytes()
+    assert (brand / "icon@2x.png").read_bytes() == (brand / "logo@2x.png").read_bytes()
+    assert (brand / "dark_icon.png").read_bytes() == (brand / "dark_logo.png").read_bytes()
+    assert (brand / "dark_icon@2x.png").read_bytes() == (brand / "dark_logo@2x.png").read_bytes()
+
+    builder = (ROOT / "scripts" / "build_brand_assets.py").read_text(encoding="utf-8")
+    assert ".crop(" not in builder
+    assert "DOEMS has one brand logo" in builder

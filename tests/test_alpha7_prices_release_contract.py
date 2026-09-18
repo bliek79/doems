@@ -3,7 +3,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_alpha7_4_versions_prices_files_and_registered_entities():
+def test_alpha7_5_versions_prices_files_and_registered_entities():
     const = (ROOT / "custom_components/doems/const.py").read_text()
     manifest = (ROOT / "custom_components/doems/manifest.json").read_text()
     init = (ROOT / "custom_components/doems/__init__.py").read_text()
@@ -14,8 +14,8 @@ def test_alpha7_4_versions_prices_files_and_registered_entities():
     config_flow = (ROOT / "custom_components/doems/config_flow.py").read_text()
     example = (ROOT / "examples/prices_p4_forecast_card.yaml").read_text()
 
-    assert 'VERSION = "0.1.0-alpha.7.4"' in const
-    assert '"version": "0.1.0-alpha.7.4"' in manifest
+    assert 'VERSION = "0.1.0-alpha.7.5"' in const
+    assert '"version": "0.1.0-alpha.7.5"' in manifest
     assert "DOEMSRegisteredPricesManager" in init
     assert "build_prices_sensors" in sensor
     assert 'entry_data.get("prices")' in sensor
@@ -35,7 +35,7 @@ def test_alpha7_4_versions_prices_files_and_registered_entities():
 
     # Runtime ownership is now the SensorEntity platform. The Alpha7/7.1
     # direct-state publisher remains only in the legacy base implementation
-    # and is suppressed by the actual Alpha7.4 runtime manager.
+    # and is suppressed by the actual Alpha7.5 runtime manager.
     assert "class DOEMSRegisteredPricesManager" in prices_runtime
     assert "def _publish_states(self) -> None:" in prices_runtime
     assert "SensorEntity owns public state output" in prices_runtime
@@ -88,3 +88,11 @@ def test_alpha7_4_versions_prices_files_and_registered_entities():
     assert "if index + 1 < count:" in config_flow
     assert "self._solar_array_index += 1" not in config_flow
     assert '"array 3 of 2"' in config_flow
+
+
+
+def test_alpha7_5_is_branding_only_and_preserves_prices_contract():
+    builder = (ROOT / "scripts/build_brand_assets.py").read_text(encoding="utf-8")
+    assert 'SOURCE = BRAND / "logo.png"' in builder
+    assert ".crop(" not in builder
+    assert "shutil.copyfile(BRAND / \"logo.png\", BRAND / \"icon.png\")" in builder

@@ -1,4 +1,4 @@
-name: DOEMS CI and Alpha7.4 Prices Gas vs Electricity Release
+name: DOEMS CI and Alpha7.5 Single Brand Logo Fix Release
 
 on:
   pull_request:
@@ -17,8 +17,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: python -m pip install --upgrade pip pytest
+      - run: python -m pip install --upgrade pip pytest pillow
       - run: python -m compileall -q custom_components/doems scripts
+      - name: Validate single-logo brand contract
+        run: |
+          python scripts/build_brand_assets.py
+          git diff --exit-code -- custom_components/doems/brand
+          cmp custom_components/doems/brand/logo.png custom_components/doems/brand/icon.png
+          cmp custom_components/doems/brand/logo@2x.png custom_components/doems/brand/icon@2x.png
+          cmp custom_components/doems/brand/dark_logo.png custom_components/doems/brand/dark_icon.png
+          cmp custom_components/doems/brand/dark_logo@2x.png custom_components/doems/brand/dark_icon@2x.png
       - run: pytest -q
       - name: Validate JSON files
         run: |
@@ -29,16 +37,16 @@ jobs:
               json.loads(path.read_text(encoding='utf-8'))
               print(f'valid: {path}')
           PY
-      - name: Validate Alpha7.4 release contract
+      - name: Validate Alpha7.5 release contract
         run: |
-          test -f RELEASE_NOTES_0.1.0-alpha.7.4.md
+          test -f RELEASE_NOTES_0.1.0-alpha.7.5.md
           test -f examples/prices_p4_forecast_card.yaml
           test -f custom_components/doems/prices.py
           test -f custom_components/doems/prices_model.py
           test -f custom_components/doems/prices_sensor.py
           test -f custom_components/doems/prices_runtime.py
-          grep -F 'VERSION = "0.1.0-alpha.7.4"' custom_components/doems/const.py
-          grep -F '"version": "0.1.0-alpha.7.4"' custom_components/doems/manifest.json
+          grep -F 'VERSION = "0.1.0-alpha.7.5"' custom_components/doems/const.py
+          grep -F '"version": "0.1.0-alpha.7.5"' custom_components/doems/manifest.json
           grep -F 'build_prices_sensors' custom_components/doems/sensor.py
           grep -F 'DOEMSRegisteredPricesManager' custom_components/doems/__init__.py
           grep -F 'GAS_SOURCE_ENERGYZERO_MARKET_ACTION' custom_components/doems/const.py
@@ -52,7 +60,7 @@ jobs:
           grep -F 'import_all_in' examples/prices_p4_forecast_card.yaml
           grep -F 'export_all_in' examples/prices_p4_forecast_card.yaml
 
-  publish-alpha7-4:
+  publish-alpha7-5:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
@@ -62,7 +70,7 @@ jobs:
           fetch-depth: 0
       - name: Build release archive
         run: |
-          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.7.4.md
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.7.5.md
           sha256sum doems.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - name: Verify Prices P4 runtime is packaged
@@ -73,7 +81,7 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/prices_runtime.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/config_flow.py'
           unzip -l doems.zip | grep -F 'examples/prices_p4_forecast_card.yaml'
-      - name: Verify existing DOEMS brand assets are packaged unchanged by this release step
+      - name: Verify the single DOEMS brand logo is packaged for all brand roles
         run: |
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/icon.png'
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/icon@2x.png'
@@ -81,12 +89,12 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/dark_icon@2x.png'
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/logo.png'
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/dark_logo.png'
-      - name: Publish normal Alpha7.4 release if missing
+      - name: Publish normal Alpha7.5 release if missing
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view 0.1.0-alpha.7.4 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.7.4 --title "DOEMS 0.1.0-alpha.7.4 - Gas vs Electricity Price Sensor" --notes-file RELEASE_NOTES_0.1.0-alpha.7.4.md
+          if gh release view 0.1.0-alpha.7.5 >/dev/null 2>&1; then
+            gh release edit 0.1.0-alpha.7.5 --title "DOEMS 0.1.0-alpha.7.5 - Gas vs Electricity Price Sensor" --notes-file RELEASE_NOTES_0.1.0-alpha.7.5.md
           else
-            gh release create 0.1.0-alpha.7.4 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.4 - Gas vs Electricity Price Sensor" --notes-file RELEASE_NOTES_0.1.0-alpha.7.4.md
+            gh release create 0.1.0-alpha.7.5 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.5 - Gas vs Electricity Price Sensor" --notes-file RELEASE_NOTES_0.1.0-alpha.7.5.md
           fi
