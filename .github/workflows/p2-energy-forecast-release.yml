@@ -86,7 +86,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view 0.1.0-alpha.7.4 >/dev/null 2>&1; then
-            echo "Release 0.1.0-alpha.7.4 already exists; leaving it unchanged."
+            gh release edit 0.1.0-alpha.7.4 --title "DOEMS 0.1.0-alpha.7.4 - Gas vs Electricity Price Sensor" --notes-file RELEASE_NOTES_0.1.0-alpha.7.4.md
           else
-            gh release create 0.1.0-alpha.7.4 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.4 - Prices Gas Market Semantics Fix" --notes-file RELEASE_NOTES_0.1.0-alpha.7.4.md
+            gh release create 0.1.0-alpha.7.4 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.4 - Gas vs Electricity Price Sensor" --notes-file RELEASE_NOTES_0.1.0-alpha.7.4.md
           fi
