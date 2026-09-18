@@ -1,21 +1,22 @@
-# DOEMS 0.1.0-alpha.7.5 - Single Brand Logo Fix
+# DOEMS 0.1.0-alpha.7.5 - Full Brand Logo Icon Fix
 
-Alpha7.5 is intentionally small: DOEMS has one approved brand logo and the general Home Assistant integration icon must show that complete logo instead of a cropped sub-mark.
+Alpha7.5 is intentionally small. DOEMS has one approved brand logo. The general Home Assistant integration icon now shows that complete existing logo instead of a separately cropped sub-mark.
 
 ## Fixed
 
 - `brand/logo.png` remains the single approved source artwork.
-- The Home Assistant icon roles now reuse the complete logo artwork:
-  - `icon.png` = `logo.png`
-  - `icon@2x.png` = `logo@2x.png`
-  - `dark_icon.png` = `dark_logo.png`
-  - `dark_icon@2x.png` = `dark_logo@2x.png`
-- The brand builder no longer crops a separate icon out of the logo.
-- CI verifies byte-for-byte that icon roles and their corresponding logo variants match.
+- The technical square Home Assistant icon roles are rebuilt from the **complete** logo without cropping:
+  - `icon.png` 256x256
+  - `icon@2x.png` 512x512
+  - `dark_icon.png` 256x256
+  - `dark_icon@2x.png` 512x512
+- Aspect ratio is preserved and unused square space stays transparent.
+- Dark mode changes only the existing logo's dark text treatment; it is not a second logo.
+- CI rebuilds the brand assets and fails when committed files differ from the deterministic output.
 
 ## Unchanged
 
-- No MDI replacement and no second logo.
+- No MDI replacement and no new artwork.
 - No entity-specific icon changes.
 - Energy Forecast unchanged.
 - Solar P3.1 unchanged.
@@ -26,4 +27,4 @@ Alpha7.5 is intentionally small: DOEMS has one approved brand logo and the gener
 
 ## Live check
 
-After HACS upgrade and Home Assistant restart, check only the general DOEMS integration/device branding. It should show the existing complete DOEMS brand logo. Functional sensor values should remain unchanged.
+After HACS upgrade and Home Assistant restart, check only the general DOEMS integration/device branding. It should show the complete existing DOEMS brand logo. Functional sensor values should remain unchanged.

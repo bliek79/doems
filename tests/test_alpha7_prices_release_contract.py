@@ -91,8 +91,9 @@ def test_alpha7_5_versions_prices_files_and_registered_entities():
 
 
 
+
 def test_alpha7_5_is_branding_only_and_preserves_prices_contract():
-    builder = (ROOT / "scripts/build_brand_assets.py").read_text(encoding="utf-8")
+    builder = (ROOT / "scripts/build_brand_assets.py").read_text()
     assert 'SOURCE = BRAND / "logo.png"' in builder
+    assert "_fit_complete_logo_on_square" in builder
     assert ".crop(" not in builder
-    assert "shutil.copyfile(BRAND / \"logo.png\", BRAND / \"icon.png\")" in builder

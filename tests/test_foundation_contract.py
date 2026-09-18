@@ -51,10 +51,10 @@ def _png_dimensions(path: Path) -> tuple[int, int]:
 
 def test_local_brand_assets_are_valid_pngs() -> None:
     expected = {
-        "icon.png": (640, 192),
-        "icon@2x.png": (1280, 384),
-        "dark_icon.png": (640, 192),
-        "dark_icon@2x.png": (1280, 384),
+        "icon.png": (256, 256),
+        "icon@2x.png": (512, 512),
+        "dark_icon.png": (256, 256),
+        "dark_icon@2x.png": (512, 512),
         "logo.png": (640, 192),
         "logo@2x.png": (1280, 384),
         "dark_logo.png": (640, 192),

@@ -4,7 +4,7 @@ DOEMS is a Home Assistant Energy Management System integration built component b
 
 ## Current stage
 
-`0.1.0-alpha.7.5` is a focused **single-brand-logo fix**. DOEMS keeps one approved logo; Home Assistant's general integration icon roles now reuse the complete logo instead of a cropped sub-mark. Runtime logic is unchanged.
+`0.1.0-alpha.7.5` is a focused **single-brand-logo fix**. DOEMS keeps one approved logo; Home Assistant's general integration icon roles now render the complete existing DOEMS logo instead of a cropped sub-mark. Runtime logic is unchanged.
 
 The current integration provides:
 
@@ -16,7 +16,7 @@ The current integration provides:
 - user-configurable tariff profiles with separate import and export components;
 - optional gas market/all-in publication with explicit source semantics: either the official EnergyZero market action (`MARKET_WITH_VAT`) or a validated generic Home Assistant EUR/m³ market-price sensor;
 - optional `sensor.doems_prices_gas_vs_electricity`, normalizing gas all-in to EUR/kWh with a fixed 9.77 kWh/m³ higher-heating-value basis and exposing the current electricity/gas price ratio;
-- one approved DOEMS brand logo reused consistently for Home Assistant logo/icon roles;
+- one approved DOEMS brand logo, with Home Assistant icon files generated as square technical renderings of the complete logo;
 - no EMS physical execution authority.
 
 ## Installation and upgrade

@@ -37,13 +37,11 @@ def test_approved_doems_brand_assets_remain_present() -> None:
 
 
 
-def test_doems_uses_one_complete_brand_logo_for_icon_roles() -> None:
-    brand = INTEGRATION / "brand"
-    assert (brand / "icon.png").read_bytes() == (brand / "logo.png").read_bytes()
-    assert (brand / "icon@2x.png").read_bytes() == (brand / "logo@2x.png").read_bytes()
-    assert (brand / "dark_icon.png").read_bytes() == (brand / "dark_logo.png").read_bytes()
-    assert (brand / "dark_icon@2x.png").read_bytes() == (brand / "dark_logo@2x.png").read_bytes()
 
+def test_doems_brand_builder_uses_one_complete_logo_without_crop() -> None:
     builder = (ROOT / "scripts" / "build_brand_assets.py").read_text(encoding="utf-8")
+    assert 'SOURCE = BRAND / "logo.png"' in builder
+    assert "APPROVED_LOGO_SHA256" in builder
+    assert "_fit_complete_logo_on_square" in builder
     assert ".crop(" not in builder
-    assert "DOEMS has one brand logo" in builder
+    assert "one visual DOEMS brand logo" in builder
