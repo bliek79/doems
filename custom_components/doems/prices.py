@@ -26,10 +26,12 @@ from .const import (
     CONF_ELECTRICITY_IMPORT_SUPPLIER,
     CONF_ELECTRICITY_IMPORT_TAX,
     CONF_ELECTRICITY_TAX_CREDIT_PER_DAY,
+    CONF_GAS_ENERGYZERO_CONFIG_ENTRY,
     CONF_GAS_FIXED_SUPPLY_PER_DAY,
     CONF_GAS_GRID_PER_DAY,
     CONF_GAS_MARKET_ENTITY,
     CONF_GAS_PRICES_ENABLED,
+    CONF_GAS_SOURCE_MODE,
     CONF_GAS_SUPPLIER,
     CONF_GAS_TAX,
     CONF_PRICES_RESOLUTION_PREFERENCE,
@@ -39,6 +41,8 @@ from .const import (
     CONF_VAT_PERCENT,
     FORECAST_HORIZON_HOURS,
     FORECAST_SLOTS,
+    GAS_SOURCE_ENERGYZERO_MARKET_ACTION,
+    GAS_SOURCE_HOME_ASSISTANT_ENTITY,
     PRICE_BUFFER_HOURS,
     PRICE_BUFFER_SLOT_COUNT,
     PRICES_PROVIDER,
@@ -55,6 +59,7 @@ from .prices_model import (
     deduplicate_price_points,
     expected_quarter_starts,
     floor_quarter,
+    select_current_response_price,
     select_exact_price_window,
     utc,
 )
@@ -111,6 +116,11 @@ class DOEMSPricesManager:
         self.timeline_start: datetime | None = None
         self.timeline_end: datetime | None = None
         self.timeline_missing_starts: list[datetime] = []
+        self._gas_action_market_price: float | None = None
+        self.gas_source_status = "disabled"
+        self.gas_source_error: str | None = None
+        self.gas_source_timestamp: str | None = None
+        self.gas_source_points = 0
 
     @property
     def options(self) -> dict[str, Any]:
@@ -134,13 +144,37 @@ class DOEMSPricesManager:
         return bool(self.entry.options.get(CONF_GAS_PRICES_ENABLED, False))
 
     @property
+    def gas_source_mode(self) -> str:
+        value = str(
+            self.entry.options.get(
+                CONF_GAS_SOURCE_MODE,
+                GAS_SOURCE_HOME_ASSISTANT_ENTITY,
+            )
+        )
+        if value not in {
+            GAS_SOURCE_HOME_ASSISTANT_ENTITY,
+            GAS_SOURCE_ENERGYZERO_MARKET_ACTION,
+        }:
+            return GAS_SOURCE_HOME_ASSISTANT_ENTITY
+        return value
+
+    @property
     def gas_market_entity(self) -> str | None:
         value = self.entry.options.get(CONF_GAS_MARKET_ENTITY)
         return str(value) if value else None
 
     @property
+    def gas_energyzero_config_entry(self) -> str | None:
+        value = self.entry.options.get(CONF_GAS_ENERGYZERO_CONFIG_ENTRY)
+        return str(value) if value else None
+
+    @property
     def gas_market_price(self) -> float | None:
-        if not self.gas_enabled or not self.gas_market_entity:
+        if not self.gas_enabled:
+            return None
+        if self.gas_source_mode == GAS_SOURCE_ENERGYZERO_MARKET_ACTION:
+            return self._gas_action_market_price
+        if not self.gas_market_entity:
             return None
         state = self.hass.states.get(self.gas_market_entity)
         if state is None or state.state in {"unknown", "unavailable", "none", "None", ""}:
@@ -149,6 +183,32 @@ class DOEMSPricesManager:
             return float(state.state)
         except (TypeError, ValueError):
             return None
+
+    @property
+    def gas_source_attributes(self) -> dict[str, Any]:
+        return {
+            "source": (
+                "energyzero.get_gas_prices"
+                if self.gas_source_mode == GAS_SOURCE_ENERGYZERO_MARKET_ACTION
+                else "configured_home_assistant_entity"
+            ),
+            "source_mode": self.gas_source_mode,
+            "source_entity": (
+                self.gas_market_entity
+                if self.gas_source_mode == GAS_SOURCE_HOME_ASSISTANT_ENTITY
+                else None
+            ),
+            "source_config_entry": (
+                self.gas_energyzero_config_entry
+                if self.gas_source_mode == GAS_SOURCE_ENERGYZERO_MARKET_ACTION
+                else None
+            ),
+            "price_basis": "market_incl_vat",
+            "source_status": self.gas_source_status,
+            "source_error": self.gas_source_error,
+            "source_timestamp": self.gas_source_timestamp,
+            "source_points": self.gas_source_points,
+        }
 
     @property
     def gas_variable_addon(self) -> float:
@@ -174,6 +234,7 @@ class DOEMSPricesManager:
             "electricity_grid_per_day": self._num(CONF_ELECTRICITY_GRID_PER_DAY),
             "electricity_tax_credit_per_day": self._num(CONF_ELECTRICITY_TAX_CREDIT_PER_DAY),
             "gas_prices_enabled": self.gas_enabled,
+            "gas_source_mode": self.gas_source_mode,
             "gas_supplier_incl_vat": self._num(CONF_GAS_SUPPLIER),
             "gas_tax_incl_vat": self._num(CONF_GAS_TAX),
             "gas_fixed_supply_per_day": self._num(CONF_GAS_FIXED_SUPPLY_PER_DAY),
@@ -186,7 +247,11 @@ class DOEMSPricesManager:
     async def async_setup(self) -> None:
         await self.async_refresh()
         self._unsubs.append(async_track_time_interval(self.hass, self._scheduled_refresh, REFRESH_INTERVAL))
-        if self.gas_enabled and self.gas_market_entity:
+        if (
+            self.gas_enabled
+            and self.gas_source_mode == GAS_SOURCE_HOME_ASSISTANT_ENTITY
+            and self.gas_market_entity
+        ):
             self._unsubs.append(
                 async_track_state_change_event(
                     self.hass,
@@ -224,8 +289,78 @@ class DOEMSPricesManager:
 
     @callback
     def _gas_source_changed(self, _event: Event) -> None:
+        self._refresh_entity_gas_source()
         self._publish_states()
         self._notify()
+
+    def _refresh_entity_gas_source(self) -> None:
+        if not self.gas_enabled:
+            self.gas_source_status = "disabled"
+            self.gas_source_error = None
+            self.gas_source_timestamp = None
+            self.gas_source_points = 0
+            return
+        market = self.gas_market_price
+        state = self.hass.states.get(self.gas_market_entity) if self.gas_market_entity else None
+        self.gas_source_status = "ok" if market is not None else "unavailable"
+        self.gas_source_error = None if market is not None else "market_price_unavailable"
+        self.gas_source_timestamp = (
+            state.last_updated.isoformat() if state is not None else None
+        )
+        self.gas_source_points = 1 if market is not None else 0
+
+    async def _async_refresh_gas_source(self) -> None:
+        if not self.gas_enabled:
+            self._gas_action_market_price = None
+            self._refresh_entity_gas_source()
+            return
+
+        if self.gas_source_mode == GAS_SOURCE_HOME_ASSISTANT_ENTITY:
+            self._gas_action_market_price = None
+            self._refresh_entity_gas_source()
+            return
+
+        self._gas_action_market_price = None
+        self.gas_source_timestamp = None
+        self.gas_source_points = 0
+        entry_id = self.gas_energyzero_config_entry
+        if not entry_id:
+            self.gas_source_status = "error"
+            self.gas_source_error = "energyzero_config_entry_missing"
+            return
+        if not self.hass.services.has_service("energyzero", "get_gas_prices"):
+            self.gas_source_status = "error"
+            self.gas_source_error = "energyzero_get_gas_prices_service_unavailable"
+            return
+
+        try:
+            response = await self.hass.services.async_call(
+                "energyzero",
+                "get_gas_prices",
+                {"config_entry": entry_id, "incl_vat": True},
+                blocking=True,
+                return_response=True,
+            )
+            prices = response.get("prices", []) if isinstance(response, dict) else []
+            market, timestamp, points = select_current_response_price(
+                prices,
+                now=dt_util.utcnow(),
+            )
+            if market is None:
+                raise ValueError("EnergyZero market action returned no valid gas price")
+            self._gas_action_market_price = market
+            self.gas_source_timestamp = timestamp
+            self.gas_source_points = points
+            self.gas_source_status = "ok"
+            self.gas_source_error = None
+        except Exception as err:
+            self._gas_action_market_price = None
+            self.gas_source_status = "error"
+            self.gas_source_error = f"{type(err).__name__}: {err}"
+            _LOGGER.warning(
+                "DOEMS EnergyZero gas market refresh failed: %s",
+                self.gas_source_error,
+            )
 
     async def async_refresh(self) -> None:
         session = async_get_clientsession(self.hass)
@@ -252,6 +387,8 @@ class DOEMSPricesManager:
             self.error = f"{type(err).__name__}: {err}"
             self.status = "error"
             _LOGGER.warning("DOEMS Prices refresh failed: %s", self.error)
+
+        await self._async_refresh_gas_source()
         self._publish_states()
         self._notify()
 
@@ -401,6 +538,7 @@ class DOEMSPricesManager:
             "known_over_forecast": True,
             "current_never_uses_forecast": True,
             "import_export_separate": True,
+            **self.gas_source_attributes,
             "physical_execution_authority": False,
         }
 

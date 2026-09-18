@@ -4,7 +4,7 @@ from __future__ import annotations
 
 DOMAIN = "doems"
 NAME = "DOEMS"
-VERSION = "0.1.0-alpha.7.2"
+VERSION = "0.1.0-alpha.7.3"
 
 CONF_INSTANCE_NAME = "instance_name"
 DEFAULT_INSTANCE_NAME = NAME
@@ -78,7 +78,15 @@ CONF_ELECTRICITY_FIXED_SUPPLY_PER_DAY = "electricity_fixed_supply_per_day"
 CONF_ELECTRICITY_GRID_PER_DAY = "electricity_grid_per_day"
 CONF_ELECTRICITY_TAX_CREDIT_PER_DAY = "electricity_tax_credit_per_day"
 CONF_GAS_PRICES_ENABLED = "gas_prices_enabled"
+CONF_GAS_SOURCE_MODE = "gas_source_mode"
+GAS_SOURCE_HOME_ASSISTANT_ENTITY = "home_assistant_entity"
+GAS_SOURCE_ENERGYZERO_MARKET_ACTION = "energyzero_market_action"
+GAS_SOURCE_MODES = [
+    GAS_SOURCE_HOME_ASSISTANT_ENTITY,
+    GAS_SOURCE_ENERGYZERO_MARKET_ACTION,
+]
 CONF_GAS_MARKET_ENTITY = "gas_market_entity"
+CONF_GAS_ENERGYZERO_CONFIG_ENTRY = "gas_energyzero_config_entry"
 CONF_GAS_SUPPLIER = "gas_supplier_incl_vat"
 CONF_GAS_TAX = "gas_tax_incl_vat"
 CONF_GAS_FIXED_SUPPLY_PER_DAY = "gas_fixed_supply_per_day"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from math import isfinite
 from typing import Any, Iterable
 
 QUARTER_MINUTES = 15
@@ -129,3 +130,43 @@ def compose_point(
         kind=kind,
         source_resolution_minutes=source_resolution_minutes,
     )
+
+
+
+def select_current_response_price(
+    prices: Iterable[dict[str, Any]], *, now: datetime
+) -> tuple[float | None, str | None, int]:
+    """Select the response price that applies at *now*.
+
+    EnergyZero currently returns one daily gas market point while older
+    response shapes could contain repeated hourly points. Support both and
+    expose the selected timestamp for provenance.
+    """
+    current = utc(now)
+    valid: list[tuple[datetime, float]] = []
+    for item in prices:
+        try:
+            value = float(item.get("price"))
+        except (TypeError, ValueError):
+            continue
+        if not isfinite(value):
+            continue
+        raw_timestamp = item.get("timestamp")
+        if not raw_timestamp:
+            continue
+        try:
+            timestamp = datetime.fromisoformat(
+                str(raw_timestamp).replace("Z", "+00:00")
+            )
+            timestamp = utc(timestamp)
+        except (TypeError, ValueError):
+            continue
+        valid.append((timestamp, value))
+
+    if not valid:
+        return None, None, 0
+
+    valid.sort(key=lambda item: item[0])
+    applicable = [item for item in valid if item[0] <= current]
+    selected = applicable[-1] if applicable else valid[0]
+    return selected[1], selected[0].isoformat(), len(valid)
