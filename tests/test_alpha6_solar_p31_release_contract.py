@@ -42,4 +42,8 @@ def test_safety_and_branding_scope_remain_explicit() -> None:
     prices = (INTEGRATION / "prices.py").read_text(encoding="utf-8")
     assert '"energyzero"' in prices and '"get_gas_prices"' in prices
     assert '"physical_execution_authority": False' in active_text
-    assert "build_brand_assets.py" not in workflow
+    # Alpha7.5 is the explicitly authorized branding-only release. The
+    # builder may run only as a deterministic validation step; safety/runtime
+    # semantics remain unchanged.
+    assert "python scripts/build_brand_assets.py" in workflow
+    assert "git diff --exit-code -- custom_components/doems/brand" in workflow
