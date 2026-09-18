@@ -1,4 +1,4 @@
-name: DOEMS CI and Alpha7.5 Full Brand Logo Integration Icon Release
+name: DOEMS CI and Alpha7.6 Exact Existing Brand Icon Release
 
 on:
   pull_request:
@@ -17,14 +17,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: python -m pip install --upgrade pip pytest pillow
-      - run: python -m compileall -q custom_components/doems scripts
-      - name: Validate deterministic full-logo brand assets
-        run: |
-          python scripts/build_brand_assets.py
-          git diff --exit-code -- custom_components/doems/brand
-          grep -F '_fit_complete_logo_on_square' scripts/build_brand_assets.py
-          test "$(grep -c '\\.crop(' scripts/build_brand_assets.py)" -eq 0
+      - run: python -m pip install --upgrade pip pytest
+      - run: python -m compileall -q custom_components/doems
       - run: pytest -q
       - name: Validate JSON files
         run: |
@@ -35,16 +29,20 @@ jobs:
               json.loads(path.read_text(encoding='utf-8'))
               print(f'valid: {path}')
           PY
-      - name: Validate Alpha7.5 release contract
+      - name: Validate Alpha7.6 release contract
         run: |
-          test -f RELEASE_NOTES_0.1.0-alpha.7.5.md
+          test -f RELEASE_NOTES_0.1.0-alpha.7.6.md
           test -f examples/prices_p4_forecast_card.yaml
           test -f custom_components/doems/prices.py
           test -f custom_components/doems/prices_model.py
           test -f custom_components/doems/prices_sensor.py
           test -f custom_components/doems/prices_runtime.py
-          grep -F 'VERSION = "0.1.0-alpha.7.5"' custom_components/doems/const.py
-          grep -F '"version": "0.1.0-alpha.7.5"' custom_components/doems/manifest.json
+          test -f custom_components/doems/brand/icon.png
+          test ! -f scripts/build_brand_assets.py
+          test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
+          test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
+          grep -F 'VERSION = "0.1.0-alpha.7.6"' custom_components/doems/const.py
+          grep -F '"version": "0.1.0-alpha.7.6"' custom_components/doems/manifest.json
           grep -F 'build_prices_sensors' custom_components/doems/sensor.py
           grep -F 'DOEMSRegisteredPricesManager' custom_components/doems/__init__.py
           grep -F 'GAS_SOURCE_ENERGYZERO_MARKET_ACTION' custom_components/doems/const.py
@@ -58,7 +56,7 @@ jobs:
           grep -F 'import_all_in' examples/prices_p4_forecast_card.yaml
           grep -F 'export_all_in' examples/prices_p4_forecast_card.yaml
 
-  publish-alpha7-5:
+  publish-alpha7-6:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
@@ -68,7 +66,7 @@ jobs:
           fetch-depth: 0
       - name: Build release archive
         run: |
-          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.7.5.md
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.7.6.md
           sha256sum doems.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - name: Verify Prices P4 runtime is packaged
@@ -79,20 +77,17 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/prices_runtime.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/config_flow.py'
           unzip -l doems.zip | grep -F 'examples/prices_p4_forecast_card.yaml'
-      - name: Verify the single DOEMS brand logo is packaged for all brand roles
+      - name: Verify exact existing DOEMS brand icon is packaged
         run: |
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/icon.png'
-          unzip -l doems.zip | grep -F 'custom_components/doems/brand/icon@2x.png'
-          unzip -l doems.zip | grep -F 'custom_components/doems/brand/dark_icon.png'
-          unzip -l doems.zip | grep -F 'custom_components/doems/brand/dark_icon@2x.png'
-          unzip -l doems.zip | grep -F 'custom_components/doems/brand/logo.png'
-          unzip -l doems.zip | grep -F 'custom_components/doems/brand/dark_logo.png'
-      - name: Publish normal Alpha7.5 release if missing
+          test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
+          test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
+      - name: Publish normal Alpha7.6 release if missing
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view 0.1.0-alpha.7.5 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.7.5 --title "DOEMS 0.1.0-alpha.7.5 - Full Brand Logo Integration Icon" --notes-file RELEASE_NOTES_0.1.0-alpha.7.5.md
+          if gh release view 0.1.0-alpha.7.6 >/dev/null 2>&1; then
+            gh release edit 0.1.0-alpha.7.6 --title "DOEMS 0.1.0-alpha.7.6 - Exact Existing Brand Icon" --notes-file RELEASE_NOTES_0.1.0-alpha.7.6.md
           else
-            gh release create 0.1.0-alpha.7.5 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.5 - Full Brand Logo Integration Icon" --notes-file RELEASE_NOTES_0.1.0-alpha.7.5.md
+            gh release create 0.1.0-alpha.7.6 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.6 - Exact Existing Brand Icon" --notes-file RELEASE_NOTES_0.1.0-alpha.7.6.md
           fi
