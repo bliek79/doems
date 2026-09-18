@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: "3.13"
       - run: python -m pip install --upgrade pip pytest
-      - run: python -m compileall -q custom_components/doems scripts
+      - run: python -m compileall -q custom_components/doems
       - run: pytest -q
       - name: Validate JSON files
         run: |
@@ -87,7 +87,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view 0.1.0-alpha.7.6 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.7.6 --title "DOEMS 0.1.0-alpha.7.6 - Full Brand Logo Integration Icon" --notes-file RELEASE_NOTES_0.1.0-alpha.7.6.md
+            gh release edit 0.1.0-alpha.7.6 --title "DOEMS 0.1.0-alpha.7.6 - Exact Existing Brand Icon" --notes-file RELEASE_NOTES_0.1.0-alpha.7.6.md
           else
-            gh release create 0.1.0-alpha.7.6 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.6 - Full Brand Logo Integration Icon" --notes-file RELEASE_NOTES_0.1.0-alpha.7.6.md
+            gh release create 0.1.0-alpha.7.6 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.6 - Exact Existing Brand Icon" --notes-file RELEASE_NOTES_0.1.0-alpha.7.6.md
           fi
