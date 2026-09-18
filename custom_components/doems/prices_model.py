@@ -170,3 +170,39 @@ def select_current_response_price(
     applicable = [item for item in valid if item[0] <= current]
     selected = applicable[-1] if applicable else valid[0]
     return selected[1], selected[0].isoformat(), len(valid)
+
+
+
+def gas_equivalent_eur_kwh(
+    gas_all_in_eur_m3: Any,
+    *,
+    energy_factor_kwh_m3: float,
+) -> float | None:
+    """Convert an all-in gas price from EUR/m3 to EUR/kWh of gas energy."""
+    try:
+        gas_price = float(gas_all_in_eur_m3)
+        factor = float(energy_factor_kwh_m3)
+    except (TypeError, ValueError):
+        return None
+    if not isfinite(gas_price) or not isfinite(factor) or factor <= 0:
+        return None
+    return round(gas_price / factor, 6)
+
+
+def electricity_to_gas_price_ratio(
+    electricity_import_eur_kwh: Any,
+    gas_equivalent_price_eur_kwh: Any,
+) -> float | None:
+    """Return electricity import all-in divided by gas-equivalent all-in."""
+    try:
+        electricity_price = float(electricity_import_eur_kwh)
+        gas_price = float(gas_equivalent_price_eur_kwh)
+    except (TypeError, ValueError):
+        return None
+    if (
+        not isfinite(electricity_price)
+        or not isfinite(gas_price)
+        or gas_price <= 0
+    ):
+        return None
+    return round(electricity_price / gas_price, 6)
