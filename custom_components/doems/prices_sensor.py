@@ -49,6 +49,7 @@ def build_prices_sensors(
             [
                 DOEMSPricesGasMarketSensor(entry, manager),
                 DOEMSPricesGasAllInSensor(entry, manager),
+                DOEMSPricesGasVsElectricitySensor(entry, manager),
             ]
         )
     return entities
@@ -244,5 +245,28 @@ class DOEMSPricesGasAllInSensor(DOEMSPricesBaseSensor):
             "gas_fixed_supply_per_day": tariff.get("gas_fixed_supply_per_day"),
             "gas_grid_per_day": tariff.get("gas_grid_per_day"),
             "tariff_profile_id": tariff.get("profile_id"),
+            "physical_execution_authority": False,
+        }
+
+
+
+class DOEMSPricesGasVsElectricitySensor(DOEMSPricesBaseSensor):
+    """Expose gas all-in normalized to EUR/kWh with electricity comparison."""
+
+    _attr_name = "DOEMS Prices Gas vs Electricity"
+    _attr_unique_id = "doems_prices_gas_vs_electricity"
+    _attr_suggested_object_id = "doems_prices_gas_vs_electricity"
+    _attr_native_unit_of_measurement = "EUR/kWh"
+    _attr_icon = "mdi:lightning-bolt-circle"
+
+    @property
+    def native_value(self) -> float | None:
+        return self.manager.gas_equivalent_price_eur_kwh
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            **self.manager.gas_source_attributes,
+            **self.manager.gas_vs_electricity_attributes,
             "physical_execution_authority": False,
         }

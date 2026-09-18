@@ -4,7 +4,7 @@ from __future__ import annotations
 
 DOMAIN = "doems"
 NAME = "DOEMS"
-VERSION = "0.1.0-alpha.7.3"
+VERSION = "0.1.0-alpha.7.4"
 
 CONF_INSTANCE_NAME = "instance_name"
 DEFAULT_INSTANCE_NAME = NAME
@@ -91,6 +91,7 @@ CONF_GAS_SUPPLIER = "gas_supplier_incl_vat"
 CONF_GAS_TAX = "gas_tax_incl_vat"
 CONF_GAS_FIXED_SUPPLY_PER_DAY = "gas_fixed_supply_per_day"
 CONF_GAS_GRID_PER_DAY = "gas_grid_per_day"
+GAS_HIGHER_HEATING_VALUE_KWH_M3 = 9.77
 PRICES_PROVIDER = "stroomvoorspeller"
 PRICES_SOURCE_ATTRIBUTION = "Data provided by Stroomvoorspeller.nl (CC BY 4.0)"
 PRICE_BUFFER_HOURS = 76
