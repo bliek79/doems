@@ -1,4 +1,4 @@
-name: DOEMS CI and Alpha7.5 Single Brand Logo Fix Release
+name: DOEMS CI and Alpha7.5 Full Brand Logo Integration Icon Release
 
 on:
   pull_request:
@@ -94,7 +94,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view 0.1.0-alpha.7.5 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.7.5 --title "DOEMS 0.1.0-alpha.7.5 - Gas vs Electricity Price Sensor" --notes-file RELEASE_NOTES_0.1.0-alpha.7.5.md
+            gh release edit 0.1.0-alpha.7.5 --title "DOEMS 0.1.0-alpha.7.5 - Full Brand Logo Integration Icon" --notes-file RELEASE_NOTES_0.1.0-alpha.7.5.md
           else
-            gh release create 0.1.0-alpha.7.5 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.5 - Gas vs Electricity Price Sensor" --notes-file RELEASE_NOTES_0.1.0-alpha.7.5.md
+            gh release create 0.1.0-alpha.7.5 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.5 - Full Brand Logo Integration Icon" --notes-file RELEASE_NOTES_0.1.0-alpha.7.5.md
           fi
