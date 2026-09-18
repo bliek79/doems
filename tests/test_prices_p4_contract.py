@@ -108,3 +108,23 @@ def test_energyzero_gas_action_response_supports_legacy_hourly_shape():
     assert value == 0.81
     assert timestamp == "2026-09-18T07:00:00+00:00"
     assert count == 3
+
+
+
+def test_gas_equivalent_price_uses_fixed_higher_heating_value_basis():
+    m = _load("prices_model")
+    value = m.gas_equivalent_eur_kwh(
+        1.711679,
+        energy_factor_kwh_m3=9.77,
+    )
+    assert value == 0.175197
+
+
+def test_electricity_to_gas_ratio_and_missing_semantics():
+    m = _load("prices_model")
+    assert m.electricity_to_gas_price_ratio(0.35, 0.175) == 2.0
+    assert m.electricity_to_gas_price_ratio(None, 0.175) is None
+    assert m.electricity_to_gas_price_ratio(0.35, None) is None
+    assert m.electricity_to_gas_price_ratio(0.35, 0.0) is None
+    assert m.gas_equivalent_eur_kwh(None, energy_factor_kwh_m3=9.77) is None
+    assert m.gas_equivalent_eur_kwh(1.71, energy_factor_kwh_m3=0) is None
