@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 INTEGRATION = ROOT / "custom_components" / "doems"
+APPROVED_BRAND_BLOB_SHA = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
 
 
 def test_foundation_still_installs_without_component_input() -> None:
@@ -27,13 +29,6 @@ def test_required_p2_files_exist() -> None:
         "translations/en.json",
         "translations/nl.json",
         "brand/icon.png",
-        "brand/icon@2x.png",
-        "brand/dark_icon.png",
-        "brand/dark_icon@2x.png",
-        "brand/logo.png",
-        "brand/logo@2x.png",
-        "brand/dark_logo.png",
-        "brand/dark_logo@2x.png",
     }
     actual = {
         str(path.relative_to(INTEGRATION)).replace("\\", "/")
@@ -43,24 +38,12 @@ def test_required_p2_files_exist() -> None:
     assert required <= actual
 
 
-def _png_dimensions(path: Path) -> tuple[int, int]:
-    data = path.read_bytes()
-    assert data[:8] == b"\x89PNG\r\n\x1a\n"
-    return int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
-
-
-def test_local_brand_assets_are_valid_pngs() -> None:
-    expected = {
-        "icon.png": (256, 256),
-        "icon@2x.png": (512, 512),
-        "dark_icon.png": (256, 256),
-        "dark_icon@2x.png": (512, 512),
-        "logo.png": (640, 192),
-        "logo@2x.png": (1280, 384),
-        "dark_logo.png": (640, 192),
-        "dark_logo@2x.png": (1280, 384),
-    }
+def test_local_brand_is_exact_existing_dummy_os_icon() -> None:
     brand = INTEGRATION / "brand"
-    assert {path.name for path in brand.glob("*.png")} == set(expected)
-    for name, dimensions in expected.items():
-        assert _png_dimensions(brand / name) == dimensions
+    assert {path.name for path in brand.iterdir() if path.is_file()} == {"icon.png"}
+    icon = brand / "icon.png"
+    data = icon.read_bytes()
+    assert data[:8] == b"\x89PNG\r\n\x1a\n"
+    assert len(data) == 1864695
+    git_blob_sha = hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
+    assert git_blob_sha == APPROVED_BRAND_BLOB_SHA

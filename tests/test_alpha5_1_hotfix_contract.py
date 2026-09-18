@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 INTEGRATION = ROOT / "custom_components" / "doems"
+APPROVED_BRAND_BLOB_SHA = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
+APPROVED_BRAND_SIZE = 1864695
 
 
 def test_unitless_number_selectors_do_not_serialize_null_unit() -> None:
@@ -21,27 +24,13 @@ def test_solar_count_fields_use_unitless_number_helper() -> None:
     assert '_number(1, SOLAR_MAX_ARRAYS, 1)' in text
 
 
-def test_approved_doems_brand_assets_remain_present() -> None:
+def test_doems_uses_exact_existing_dummy_os_brand_icon() -> None:
     brand = INTEGRATION / "brand"
-    expected = {
-        "icon.png",
-        "icon@2x.png",
-        "dark_icon.png",
-        "dark_icon@2x.png",
-        "logo.png",
-        "logo@2x.png",
-        "dark_logo.png",
-        "dark_logo@2x.png",
-    }
-    assert {path.name for path in brand.glob("*.png")} == expected
-
-
-
-
-def test_doems_brand_builder_uses_one_complete_logo_without_crop() -> None:
-    builder = (ROOT / "scripts" / "build_brand_assets.py").read_text(encoding="utf-8")
-    assert 'SOURCE = BRAND / "logo.png"' in builder
-    assert "APPROVED_LOGO_SHA256" in builder
-    assert "_fit_complete_logo_on_square" in builder
-    assert ".crop(" not in builder
-    assert "one visual DOEMS brand logo" in builder
+    files = [path.name for path in brand.iterdir() if path.is_file()]
+    assert files == ["icon.png"]
+    icon = brand / "icon.png"
+    data = icon.read_bytes()
+    assert len(data) == APPROVED_BRAND_SIZE
+    assert data[:8] == b"\x89PNG\r\n\x1a\n"
+    git_blob_sha = hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
+    assert git_blob_sha == APPROVED_BRAND_BLOB_SHA
