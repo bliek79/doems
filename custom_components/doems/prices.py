@@ -41,6 +41,7 @@ from .const import (
     CONF_VAT_PERCENT,
     FORECAST_HORIZON_HOURS,
     FORECAST_SLOTS,
+    GAS_HIGHER_HEATING_VALUE_KWH_M3,
     GAS_SOURCE_ENERGYZERO_MARKET_ACTION,
     GAS_SOURCE_HOME_ASSISTANT_ENTITY,
     PRICE_BUFFER_HOURS,
@@ -59,6 +60,8 @@ from .prices_model import (
     deduplicate_price_points,
     expected_quarter_starts,
     floor_quarter,
+    gas_equivalent_eur_kwh,
+    electricity_to_gas_price_ratio,
     select_current_response_price,
     select_exact_price_window,
     utc,
@@ -80,6 +83,7 @@ PUBLIC_ENTITY_IDS = (
     "sensor.doems_prices_tariff_profile",
     "sensor.doems_prices_gas_market",
     "sensor.doems_prices_gas_all_in",
+    "sensor.doems_prices_gas_vs_electricity",
 )
 
 
@@ -218,6 +222,38 @@ class DOEMSPricesManager:
     def gas_all_in_price(self) -> float | None:
         market = self.gas_market_price
         return None if market is None else round(market + self.gas_variable_addon, 6)
+
+    @property
+    def gas_equivalent_price_eur_kwh(self) -> float | None:
+        return gas_equivalent_eur_kwh(
+            self.gas_all_in_price,
+            energy_factor_kwh_m3=GAS_HIGHER_HEATING_VALUE_KWH_M3,
+        )
+
+    @property
+    def electricity_import_price_eur_kwh(self) -> float | None:
+        point = self.current_point
+        return point.import_all_in if point is not None else None
+
+    @property
+    def electricity_to_gas_ratio(self) -> float | None:
+        return electricity_to_gas_price_ratio(
+            self.electricity_import_price_eur_kwh,
+            self.gas_equivalent_price_eur_kwh,
+        )
+
+    @property
+    def gas_vs_electricity_attributes(self) -> dict[str, Any]:
+        return {
+            "gas_all_in_eur_m3": self.gas_all_in_price,
+            "gas_energy_factor_kwh_m3": GAS_HIGHER_HEATING_VALUE_KWH_M3,
+            "gas_energy_basis": "higher_heating_value",
+            "gas_equivalent_eur_kwh": self.gas_equivalent_price_eur_kwh,
+            "electricity_import_eur_kwh": self.electricity_import_price_eur_kwh,
+            "electricity_to_gas_price_ratio": self.electricity_to_gas_ratio,
+            "comparison_scope": "energy_carrier_price_only",
+            "efficiency_or_cop_included": False,
+        }
 
     @property
     def tariff_snapshot(self) -> dict[str, Any]:
@@ -556,9 +592,11 @@ class DOEMSPricesManager:
         if self.gas_enabled:
             self.hass.states.async_set("sensor.doems_prices_gas_market", self.gas_market_price, {"unit_of_measurement": "EUR/m3", "source": "configured_home_assistant_entity", "source_entity": self.gas_market_entity, "physical_execution_authority": False})
             self.hass.states.async_set("sensor.doems_prices_gas_all_in", self.gas_all_in_price, {"unit_of_measurement": "EUR/m3", "market_price": self.gas_market_price, "variable_addon_incl_vat": round(self.gas_variable_addon, 6), "gas_supplier_incl_vat": tariff.get("gas_supplier_incl_vat"), "gas_tax_incl_vat": tariff.get("gas_tax_incl_vat"), "gas_fixed_supply_per_day": tariff.get("gas_fixed_supply_per_day"), "gas_grid_per_day": tariff.get("gas_grid_per_day"), "tariff_profile_id": tariff.get("profile_id"), "physical_execution_authority": False})
+            self.hass.states.async_set("sensor.doems_prices_gas_vs_electricity", self.gas_equivalent_price_eur_kwh, {"unit_of_measurement": "EUR/kWh", **self.gas_source_attributes, **self.gas_vs_electricity_attributes, "physical_execution_authority": False})
         else:
             self.hass.states.async_remove("sensor.doems_prices_gas_market")
             self.hass.states.async_remove("sensor.doems_prices_gas_all_in")
+            self.hass.states.async_remove("sensor.doems_prices_gas_vs_electricity")
 
     @staticmethod
     def _eur_mwh_to_kwh(value: Any) -> float | None:
