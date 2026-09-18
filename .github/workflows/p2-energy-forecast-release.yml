@@ -44,7 +44,7 @@ jobs:
           grep -F 'GAS_SOURCE_ENERGYZERO_MARKET_ACTION' custom_components/doems/const.py
           grep -F '"get_gas_prices"' custom_components/doems/prices.py
           grep -F '"incl_vat": True' custom_components/doems/prices.py
-          grep -F 'gas_energyzero_config_entry' custom_components/doems/config_flow.py
+          grep -F 'CONF_GAS_ENERGYZERO_CONFIG_ENTRY' custom_components/doems/config_flow.py
           grep -F 'sensor.doems_prices_timeline' examples/prices_p4_forecast_card.yaml
           grep -F 'import_all_in' examples/prices_p4_forecast_card.yaml
           grep -F 'export_all_in' examples/prices_p4_forecast_card.yaml
@@ -85,5 +85,5 @@ jobs:
           if gh release view 0.1.0-alpha.7.3 >/dev/null 2>&1; then
             echo "Release 0.1.0-alpha.7.3 already exists; leaving it unchanged."
           else
-            gh release create 0.1.0-alpha.7.3 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.3 - Prices Entity Registration Hotfix" --notes-file RELEASE_NOTES_0.1.0-alpha.7.3.md
+            gh release create 0.1.0-alpha.7.3 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.3 - Prices Gas Market Semantics Fix" --notes-file RELEASE_NOTES_0.1.0-alpha.7.3.md
           fi
