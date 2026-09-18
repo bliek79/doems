@@ -79,3 +79,32 @@ def test_ceil_quarter_keeps_exact_boundary_and_advances_partial_slot():
     partial = datetime(2026, 9, 17, 12, 15, 1, tzinfo=timezone.utc)
     assert m.ceil_quarter(exact) == exact
     assert m.ceil_quarter(partial) == datetime(2026, 9, 17, 12, 30, tzinfo=timezone.utc)
+
+
+
+def test_energyzero_gas_action_response_selects_current_market_point():
+    m = _load("prices_model")
+    now = datetime(2026, 9, 18, 7, 0, tzinfo=timezone.utc)
+    value, timestamp, count = m.select_current_response_price(
+        [{"timestamp": "2026-09-18T04:00:00+00:00", "price": 0.83127809154956}],
+        now=now,
+    )
+    assert value == 0.83127809154956
+    assert timestamp == "2026-09-18T04:00:00+00:00"
+    assert count == 1
+
+
+def test_energyzero_gas_action_response_supports_legacy_hourly_shape():
+    m = _load("prices_model")
+    now = datetime(2026, 9, 18, 7, 20, tzinfo=timezone.utc)
+    value, timestamp, count = m.select_current_response_price(
+        [
+            {"timestamp": "2026-09-18T06:00:00+00:00", "price": 0.80},
+            {"timestamp": "2026-09-18T07:00:00+00:00", "price": 0.81},
+            {"timestamp": "2026-09-18T08:00:00+00:00", "price": 0.82},
+        ],
+        now=now,
+    )
+    assert value == 0.81
+    assert timestamp == "2026-09-18T07:00:00+00:00"
+    assert count == 3

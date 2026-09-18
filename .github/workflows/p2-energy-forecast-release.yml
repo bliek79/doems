@@ -1,4 +1,4 @@
-name: DOEMS CI and Alpha7.2 Prices Entity Registration Hotfix Release
+name: DOEMS CI and Alpha7.3 Prices Gas Market Semantics Fix Release
 
 on:
   pull_request:
@@ -29,23 +29,27 @@ jobs:
               json.loads(path.read_text(encoding='utf-8'))
               print(f'valid: {path}')
           PY
-      - name: Validate Alpha7.2 release contract
+      - name: Validate Alpha7.3 release contract
         run: |
-          test -f RELEASE_NOTES_0.1.0-alpha.7.2.md
+          test -f RELEASE_NOTES_0.1.0-alpha.7.3.md
           test -f examples/prices_p4_forecast_card.yaml
           test -f custom_components/doems/prices.py
           test -f custom_components/doems/prices_model.py
           test -f custom_components/doems/prices_sensor.py
           test -f custom_components/doems/prices_runtime.py
-          grep -F 'VERSION = "0.1.0-alpha.7.2"' custom_components/doems/const.py
-          grep -F '"version": "0.1.0-alpha.7.2"' custom_components/doems/manifest.json
+          grep -F 'VERSION = "0.1.0-alpha.7.3"' custom_components/doems/const.py
+          grep -F '"version": "0.1.0-alpha.7.3"' custom_components/doems/manifest.json
           grep -F 'build_prices_sensors' custom_components/doems/sensor.py
           grep -F 'DOEMSRegisteredPricesManager' custom_components/doems/__init__.py
+          grep -F 'GAS_SOURCE_ENERGYZERO_MARKET_ACTION' custom_components/doems/const.py
+          grep -F '"get_gas_prices"' custom_components/doems/prices.py
+          grep -F '"incl_vat": True' custom_components/doems/prices.py
+          grep -F 'CONF_GAS_ENERGYZERO_CONFIG_ENTRY' custom_components/doems/config_flow.py
           grep -F 'sensor.doems_prices_timeline' examples/prices_p4_forecast_card.yaml
           grep -F 'import_all_in' examples/prices_p4_forecast_card.yaml
           grep -F 'export_all_in' examples/prices_p4_forecast_card.yaml
 
-  publish-alpha7-2:
+  publish-alpha7-3:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
@@ -55,7 +59,7 @@ jobs:
           fetch-depth: 0
       - name: Build release archive
         run: |
-          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.7.2.md
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.7.3.md
           sha256sum doems.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - name: Verify Prices P4 runtime is packaged
@@ -74,12 +78,12 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/dark_icon@2x.png'
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/logo.png'
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/dark_logo.png'
-      - name: Publish normal Alpha7.2 release if missing
+      - name: Publish normal Alpha7.3 release if missing
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view 0.1.0-alpha.7.2 >/dev/null 2>&1; then
-            echo "Release 0.1.0-alpha.7.2 already exists; leaving it unchanged."
+          if gh release view 0.1.0-alpha.7.3 >/dev/null 2>&1; then
+            echo "Release 0.1.0-alpha.7.3 already exists; leaving it unchanged."
           else
-            gh release create 0.1.0-alpha.7.2 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.2 - Prices Entity Registration Hotfix" --notes-file RELEASE_NOTES_0.1.0-alpha.7.2.md
+            gh release create 0.1.0-alpha.7.3 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.3 - Prices Gas Market Semantics Fix" --notes-file RELEASE_NOTES_0.1.0-alpha.7.3.md
           fi

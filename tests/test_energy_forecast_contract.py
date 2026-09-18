@@ -23,7 +23,7 @@ def _load_pure_module(name: str):
 
 def test_manifest_and_clean_identity_contract() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["domain"] == "doems" and manifest["name"] == "DOEMS" and manifest["version"] == "0.1.0-alpha.7.2"
+    assert manifest["domain"] == "doems" and manifest["name"] == "DOEMS" and manifest["version"] == "0.1.0-alpha.7.3"
     for path in INTEGRATION.rglob("*"):
         if not path.is_file() or path.suffix not in {".py", ".json", ".yaml", ".yml"}: continue
         text = path.read_text(encoding="utf-8")
@@ -48,7 +48,11 @@ def test_public_entity_object_ids_are_doems_prefixed() -> None:
 
 def test_no_physical_control_surface() -> None:
     active_text="\n".join(path.read_text(encoding="utf-8") for path in INTEGRATION.rglob("*.py"))
-    assert "async_call(" not in active_text
+    assert active_text.count(".services.async_call(") == 1
+    prices=(INTEGRATION / "prices.py").read_text(encoding="utf-8")
+    assert '"energyzero"' in prices and '"get_gas_prices"' in prices
+    for forbidden in ('"anker_solix"', '"switch"', '"number"', '"select.select_option"'):
+        assert forbidden not in prices
     assert '"physical_execution_authority": False' in active_text
 
 

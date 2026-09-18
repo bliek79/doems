@@ -214,8 +214,7 @@ class DOEMSPricesGasMarketSensor(DOEMSPricesBaseSensor):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         return {
-            "source": "configured_home_assistant_entity",
-            "source_entity": self.manager.gas_market_entity,
+            **self.manager.gas_source_attributes,
             "physical_execution_authority": False,
         }
 
@@ -237,6 +236,7 @@ class DOEMSPricesGasAllInSensor(DOEMSPricesBaseSensor):
     def extra_state_attributes(self) -> dict[str, Any]:
         tariff = self.manager.tariff_snapshot
         return {
+            **self.manager.gas_source_attributes,
             "market_price": self.manager.gas_market_price,
             "variable_addon_incl_vat": round(self.manager.gas_variable_addon, 6),
             "gas_supplier_incl_vat": tariff.get("gas_supplier_incl_vat"),

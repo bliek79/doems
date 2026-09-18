@@ -26,10 +26,12 @@ from .const import (
     CONF_ENERGY_FORECAST_ENABLED,
     CONF_ENERGY_SOURCE_MODE,
     CONF_ENERGY_START_PROFILE,
+    CONF_GAS_ENERGYZERO_CONFIG_ENTRY,
     CONF_GAS_FIXED_SUPPLY_PER_DAY,
     CONF_GAS_GRID_PER_DAY,
     CONF_GAS_MARKET_ENTITY,
     CONF_GAS_PRICES_ENABLED,
+    CONF_GAS_SOURCE_MODE,
     CONF_GAS_SUPPLIER,
     CONF_GAS_TAX,
     CONF_GRID_NET_POWER_ENTITY,
@@ -56,6 +58,8 @@ from .const import (
     DOMAIN,
     ENERGY_SOURCE_BALANCE,
     ENERGY_SOURCE_DIRECT,
+    GAS_SOURCE_ENERGYZERO_MARKET_ACTION,
+    GAS_SOURCE_HOME_ASSISTANT_ENTITY,
     GRID_SIGN_POSITIVE_EXPORT,
     GRID_SIGN_POSITIVE_IMPORT,
     NAME,
@@ -79,6 +83,10 @@ def _power_selector() -> selector.EntitySelector:
 
 def _sensor_selector() -> selector.EntitySelector:
     return selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor"))
+
+
+def _energyzero_config_entry_selector() -> selector.ConfigEntrySelector:
+    return selector.ConfigEntrySelector({"integration": "energyzero"})
 
 
 def _select(options: list[tuple[str, str]]) -> selector.SelectSelector:
@@ -115,6 +123,10 @@ def _optional_entity(key: str, current: str | None) -> vol.Marker:
     return vol.Optional(key, default=current) if current else vol.Optional(key)
 
 
+def _optional_config_entry(key: str, current: str | None) -> vol.Marker:
+    return vol.Optional(key, default=current) if current else vol.Optional(key)
+
+
 def _validate_power_entity(hass: HomeAssistant, entity_id: str | None, *, allow_negative: bool) -> str | None:
     if not entity_id:
         return "source_required"
@@ -133,9 +145,28 @@ def _validate_power_entity(hass: HomeAssistant, entity_id: str | None, *, allow_
     return None
 
 
+def _validate_gas_market_entity(hass: HomeAssistant, entity_id: str | None) -> str | None:
+    """Validate a generic gas source as an explicit EUR/m3 market-price sensor."""
+    if not entity_id:
+        return "source_required"
+    object_id = entity_id.split(".", 1)[1] if "." in entity_id else entity_id
+    if object_id.startswith("doems_"):
+        return "doems_source_not_allowed"
+    state = hass.states.get(entity_id)
+    if state is None:
+        return "source_not_found"
+    unit = str(state.attributes.get("unit_of_measurement") or "")
+    normalized_unit = (
+        unit.replace("€", "EUR").replace("³", "3").replace(" ", "").lower()
+    )
+    if normalized_unit != "eur/m3":
+        return "unsupported_gas_price_unit"
+    return None
+
+
 class DOEMSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
-    MINOR_VERSION = 4
+    MINOR_VERSION = 5
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         await self.async_set_unique_id(DOMAIN)
@@ -432,7 +463,15 @@ class DOEMSOptionsFlow(OptionsFlow):
             self._pending.update(user_input)
             if user_input.get(CONF_GAS_PRICES_ENABLED, False):
                 return await self.async_step_prices_gas()
-            for key in (CONF_GAS_MARKET_ENTITY, CONF_GAS_SUPPLIER, CONF_GAS_TAX, CONF_GAS_FIXED_SUPPLY_PER_DAY, CONF_GAS_GRID_PER_DAY):
+            for key in (
+                CONF_GAS_SOURCE_MODE,
+                CONF_GAS_MARKET_ENTITY,
+                CONF_GAS_ENERGYZERO_CONFIG_ENTRY,
+                CONF_GAS_SUPPLIER,
+                CONF_GAS_TAX,
+                CONF_GAS_FIXED_SUPPLY_PER_DAY,
+                CONF_GAS_GRID_PER_DAY,
+            ):
                 self._pending.pop(key, None)
             return self._save()
         return self.async_show_form(
@@ -459,18 +498,63 @@ class DOEMSOptionsFlow(OptionsFlow):
         )
 
     async def async_step_prices_gas(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Configure explicit gas market-price source semantics."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            entity_id = user_input.get(CONF_GAS_MARKET_ENTITY)
-            if not entity_id or self.hass.states.get(entity_id) is None:
-                errors[CONF_GAS_MARKET_ENTITY] = "source_not_found"
+            source_mode = str(
+                user_input.get(
+                    CONF_GAS_SOURCE_MODE,
+                    GAS_SOURCE_HOME_ASSISTANT_ENTITY,
+                )
+            )
+            if source_mode == GAS_SOURCE_ENERGYZERO_MARKET_ACTION:
+                entry_id = user_input.get(CONF_GAS_ENERGYZERO_CONFIG_ENTRY)
+                energyzero_entry = (
+                    self.hass.config_entries.async_get_entry(str(entry_id))
+                    if entry_id
+                    else None
+                )
+                if energyzero_entry is None or energyzero_entry.domain != "energyzero":
+                    errors[CONF_GAS_ENERGYZERO_CONFIG_ENTRY] = "energyzero_config_entry_required"
+            else:
+                error = _validate_gas_market_entity(
+                    self.hass, user_input.get(CONF_GAS_MARKET_ENTITY)
+                )
+                if error:
+                    errors[CONF_GAS_MARKET_ENTITY] = error
+
             if not errors:
                 self._pending.update(user_input)
+                if source_mode == GAS_SOURCE_ENERGYZERO_MARKET_ACTION:
+                    self._pending.pop(CONF_GAS_MARKET_ENTITY, None)
+                else:
+                    self._pending.pop(CONF_GAS_ENERGYZERO_CONFIG_ENTRY, None)
                 return self._save()
+
+        current_mode = str(
+            self._current(CONF_GAS_SOURCE_MODE, GAS_SOURCE_HOME_ASSISTANT_ENTITY)
+        )
         return self.async_show_form(
             step_id="prices_gas",
             data_schema=vol.Schema({
-                _required_entity(CONF_GAS_MARKET_ENTITY, self._current(CONF_GAS_MARKET_ENTITY)): _sensor_selector(),
+                vol.Required(CONF_GAS_SOURCE_MODE, default=current_mode): _select([
+                    (
+                        GAS_SOURCE_ENERGYZERO_MARKET_ACTION,
+                        "EnergyZero market action - explicit market incl. VAT",
+                    ),
+                    (
+                        GAS_SOURCE_HOME_ASSISTANT_ENTITY,
+                        "Home Assistant market-price sensor",
+                    ),
+                ]),
+                _optional_config_entry(
+                    CONF_GAS_ENERGYZERO_CONFIG_ENTRY,
+                    self._current(CONF_GAS_ENERGYZERO_CONFIG_ENTRY),
+                ): _energyzero_config_entry_selector(),
+                _optional_entity(
+                    CONF_GAS_MARKET_ENTITY,
+                    self._current(CONF_GAS_MARKET_ENTITY),
+                ): _sensor_selector(),
                 vol.Required(CONF_GAS_SUPPLIER, default=float(self._current(CONF_GAS_SUPPLIER, 0.0))): _number(-10, 10, "any", "EUR/m3"),
                 vol.Required(CONF_GAS_TAX, default=float(self._current(CONF_GAS_TAX, 0.0))): _number(-10, 10, "any", "EUR/m3"),
                 vol.Required(CONF_GAS_FIXED_SUPPLY_PER_DAY, default=float(self._current(CONF_GAS_FIXED_SUPPLY_PER_DAY, 0.0))): _number(-100, 100, "any", "EUR/day"),
