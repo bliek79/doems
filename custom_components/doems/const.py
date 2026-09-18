@@ -109,10 +109,7 @@ MIN_VALID_COVERAGE = 0.90
 STORAGE_VERSION = 1
 STORAGE_KEY = f"{DOMAIN}.energy_forecast"
 ENERGY_STORE_SCHEMA_VERSION = 1
-SOLAR_REFERENCE_FREEZE_STORAGE_VERSION = 1
-SOLAR_REFERENCE_FREEZE_STORAGE_KEY = f"{DOMAIN}.solar_reference_freeze"
-
-PLATFORMS = ["sensor", "select", "binary_sensor", "button"]
+PLATFORMS = ["sensor", "select", "binary_sensor"]
 DEVICE_IDENTIFIER = "main"
 FOUNDATION_PHASE = "solar_p3_0_foundation"
 CANONICAL_HOME_POWER_ENTITY = "sensor.doems_source_home_power"
