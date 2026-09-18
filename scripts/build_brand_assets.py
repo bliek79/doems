@@ -1,4 +1,4 @@
-"""Rebuild DOEMS local brand variants from the approved light logo artwork."""
+"""Rebuild DOEMS technical brand variants from the single approved brand logo."""
 
 from __future__ import annotations
 
@@ -17,6 +17,36 @@ def _save(image: Image.Image, name: str) -> None:
     image.save(BRAND / name, format="PNG", optimize=True)
 
 
+def _fit_complete_logo_on_square(image: Image.Image, size: int) -> Image.Image:
+    """Fit the complete logo on a transparent square without cropping it."""
+    margin = max(8, round(size * 0.06))
+    available = size - (2 * margin)
+    scale = min(available / image.width, available / image.height)
+    target = (
+        max(1, round(image.width * scale)),
+        max(1, round(image.height * scale)),
+    )
+    resized = image.resize(target, Image.Resampling.LANCZOS)
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    canvas.alpha_composite(
+        resized,
+        ((size - resized.width) // 2, (size - resized.height) // 2),
+    )
+    return canvas
+
+
+def _dark_variant(logo: Image.Image) -> Image.Image:
+    """Keep the same logo geometry and adapt only dark text for dark mode."""
+    dark_logo = logo.copy()
+    pixels = dark_logo.load()
+    for y in range(dark_logo.height):
+        for x in range(175, dark_logo.width):
+            red, green, blue, alpha = pixels[x, y]
+            if alpha and red < 35 and green < 60 and blue < 85:
+                pixels[x, y] = (245, 248, 250, alpha)
+    return dark_logo
+
+
 def main() -> None:
     source_bytes = SOURCE.read_bytes()
     actual_sha = hashlib.sha256(source_bytes).hexdigest()
@@ -27,22 +57,16 @@ def main() -> None:
     if logo.size != (640, 192):
         raise SystemExit(f"Unexpected approved logo dimensions: {logo.size}")
 
-    artwork = logo.crop((13, 25, 156, 168))
-    icon_base = Image.new("RGBA", (192, 192), (0, 0, 0, 0))
-    icon_base.alpha_composite(artwork, ((192 - artwork.width) // 2, (192 - artwork.height) // 2))
-    _save(icon_base.resize((256, 256), Image.Resampling.LANCZOS), "icon.png")
-    _save(icon_base.resize((512, 512), Image.Resampling.LANCZOS), "icon@2x.png")
-    _save(icon_base.resize((256, 256), Image.Resampling.LANCZOS), "dark_icon.png")
-    _save(icon_base.resize((512, 512), Image.Resampling.LANCZOS), "dark_icon@2x.png")
-    _save(logo.resize((1280, 384), Image.Resampling.LANCZOS), "logo@2x.png")
+    dark_logo = _dark_variant(logo)
 
-    dark_logo = logo.copy()
-    pixels = dark_logo.load()
-    for y in range(dark_logo.height):
-        for x in range(175, dark_logo.width):
-            red, green, blue, alpha = pixels[x, y]
-            if alpha and red < 35 and green < 60 and blue < 85:
-                pixels[x, y] = (245, 248, 250, alpha)
+    # There is one visual DOEMS brand logo. Home Assistant's square icon
+    # files are only technical renderings of that complete logo.
+    _save(_fit_complete_logo_on_square(logo, 256), "icon.png")
+    _save(_fit_complete_logo_on_square(logo, 512), "icon@2x.png")
+    _save(_fit_complete_logo_on_square(dark_logo, 256), "dark_icon.png")
+    _save(_fit_complete_logo_on_square(dark_logo, 512), "dark_icon@2x.png")
+
+    _save(logo.resize((1280, 384), Image.Resampling.LANCZOS), "logo@2x.png")
     _save(dark_logo, "dark_logo.png")
     _save(dark_logo.resize((1280, 384), Image.Resampling.LANCZOS), "dark_logo@2x.png")
 

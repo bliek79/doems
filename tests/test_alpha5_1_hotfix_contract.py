@@ -34,3 +34,14 @@ def test_approved_doems_brand_assets_remain_present() -> None:
         "dark_logo@2x.png",
     }
     assert {path.name for path in brand.glob("*.png")} == expected
+
+
+
+
+def test_doems_brand_builder_uses_one_complete_logo_without_crop() -> None:
+    builder = (ROOT / "scripts" / "build_brand_assets.py").read_text(encoding="utf-8")
+    assert 'SOURCE = BRAND / "logo.png"' in builder
+    assert "APPROVED_LOGO_SHA256" in builder
+    assert "_fit_complete_logo_on_square" in builder
+    assert ".crop(" not in builder
+    assert "one visual DOEMS brand logo" in builder

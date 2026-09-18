@@ -4,7 +4,7 @@ DOEMS is a Home Assistant Energy Management System integration built component b
 
 ## Current stage
 
-`0.1.0-alpha.7.4` adds a read-only **gas versus electricity price comparison sensor** on top of the live Prices P4 gas-source semantics from Alpha7.3.
+`0.1.0-alpha.7.5` is a focused **single-brand-logo fix**. DOEMS keeps one approved logo; Home Assistant's general integration icon roles now render the complete existing DOEMS logo instead of a cropped sub-mark. Runtime logic is unchanged.
 
 The current integration provides:
 
@@ -16,7 +16,7 @@ The current integration provides:
 - user-configurable tariff profiles with separate import and export components;
 - optional gas market/all-in publication with explicit source semantics: either the official EnergyZero market action (`MARKET_WITH_VAT`) or a validated generic Home Assistant EUR/m³ market-price sensor;
 - optional `sensor.doems_prices_gas_vs_electricity`, normalizing gas all-in to EUR/kWh with a fixed 9.77 kWh/m³ higher-heating-value basis and exposing the current electricity/gas price ratio;
-- approved local DOEMS branding assets;
+- one approved DOEMS brand logo, with Home Assistant icon files generated as square technical renderings of the complete logo;
 - no EMS physical execution authority.
 
 ## Installation and upgrade
@@ -74,7 +74,7 @@ When gas is enabled, `sensor.doems_prices_gas_vs_electricity` exposes the gas al
 
 All public DOEMS object IDs start with `doems_`. Active integration code lives under `custom_components/doems`, domain `doems`, and component-owned storage uses `doems.*` namespaces.
 
-Forecast modules are data/configuration layers. `physical_execution_authority` remains false. Alpha7.4 retains the single read-only Home Assistant data-action call (`energyzero.get_gas_prices`) and no battery, inverter or other physical equipment service calls.
+Forecast modules are data/configuration layers. `physical_execution_authority` remains false. Alpha7.5 retains the single read-only Home Assistant data-action call (`energyzero.get_gas_prices`) and no battery, inverter or other physical equipment service calls.
 
 ## License
 
