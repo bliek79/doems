@@ -7,27 +7,43 @@ from collections.abc import Callable
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.storage import Store
 
 from .const import CONF_ENERGY_FORECAST_ENABLED, CONF_PRICES_ENABLED, DOMAIN, PLATFORMS
 from .energy_coordinator import DOEMSEnergyCoordinator
 from .prices_runtime import DOEMSRegisteredPricesManager
 from .solar_forecast import SolarForecastManager
 from .solar_foundation import SolarFoundationManager
-from .solar_reference_freeze_runtime import SolarReferenceFreezeManager
 
 
 type DOEMSConfigEntry = ConfigEntry
 
+_LEGACY_SOLAR_FREEZE_STORAGE_VERSION = 1
+_LEGACY_SOLAR_FREEZE_STORAGE_KEY = f"{DOMAIN}.solar_reference_freeze"
+
+
+async def _async_remove_legacy_solar_freeze_storage(hass: HomeAssistant) -> None:
+    """Remove the retired one-time Alpha41 Solar freeze store.
+
+    The cleanup is intentionally idempotent so upgrades from releases that
+    created the freeze store do not leave orphaned component-owned storage.
+    """
+    store: Store[dict] = Store(
+        hass,
+        _LEGACY_SOLAR_FREEZE_STORAGE_VERSION,
+        _LEGACY_SOLAR_FREEZE_STORAGE_KEY,
+    )
+    await store.async_remove()
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> bool:
     """Set up DOEMS components from one config entry."""
+    await _async_remove_legacy_solar_freeze_storage(hass)
+
     coordinator: DOEMSEnergyCoordinator | None = None
     if entry.options.get(CONF_ENERGY_FORECAST_ENABLED, False):
         coordinator = DOEMSEnergyCoordinator(hass, entry)
         await coordinator.async_setup()
-
-    freeze_manager = SolarReferenceFreezeManager(hass)
-    await freeze_manager.async_setup()
 
     foundation = SolarFoundationManager(hass, entry)
     await foundation.async_setup()
@@ -42,7 +58,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
     entry.runtime_data = coordinator
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "energy_forecast_enabled": coordinator is not None,
-        "solar_reference_freeze": freeze_manager,
         "solar_foundation": foundation,
         "solar_forecast": solar_forecast,
         "prices": prices,
@@ -99,10 +114,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> bo
     foundation = entry_data.get("solar_foundation")
     if isinstance(foundation, SolarFoundationManager):
         await foundation.async_shutdown()
-
-    freeze_manager = entry_data.get("solar_reference_freeze")
-    if isinstance(freeze_manager, SolarReferenceFreezeManager):
-        await freeze_manager.async_shutdown()
 
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:

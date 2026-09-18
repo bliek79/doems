@@ -32,7 +32,7 @@ def test_manifest_and_clean_identity_contract() -> None:
 
 def test_public_entity_object_ids_are_doems_prefixed() -> None:
     suggested=[]; unique=[]
-    for path in [INTEGRATION / "sensor.py", INTEGRATION / "solar_sensor.py", INTEGRATION / "prices_sensor.py", INTEGRATION / "select.py", INTEGRATION / "binary_sensor.py", INTEGRATION / "button.py"]:
+    for path in [INTEGRATION / "sensor.py", INTEGRATION / "solar_sensor.py", INTEGRATION / "prices_sensor.py", INTEGRATION / "select.py", INTEGRATION / "binary_sensor.py"]:
         tree=ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node,(ast.Assign,ast.AnnAssign)): continue
