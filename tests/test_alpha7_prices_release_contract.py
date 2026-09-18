@@ -3,7 +3,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_alpha7_3_versions_prices_files_and_registered_entities():
+def test_alpha7_4_versions_prices_files_and_registered_entities():
     const = (ROOT / "custom_components/doems/const.py").read_text()
     manifest = (ROOT / "custom_components/doems/manifest.json").read_text()
     init = (ROOT / "custom_components/doems/__init__.py").read_text()
@@ -14,8 +14,8 @@ def test_alpha7_3_versions_prices_files_and_registered_entities():
     config_flow = (ROOT / "custom_components/doems/config_flow.py").read_text()
     example = (ROOT / "examples/prices_p4_forecast_card.yaml").read_text()
 
-    assert 'VERSION = "0.1.0-alpha.7.3"' in const
-    assert '"version": "0.1.0-alpha.7.3"' in manifest
+    assert 'VERSION = "0.1.0-alpha.7.4"' in const
+    assert '"version": "0.1.0-alpha.7.4"' in manifest
     assert "DOEMSRegisteredPricesManager" in init
     assert "build_prices_sensors" in sensor
     assert 'entry_data.get("prices")' in sensor
@@ -29,12 +29,13 @@ def test_alpha7_3_versions_prices_files_and_registered_entities():
         "doems_prices_tariff_profile",
         "doems_prices_gas_market",
         "doems_prices_gas_all_in",
+        "doems_prices_gas_vs_electricity",
     ):
         assert object_id in prices_sensor
 
     # Runtime ownership is now the SensorEntity platform. The Alpha7/7.1
     # direct-state publisher remains only in the legacy base implementation
-    # and is suppressed by the actual Alpha7.3 runtime manager.
+    # and is suppressed by the actual Alpha7.4 runtime manager.
     assert "class DOEMSRegisteredPricesManager" in prices_runtime
     assert "def _publish_states(self) -> None:" in prices_runtime
     assert "SensorEntity owns public state output" in prices_runtime
@@ -54,7 +55,7 @@ def test_alpha7_3_versions_prices_files_and_registered_entities():
     assert "export_all_in" in example
     assert example.count("type: line") == 2
 
-    # Alpha7.3 makes gas source semantics explicit rather than trusting a
+    # Alpha7.4 makes gas source semantics explicit rather than trusting a
     # provider label or subtracting tariff components heuristically.
     for token in (
         "gas_source_mode",
@@ -68,6 +69,14 @@ def test_alpha7_3_versions_prices_files_and_registered_entities():
     assert '"incl_vat": True' in prices
     assert "- self.gas_variable_addon" not in prices
     assert "unsupported_gas_price_unit" in config_flow
+
+    # Alpha7.4 adds exactly one read-only gas/electricity comparison sensor.
+    assert "GAS_HIGHER_HEATING_VALUE_KWH_M3 = 9.77" in const
+    assert "gas_equivalent_price_eur_kwh" in prices
+    assert "electricity_to_gas_ratio" in prices
+    assert "DOEMSPricesGasVsElectricitySensor" in prices_sensor
+    assert "energy_carrier_price_only" in prices
+    assert "efficiency_or_cop_included" in prices
 
     # Home Assistant NumberSelector requires step >= 0.001 unless step='any'.
     assert "0.00001" not in config_flow
