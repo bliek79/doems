@@ -20,7 +20,7 @@ CONF_BATTERY_PRESENT = "battery_present"
 CONF_BATTERY_CHARGE_POWER_ENTITY = "battery_charge_power_entity"
 CONF_BATTERY_DISCHARGE_POWER_ENTITY = "battery_discharge_power_entity"
 
-# G6 EMS configuration contract - Step 3A.
+# G6 EMS configuration contract - Steps 3A/3B.
 CONF_EMS_ENABLED = "ems_enabled"
 CONF_BATTERY_CAPACITY_KWH = "battery_capacity_kwh"
 CONF_TECHNICAL_MIN_SOC_PERCENT = "technical_min_soc_percent"
