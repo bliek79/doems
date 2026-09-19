@@ -21,6 +21,10 @@ from .const import (
     CONF_MAX_SOC_PERCENT,
     CONF_MAX_CHARGE_POWER_W,
     CONF_MAX_DISCHARGE_POWER_W,
+    CONF_SOFTWARE_RESERVE_PERCENT,
+    CONF_CHARGE_EFFICIENCY_PERCENT,
+    CONF_DISCHARGE_EFFICIENCY_PERCENT,
+    CONF_MINIMUM_TRADE_MARGIN_EUR_PER_KWH,
     CONF_EMS_ENABLED,
     CONF_ELECTRICITY_EXPORT_SUPPLIER,
     CONF_ELECTRICITY_EXPORT_TAX,
@@ -66,6 +70,10 @@ from .const import (
     DEFAULT_MAX_SOC_PERCENT,
     DEFAULT_MAX_CHARGE_POWER_W,
     DEFAULT_MAX_DISCHARGE_POWER_W,
+    DEFAULT_SOFTWARE_RESERVE_PERCENT,
+    DEFAULT_CHARGE_EFFICIENCY_PERCENT,
+    DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
+    DEFAULT_MINIMUM_TRADE_MARGIN_EUR_PER_KWH,
     EMS_MAX_POWER_W,
     DOMAIN,
     ENERGY_SOURCE_BALANCE,
@@ -482,7 +490,7 @@ class DOEMSOptionsFlow(OptionsFlow):
         )
 
     async def async_step_ems(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Configure the G6 Step 3A EMS battery and power settings only."""
+        """Configure the G6 Step 3A/3B EMS settings only."""
         if user_input is not None:
             self._pending.update(user_input)
             return self._save()
@@ -510,6 +518,22 @@ class DOEMSOptionsFlow(OptionsFlow):
                     CONF_MAX_DISCHARGE_POWER_W,
                     default=int(self._current(CONF_MAX_DISCHARGE_POWER_W, DEFAULT_MAX_DISCHARGE_POWER_W)),
                 ): _number(100, EMS_MAX_POWER_W, 100, "W"),
+                vol.Required(
+                    CONF_SOFTWARE_RESERVE_PERCENT,
+                    default=float(self._current(CONF_SOFTWARE_RESERVE_PERCENT, DEFAULT_SOFTWARE_RESERVE_PERCENT)),
+                ): _number(0, 30, 1, "%"),
+                vol.Required(
+                    CONF_CHARGE_EFFICIENCY_PERCENT,
+                    default=float(self._current(CONF_CHARGE_EFFICIENCY_PERCENT, DEFAULT_CHARGE_EFFICIENCY_PERCENT)),
+                ): _number(50, 100, 1, "%"),
+                vol.Required(
+                    CONF_DISCHARGE_EFFICIENCY_PERCENT,
+                    default=float(self._current(CONF_DISCHARGE_EFFICIENCY_PERCENT, DEFAULT_DISCHARGE_EFFICIENCY_PERCENT)),
+                ): _number(50, 100, 1, "%"),
+                vol.Required(
+                    CONF_MINIMUM_TRADE_MARGIN_EUR_PER_KWH,
+                    default=float(self._current(CONF_MINIMUM_TRADE_MARGIN_EUR_PER_KWH, DEFAULT_MINIMUM_TRADE_MARGIN_EUR_PER_KWH)),
+                ): _number(0.0, 1.0, 0.01, "EUR/kWh"),
             }),
         )
 

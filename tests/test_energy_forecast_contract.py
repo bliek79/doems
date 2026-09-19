@@ -23,7 +23,7 @@ def _load_pure_module(name: str):
 
 def test_manifest_and_clean_identity_contract() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["domain"] == "doems" and manifest["name"] == "DOEMS" and manifest["version"] == "0.1.0-alpha.7.8"
+    assert manifest["domain"] == "doems" and manifest["name"] == "DOEMS" and manifest["version"] == "0.1.0-alpha.7.9"
     for path in INTEGRATION.rglob("*"):
         if not path.is_file() or path.suffix not in {".py", ".json", ".yaml", ".yml"}: continue
         text = path.read_text(encoding="utf-8")
@@ -63,7 +63,7 @@ def test_install_contract_is_component_scoped() -> None:
         assert token in text or token in const
     for token in ("solar_foundation_enabled","solar_location_source","solar_inverter_groups","solar_arrays","solar_latitude","solar_longitude"):
         assert token in text or token in const
-    for token in ("ems_enabled","battery_capacity_kwh","technical_min_soc_percent","max_soc_percent","max_charge_power_w","max_discharge_power_w"):
+    for token in ("ems_enabled","battery_capacity_kwh","technical_min_soc_percent","max_soc_percent","max_charge_power_w","max_discharge_power_w","software_reserve_percent","charge_efficiency_percent","discharge_efficiency_percent","minimum_trade_margin_eur_per_kwh"):
         assert token in text or token in const
     assert "physical_execution" not in text
 

@@ -1,4 +1,4 @@
-name: DOEMS CI and Alpha7.8 G6 Step 3A EMS Configuration Release
+name: DOEMS CI and Alpha7.9 G6 Step 3B EMS Configuration Release
 
 on:
   pull_request:
@@ -29,9 +29,9 @@ jobs:
               json.loads(path.read_text(encoding='utf-8'))
               print(f'valid: {path}')
           PY
-      - name: Validate Alpha7.8 release contract
+      - name: Validate Alpha7.9 release contract
         run: |
-          test -f RELEASE_NOTES_0.1.0-alpha.7.8.md
+          test -f RELEASE_NOTES_0.1.0-alpha.7.9.md
           test -f examples/prices_p4_forecast_card.yaml
           test -f custom_components/doems/prices.py
           test -f custom_components/doems/prices_model.py
@@ -41,14 +41,18 @@ jobs:
           test ! -f scripts/build_brand_assets.py
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
-          grep -F 'VERSION = "0.1.0-alpha.7.8"' custom_components/doems/const.py
-          grep -F '"version": "0.1.0-alpha.7.8"' custom_components/doems/manifest.json
+          grep -F 'VERSION = "0.1.0-alpha.7.9"' custom_components/doems/const.py
+          grep -F '"version": "0.1.0-alpha.7.9"' custom_components/doems/manifest.json
           grep -F 'CONF_EMS_ENABLED = "ems_enabled"' custom_components/doems/const.py
           grep -F 'CONF_BATTERY_CAPACITY_KWH = "battery_capacity_kwh"' custom_components/doems/const.py
           grep -F 'CONF_TECHNICAL_MIN_SOC_PERCENT = "technical_min_soc_percent"' custom_components/doems/const.py
           grep -F 'CONF_MAX_SOC_PERCENT = "max_soc_percent"' custom_components/doems/const.py
           grep -F 'CONF_MAX_CHARGE_POWER_W = "max_charge_power_w"' custom_components/doems/const.py
           grep -F 'CONF_MAX_DISCHARGE_POWER_W = "max_discharge_power_w"' custom_components/doems/const.py
+          grep -F 'CONF_SOFTWARE_RESERVE_PERCENT = "software_reserve_percent"' custom_components/doems/const.py
+          grep -F 'CONF_CHARGE_EFFICIENCY_PERCENT = "charge_efficiency_percent"' custom_components/doems/const.py
+          grep -F 'CONF_DISCHARGE_EFFICIENCY_PERCENT = "discharge_efficiency_percent"' custom_components/doems/const.py
+          grep -F 'CONF_MINIMUM_TRADE_MARGIN_EUR_PER_KWH = "minimum_trade_margin_eur_per_kwh"' custom_components/doems/const.py
           grep -F 'EMS_MAX_POWER_W = 3500' custom_components/doems/const.py
           grep -F 'async def async_step_ems' custom_components/doems/config_flow.py
           grep -F 'build_prices_sensors' custom_components/doems/sensor.py
@@ -71,7 +75,7 @@ jobs:
           ! grep -R -F 'doems_capture_alpha41_solar_freeze' custom_components/doems
           ! grep -R -F 'doems_alpha41_solar_freeze_captured' custom_components/doems
 
-  publish-alpha7-8:
+  publish-alpha7-9:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
@@ -81,7 +85,7 @@ jobs:
           fetch-depth: 0
       - name: Build release archive
         run: |
-          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.7.8.md
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.7.9.md
           sha256sum doems.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - name: Verify Prices P4 runtime is packaged
@@ -97,12 +101,12 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/icon.png'
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
-      - name: Publish Alpha7.8 cleanup release
+      - name: Publish Alpha7.9 cleanup release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view 0.1.0-alpha.7.8 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.7.8 --title "DOEMS 0.1.0-alpha.7.8 - G6 Step 3A EMS Configuration" --notes-file RELEASE_NOTES_0.1.0-alpha.7.8.md
+          if gh release view 0.1.0-alpha.7.9 >/dev/null 2>&1; then
+            gh release edit 0.1.0-alpha.7.9 --title "DOEMS 0.1.0-alpha.7.9 - G6 Step 3A EMS Configuration" --notes-file RELEASE_NOTES_0.1.0-alpha.7.9.md
           else
-            gh release create 0.1.0-alpha.7.8 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.8 - G6 Step 3A EMS Configuration" --notes-file RELEASE_NOTES_0.1.0-alpha.7.8.md
+            gh release create 0.1.0-alpha.7.9 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.9 - G6 Step 3A EMS Configuration" --notes-file RELEASE_NOTES_0.1.0-alpha.7.9.md
           fi
