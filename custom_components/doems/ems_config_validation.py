@@ -29,6 +29,10 @@ ERR_ABOVE_MAXIMUM = "ems_above_maximum"
 ERR_INVALID_STEP = "ems_invalid_step"
 ERR_INVALID_BOOLEAN = "ems_invalid_boolean"
 ERR_INVALID_DATETIME = "ems_invalid_datetime"
+ERR_SOC_RANGE_INVALID = "ems_soc_range_invalid"
+ERR_AWAY_START_REQUIRED = "ems_away_start_required"
+ERR_AWAY_END_REQUIRED = "ems_away_end_required"
+ERR_AWAY_END_NOT_AFTER_START = "ems_away_end_not_after_start"
 
 _NUMERIC_RULES: dict[str, tuple[Decimal, Decimal, Decimal, bool]] = {
     CONF_BATTERY_CAPACITY_KWH: (Decimal("1.0"), Decimal("30.0"), Decimal("0.1"), False),
@@ -76,6 +80,43 @@ def _valid_datetime(value: Any) -> bool:
     except ValueError:
         return False
     return True
+
+
+def _parse_datetime(value: Any) -> datetime | None:
+    """Parse a previously field-validated date/time value."""
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            return datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    return None
+
+
+def validate_ems_combination(values: dict[str, Any]) -> dict[str, str]:
+    """Validate Step 4B relationships between individually valid EMS fields."""
+    errors: dict[str, str] = {}
+
+    min_soc = _as_decimal(values.get(CONF_TECHNICAL_MIN_SOC_PERCENT))
+    max_soc = _as_decimal(values.get(CONF_MAX_SOC_PERCENT))
+    if min_soc is not None and max_soc is not None and min_soc >= max_soc:
+        errors[CONF_MAX_SOC_PERCENT] = ERR_SOC_RANGE_INVALID
+
+    if values.get(CONF_AWAY_SCHEDULE_ENABLED) is True:
+        start_value = values.get(CONF_AWAY_START)
+        end_value = values.get(CONF_AWAY_END)
+        if start_value in (None, ""):
+            errors[CONF_AWAY_START] = ERR_AWAY_START_REQUIRED
+        if end_value in (None, ""):
+            errors[CONF_AWAY_END] = ERR_AWAY_END_REQUIRED
+        if not errors.get(CONF_AWAY_START) and not errors.get(CONF_AWAY_END):
+            start = _parse_datetime(start_value)
+            end = _parse_datetime(end_value)
+            if start is not None and end is not None and end <= start:
+                errors[CONF_AWAY_END] = ERR_AWAY_END_NOT_AFTER_START
+
+    return errors
 
 
 def validate_ems_field(key: str, value: Any) -> str | None:

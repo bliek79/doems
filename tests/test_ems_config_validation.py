@@ -102,3 +102,80 @@ def test_step4a_does_not_add_cross_field_rules() -> None:
     assert m.validate_ems_field("max_soc_percent", 50) is None
     assert m.validate_ems_field("away_start", "2026-09-22T18:45:00+02:00") is None
     assert m.validate_ems_field("away_end", "2026-09-20T08:15:00+02:00") is None
+
+
+def test_step4b_soc_combination_validation() -> None:
+    m = _load_validation()
+    assert m.validate_ems_combination({
+        "technical_min_soc_percent": 5,
+        "max_soc_percent": 100,
+        "away_schedule_enabled": False,
+    }) == {}
+    errors = m.validate_ems_combination({
+        "technical_min_soc_percent": 30,
+        "max_soc_percent": 30,
+        "away_schedule_enabled": False,
+    })
+    assert errors == {"max_soc_percent": m.ERR_SOC_RANGE_INVALID}
+    errors = m.validate_ems_combination({
+        "technical_min_soc_percent": 30,
+        "max_soc_percent": 20,
+        "away_schedule_enabled": False,
+    })
+    assert errors == {"max_soc_percent": m.ERR_SOC_RANGE_INVALID}
+
+
+def test_step4b_away_schedule_requires_both_boundaries() -> None:
+    m = _load_validation()
+    assert m.validate_ems_combination({
+        "technical_min_soc_percent": 5,
+        "max_soc_percent": 100,
+        "away_schedule_enabled": False,
+    }) == {}
+    errors = m.validate_ems_combination({
+        "technical_min_soc_percent": 5,
+        "max_soc_percent": 100,
+        "away_schedule_enabled": True,
+        "away_end": "2026-09-22T18:45:00+02:00",
+    })
+    assert errors == {"away_start": m.ERR_AWAY_START_REQUIRED}
+    errors = m.validate_ems_combination({
+        "technical_min_soc_percent": 5,
+        "max_soc_percent": 100,
+        "away_schedule_enabled": True,
+        "away_start": "2026-09-20T08:15:00+02:00",
+    })
+    assert errors == {"away_end": m.ERR_AWAY_END_REQUIRED}
+
+
+def test_step4b_away_end_must_be_strictly_after_start() -> None:
+    m = _load_validation()
+    base = {
+        "technical_min_soc_percent": 5,
+        "max_soc_percent": 100,
+        "away_schedule_enabled": True,
+        "away_start": "2026-09-20T08:15:00+02:00",
+    }
+    assert m.validate_ems_combination({
+        **base,
+        "away_end": "2026-09-22T18:45:00+02:00",
+    }) == {}
+    assert m.validate_ems_combination({
+        **base,
+        "away_end": "2026-09-20T08:15:00+02:00",
+    }) == {"away_end": m.ERR_AWAY_END_NOT_AFTER_START}
+    assert m.validate_ems_combination({
+        **base,
+        "away_end": "2026-09-19T18:45:00+02:00",
+    }) == {"away_end": m.ERR_AWAY_END_NOT_AFTER_START}
+
+
+def test_step4b_schedule_off_does_not_enforce_away_order() -> None:
+    m = _load_validation()
+    assert m.validate_ems_combination({
+        "technical_min_soc_percent": 5,
+        "max_soc_percent": 100,
+        "away_schedule_enabled": False,
+        "away_start": "2026-09-22T18:45:00+02:00",
+        "away_end": "2026-09-20T08:15:00+02:00",
+    }) == {}

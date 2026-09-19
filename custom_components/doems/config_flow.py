@@ -104,7 +104,7 @@ from .const import (
     SOLAR_MAX_INVERTER_GROUPS,
 )
 from .energy_sources import normalize_power_w
-from .ems_config_validation import EMS_VALIDATED_FIELDS, validate_ems_field
+from .ems_config_validation import EMS_VALIDATED_FIELDS, validate_ems_combination, validate_ems_field
 from .solar_foundation_model import validate_solar_foundation
 
 
@@ -533,9 +533,13 @@ class DOEMSOptionsFlow(OptionsFlow):
                         normalized[key] = _timezone_aware_iso(self.hass, normalized[key])
                     else:
                         normalized.pop(key, None)
-                        self._pending.pop(key, None)
-                self._pending.update(normalized)
-                return self._save()
+                errors.update(validate_ems_combination(normalized))
+                if not errors:
+                    for key in (CONF_AWAY_START, CONF_AWAY_END):
+                        if key not in normalized:
+                            self._pending.pop(key, None)
+                    self._pending.update(normalized)
+                    return self._save()
 
         return self.async_show_form(
             step_id="ems",
