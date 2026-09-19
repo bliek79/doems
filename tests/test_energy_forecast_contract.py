@@ -23,7 +23,7 @@ def _load_pure_module(name: str):
 
 def test_manifest_and_clean_identity_contract() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["domain"] == "doems" and manifest["name"] == "DOEMS" and manifest["version"] == "0.1.0-alpha.7.10"
+    assert manifest["domain"] == "doems" and manifest["name"] == "DOEMS" and manifest["version"] == "0.1.0-alpha.7.11"
     for path in INTEGRATION.rglob("*"):
         if not path.is_file() or path.suffix not in {".py", ".json", ".yaml", ".yml"}: continue
         text = path.read_text(encoding="utf-8")
@@ -66,6 +66,9 @@ def test_install_contract_is_component_scoped() -> None:
     for token in ("ems_enabled","battery_capacity_kwh","technical_min_soc_percent","max_soc_percent","max_charge_power_w","max_discharge_power_w","software_reserve_percent","charge_efficiency_percent","discharge_efficiency_percent","minimum_trade_margin_eur_per_kwh","startup_delay_seconds","away_schedule_enabled","away_start","away_end"):
         assert token in text or token in const
     assert "physical_execution" not in text
+    validation=(INTEGRATION / "ems_config_validation.py").read_text(encoding="utf-8")
+    for token in ("EMS_VALIDATED_FIELDS","ems_invalid_number","ems_below_minimum","ems_above_maximum","ems_invalid_step","ems_invalid_boolean","ems_invalid_datetime"):
+        assert token in validation
 
 
 def test_alpha41_equivalent_forecast_shape_and_hierarchy() -> None:
