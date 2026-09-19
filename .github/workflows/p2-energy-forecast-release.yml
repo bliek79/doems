@@ -115,7 +115,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view 0.1.0-alpha.7.10 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.7.10 --title "DOEMS 0.1.0-alpha.7.10 - G6 Step 3B EMS Configuration" --notes-file RELEASE_NOTES_0.1.0-alpha.7.10.md
+            gh release edit 0.1.0-alpha.7.10 --title "DOEMS 0.1.0-alpha.7.10 - G6 Step 3C EMS Time Mode Configuration" --notes-file RELEASE_NOTES_0.1.0-alpha.7.10.md
           else
-            gh release create 0.1.0-alpha.7.10 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.10 - G6 Step 3B EMS Configuration" --notes-file RELEASE_NOTES_0.1.0-alpha.7.10.md
+            gh release create 0.1.0-alpha.7.10 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.10 - G6 Step 3C EMS Time Mode Configuration" --notes-file RELEASE_NOTES_0.1.0-alpha.7.10.md
           fi
