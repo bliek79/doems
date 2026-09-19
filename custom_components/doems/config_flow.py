@@ -16,6 +16,12 @@ from .const import (
     CONF_BATTERY_CHARGE_POWER_ENTITY,
     CONF_BATTERY_DISCHARGE_POWER_ENTITY,
     CONF_BATTERY_PRESENT,
+    CONF_BATTERY_CAPACITY_KWH,
+    CONF_TECHNICAL_MIN_SOC_PERCENT,
+    CONF_MAX_SOC_PERCENT,
+    CONF_MAX_CHARGE_POWER_W,
+    CONF_MAX_DISCHARGE_POWER_W,
+    CONF_EMS_ENABLED,
     CONF_ELECTRICITY_EXPORT_SUPPLIER,
     CONF_ELECTRICITY_EXPORT_TAX,
     CONF_ELECTRICITY_FIXED_SUPPLY_PER_DAY,
@@ -55,6 +61,12 @@ from .const import (
     CONF_TARIFF_VALID_FROM,
     CONF_VAT_PERCENT,
     DEFAULT_INSTANCE_NAME,
+    DEFAULT_BATTERY_CAPACITY_KWH,
+    DEFAULT_TECHNICAL_MIN_SOC_PERCENT,
+    DEFAULT_MAX_SOC_PERCENT,
+    DEFAULT_MAX_CHARGE_POWER_W,
+    DEFAULT_MAX_DISCHARGE_POWER_W,
+    EMS_MAX_POWER_W,
     DOMAIN,
     ENERGY_SOURCE_BALANCE,
     ENERGY_SOURCE_DIRECT,
@@ -201,11 +213,20 @@ class DOEMSOptionsFlow(OptionsFlow):
             return await self.async_step_solar_system()
         if self._pending.get(CONF_PRICES_ENABLED, False):
             return await self.async_step_prices()
+        if self._pending.get(CONF_EMS_ENABLED, False):
+            return await self.async_step_ems()
         return self._save()
 
     async def _continue_after_solar(self) -> ConfigFlowResult:
         if self._pending.get(CONF_PRICES_ENABLED, False):
             return await self.async_step_prices()
+        if self._pending.get(CONF_EMS_ENABLED, False):
+            return await self.async_step_ems()
+        return self._save()
+
+    async def _continue_after_prices(self) -> ConfigFlowResult:
+        if self._pending.get(CONF_EMS_ENABLED, False):
+            return await self.async_step_ems()
         return self._save()
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
@@ -217,6 +238,8 @@ class DOEMSOptionsFlow(OptionsFlow):
                 return await self.async_step_solar_system()
             if self._pending.get(CONF_PRICES_ENABLED, False):
                 return await self.async_step_prices()
+            if self._pending.get(CONF_EMS_ENABLED, False):
+                return await self.async_step_ems()
             return self._save()
 
         return self.async_show_form(
@@ -226,6 +249,7 @@ class DOEMSOptionsFlow(OptionsFlow):
                 vol.Required(CONF_ENERGY_FORECAST_ENABLED, default=bool(self._current(CONF_ENERGY_FORECAST_ENABLED, False))): bool,
                 vol.Required(CONF_SOLAR_FOUNDATION_ENABLED, default=bool(self._current(CONF_SOLAR_FOUNDATION_ENABLED, False))): bool,
                 vol.Required(CONF_PRICES_ENABLED, default=bool(self._current(CONF_PRICES_ENABLED, False))): bool,
+                vol.Required(CONF_EMS_ENABLED, default=bool(self._current(CONF_EMS_ENABLED, False))): bool,
             }),
         )
 
@@ -457,6 +481,38 @@ class DOEMSOptionsFlow(OptionsFlow):
             errors=errors,
         )
 
+    async def async_step_ems(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Configure the G6 Step 3A EMS battery and power settings only."""
+        if user_input is not None:
+            self._pending.update(user_input)
+            return self._save()
+
+        return self.async_show_form(
+            step_id="ems",
+            data_schema=vol.Schema({
+                vol.Required(
+                    CONF_BATTERY_CAPACITY_KWH,
+                    default=float(self._current(CONF_BATTERY_CAPACITY_KWH, DEFAULT_BATTERY_CAPACITY_KWH)),
+                ): _number(1.0, 30.0, 0.1, "kWh"),
+                vol.Required(
+                    CONF_TECHNICAL_MIN_SOC_PERCENT,
+                    default=int(self._current(CONF_TECHNICAL_MIN_SOC_PERCENT, DEFAULT_TECHNICAL_MIN_SOC_PERCENT)),
+                ): _number(0, 30, 1, "%"),
+                vol.Required(
+                    CONF_MAX_SOC_PERCENT,
+                    default=int(self._current(CONF_MAX_SOC_PERCENT, DEFAULT_MAX_SOC_PERCENT)),
+                ): _number(50, 100, 1, "%"),
+                vol.Required(
+                    CONF_MAX_CHARGE_POWER_W,
+                    default=int(self._current(CONF_MAX_CHARGE_POWER_W, DEFAULT_MAX_CHARGE_POWER_W)),
+                ): _number(100, EMS_MAX_POWER_W, 100, "W"),
+                vol.Required(
+                    CONF_MAX_DISCHARGE_POWER_W,
+                    default=int(self._current(CONF_MAX_DISCHARGE_POWER_W, DEFAULT_MAX_DISCHARGE_POWER_W)),
+                ): _number(100, EMS_MAX_POWER_W, 100, "W"),
+            }),
+        )
+
     async def async_step_prices(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Configure provider-neutral electricity tariff inputs for Prices P4."""
         if user_input is not None:
@@ -473,7 +529,7 @@ class DOEMSOptionsFlow(OptionsFlow):
                 CONF_GAS_GRID_PER_DAY,
             ):
                 self._pending.pop(key, None)
-            return self._save()
+            return await self._continue_after_prices()
         return self.async_show_form(
             step_id="prices",
             data_schema=vol.Schema({
@@ -529,7 +585,7 @@ class DOEMSOptionsFlow(OptionsFlow):
                     self._pending.pop(CONF_GAS_MARKET_ENTITY, None)
                 else:
                     self._pending.pop(CONF_GAS_ENERGYZERO_CONFIG_ENTRY, None)
-                return self._save()
+                return await self._continue_after_prices()
 
         current_mode = str(
             self._current(CONF_GAS_SOURCE_MODE, GAS_SOURCE_HOME_ASSISTANT_ENTITY)
