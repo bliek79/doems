@@ -102,7 +102,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view 0.1.0-alpha.7.8 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.7.8 --title "DOEMS 0.1.0-alpha.7.8 - Alpha41 Solar Freeze Cleanup" --notes-file RELEASE_NOTES_0.1.0-alpha.7.8.md
+            gh release edit 0.1.0-alpha.7.8 --title "DOEMS 0.1.0-alpha.7.8 - G6 Step 3A EMS Configuration" --notes-file RELEASE_NOTES_0.1.0-alpha.7.8.md
           else
-            gh release create 0.1.0-alpha.7.8 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.8 - Alpha41 Solar Freeze Cleanup" --notes-file RELEASE_NOTES_0.1.0-alpha.7.8.md
+            gh release create 0.1.0-alpha.7.8 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.8 - G6 Step 3A EMS Configuration" --notes-file RELEASE_NOTES_0.1.0-alpha.7.8.md
           fi
