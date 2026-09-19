@@ -104,6 +104,7 @@ from .const import (
     SOLAR_MAX_INVERTER_GROUPS,
 )
 from .energy_sources import normalize_power_w
+from .ems_config_validation import EMS_VALIDATED_FIELDS, validate_ems_field
 from .solar_foundation_model import validate_solar_foundation
 
 
@@ -517,17 +518,24 @@ class DOEMSOptionsFlow(OptionsFlow):
         )
 
     async def async_step_ems(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Configure the G6 Step 3A/3B/3C EMS settings only."""
+        """Configure and individually validate the G6 EMS settings."""
+        errors: dict[str, str] = {}
         if user_input is not None:
-            normalized = dict(user_input)
-            for key in (CONF_AWAY_START, CONF_AWAY_END):
-                if normalized.get(key):
-                    normalized[key] = _timezone_aware_iso(self.hass, normalized[key])
-                else:
-                    normalized.pop(key, None)
-                    self._pending.pop(key, None)
-            self._pending.update(normalized)
-            return self._save()
+            for key in EMS_VALIDATED_FIELDS:
+                if key in user_input:
+                    error = validate_ems_field(key, user_input[key])
+                    if error:
+                        errors[key] = error
+            if not errors:
+                normalized = dict(user_input)
+                for key in (CONF_AWAY_START, CONF_AWAY_END):
+                    if normalized.get(key):
+                        normalized[key] = _timezone_aware_iso(self.hass, normalized[key])
+                    else:
+                        normalized.pop(key, None)
+                        self._pending.pop(key, None)
+                self._pending.update(normalized)
+                return self._save()
 
         return self.async_show_form(
             step_id="ems",
@@ -579,6 +587,7 @@ class DOEMSOptionsFlow(OptionsFlow):
                 _optional_datetime(CONF_AWAY_START, self._current(CONF_AWAY_START)): selector.DateTimeSelector(),
                 _optional_datetime(CONF_AWAY_END, self._current(CONF_AWAY_END)): selector.DateTimeSelector(),
             }),
+            errors=errors,
         )
 
     async def async_step_prices(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
