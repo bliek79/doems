@@ -63,7 +63,7 @@ def test_install_contract_is_component_scoped() -> None:
         assert token in text or token in const
     for token in ("solar_foundation_enabled","solar_location_source","solar_inverter_groups","solar_arrays","solar_latitude","solar_longitude"):
         assert token in text or token in const
-    for token in ("ems_enabled","battery_capacity_kwh","technical_min_soc_percent","max_soc_percent","max_charge_power_w","max_discharge_power_w"):
+    for token in ("ems_enabled","battery_capacity_kwh","technical_min_soc_percent","max_soc_percent","max_charge_power_w","max_discharge_power_w","software_reserve_percent","charge_efficiency_percent","discharge_efficiency_percent","minimum_trade_margin_eur_per_kwh"):
         assert token in text or token in const
     assert "physical_execution" not in text
 
