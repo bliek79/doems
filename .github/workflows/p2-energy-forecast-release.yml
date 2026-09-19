@@ -1,4 +1,4 @@
-name: DOEMS CI and Alpha7.10 G6 Step 3C EMS Time Mode Configuration Release
+name: DOEMS CI and Alpha7.11 G6 Step 4A EMS Backend Validation Release
 
 on:
   pull_request:
@@ -29,9 +29,9 @@ jobs:
               json.loads(path.read_text(encoding='utf-8'))
               print(f'valid: {path}')
           PY
-      - name: Validate Alpha7.10 release contract
+      - name: Validate Alpha7.11 release contract
         run: |
-          test -f RELEASE_NOTES_0.1.0-alpha.7.10.md
+          test -f RELEASE_NOTES_0.1.0-alpha.7.11.md
           test -f examples/prices_p4_forecast_card.yaml
           test -f custom_components/doems/prices.py
           test -f custom_components/doems/prices_model.py
@@ -41,8 +41,8 @@ jobs:
           test ! -f scripts/build_brand_assets.py
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
-          grep -F 'VERSION = "0.1.0-alpha.7.10"' custom_components/doems/const.py
-          grep -F '"version": "0.1.0-alpha.7.10"' custom_components/doems/manifest.json
+          grep -F 'VERSION = "0.1.0-alpha.7.11"' custom_components/doems/const.py
+          grep -F '"version": "0.1.0-alpha.7.11"' custom_components/doems/manifest.json
           grep -F 'CONF_EMS_ENABLED = "ems_enabled"' custom_components/doems/const.py
           grep -F 'CONF_BATTERY_CAPACITY_KWH = "battery_capacity_kwh"' custom_components/doems/const.py
           grep -F 'CONF_TECHNICAL_MIN_SOC_PERCENT = "technical_min_soc_percent"' custom_components/doems/const.py
@@ -57,6 +57,12 @@ jobs:
           grep -F 'CONF_AWAY_SCHEDULE_ENABLED = "away_schedule_enabled"' custom_components/doems/const.py
           grep -F 'CONF_AWAY_START = "away_start"' custom_components/doems/const.py
           grep -F 'CONF_AWAY_END = "away_end"' custom_components/doems/const.py
+          test -f custom_components/doems/ems_config_validation.py
+          grep -F 'EMS_VALIDATED_FIELDS' custom_components/doems/ems_config_validation.py
+          grep -F 'ERR_INVALID_NUMBER = "ems_invalid_number"' custom_components/doems/ems_config_validation.py
+          grep -F 'ERR_INVALID_DATETIME = "ems_invalid_datetime"' custom_components/doems/ems_config_validation.py
+          grep -F 'validate_ems_field' custom_components/doems/config_flow.py
+          grep -F 'errors=errors' custom_components/doems/config_flow.py
           grep -F 'DEFAULT_STARTUP_DELAY_SECONDS = 30' custom_components/doems/const.py
           grep -F 'EMS_MIN_STARTUP_DELAY_SECONDS = 30' custom_components/doems/const.py
           grep -F 'EMS_MAX_STARTUP_DELAY_SECONDS = 300' custom_components/doems/const.py
@@ -84,7 +90,7 @@ jobs:
           ! grep -R -F 'doems_capture_alpha41_solar_freeze' custom_components/doems
           ! grep -R -F 'doems_alpha41_solar_freeze_captured' custom_components/doems
 
-  publish-alpha7-10:
+  publish-alpha7-11:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
@@ -94,7 +100,7 @@ jobs:
           fetch-depth: 0
       - name: Build release archive
         run: |
-          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.7.10.md
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.7.11.md
           sha256sum doems.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - name: Verify Prices P4 runtime is packaged
@@ -110,12 +116,12 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/icon.png'
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
-      - name: Publish Alpha7.10 cleanup release
+      - name: Publish Alpha7.11 cleanup release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view 0.1.0-alpha.7.10 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.7.10 --title "DOEMS 0.1.0-alpha.7.10 - G6 Step 3C EMS Time Mode Configuration" --notes-file RELEASE_NOTES_0.1.0-alpha.7.10.md
+          if gh release view 0.1.0-alpha.7.11 >/dev/null 2>&1; then
+            gh release edit 0.1.0-alpha.7.11 --title "DOEMS 0.1.0-alpha.7.11 - G6 Step 3C EMS Time Mode Configuration" --notes-file RELEASE_NOTES_0.1.0-alpha.7.11.md
           else
-            gh release create 0.1.0-alpha.7.10 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.10 - G6 Step 3C EMS Time Mode Configuration" --notes-file RELEASE_NOTES_0.1.0-alpha.7.10.md
+            gh release create 0.1.0-alpha.7.11 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.11 - G6 Step 3C EMS Time Mode Configuration" --notes-file RELEASE_NOTES_0.1.0-alpha.7.11.md
           fi
