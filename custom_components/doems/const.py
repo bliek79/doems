@@ -4,7 +4,7 @@ from __future__ import annotations
 
 DOMAIN = "doems"
 NAME = "DOEMS"
-VERSION = "0.1.0-alpha.7.9"
+VERSION = "0.1.0-alpha.7.10"
 
 CONF_INSTANCE_NAME = "instance_name"
 DEFAULT_INSTANCE_NAME = NAME
@@ -20,7 +20,7 @@ CONF_BATTERY_PRESENT = "battery_present"
 CONF_BATTERY_CHARGE_POWER_ENTITY = "battery_charge_power_entity"
 CONF_BATTERY_DISCHARGE_POWER_ENTITY = "battery_discharge_power_entity"
 
-# G6 EMS configuration contract - Steps 3A/3B.
+# G6 EMS configuration contract - Steps 3A/3B/3C.
 CONF_EMS_ENABLED = "ems_enabled"
 CONF_BATTERY_CAPACITY_KWH = "battery_capacity_kwh"
 CONF_TECHNICAL_MIN_SOC_PERCENT = "technical_min_soc_percent"
@@ -31,6 +31,10 @@ CONF_SOFTWARE_RESERVE_PERCENT = "software_reserve_percent"
 CONF_CHARGE_EFFICIENCY_PERCENT = "charge_efficiency_percent"
 CONF_DISCHARGE_EFFICIENCY_PERCENT = "discharge_efficiency_percent"
 CONF_MINIMUM_TRADE_MARGIN_EUR_PER_KWH = "minimum_trade_margin_eur_per_kwh"
+CONF_STARTUP_DELAY_SECONDS = "startup_delay_seconds"
+CONF_AWAY_SCHEDULE_ENABLED = "away_schedule_enabled"
+CONF_AWAY_START = "away_start"
+CONF_AWAY_END = "away_end"
 
 DEFAULT_BATTERY_CAPACITY_KWH = 7.2
 DEFAULT_TECHNICAL_MIN_SOC_PERCENT = 5
@@ -41,6 +45,10 @@ DEFAULT_SOFTWARE_RESERVE_PERCENT = 7.0
 DEFAULT_CHARGE_EFFICIENCY_PERCENT = 92.0
 DEFAULT_DISCHARGE_EFFICIENCY_PERCENT = 92.0
 DEFAULT_MINIMUM_TRADE_MARGIN_EUR_PER_KWH = 0.10
+DEFAULT_STARTUP_DELAY_SECONDS = 30
+DEFAULT_AWAY_SCHEDULE_ENABLED = False
+EMS_MIN_STARTUP_DELAY_SECONDS = 30
+EMS_MAX_STARTUP_DELAY_SECONDS = 300
 EMS_MAX_POWER_W = 3500
 
 ENERGY_SOURCE_DIRECT = "direct_home_power"
