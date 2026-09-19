@@ -127,7 +127,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view 0.1.0-alpha.7.12 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.7.12 --title "DOEMS 0.1.0-alpha.7.12 - G6 Step 4A EMS Backend Validation" --notes-file RELEASE_NOTES_0.1.0-alpha.7.12.md
+            gh release edit 0.1.0-alpha.7.12 --title "DOEMS 0.1.0-alpha.7.12 - G6 Step 4B EMS Combination Validation" --notes-file RELEASE_NOTES_0.1.0-alpha.7.12.md
           else
-            gh release create 0.1.0-alpha.7.12 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.12 - G6 Step 4A EMS Backend Validation" --notes-file RELEASE_NOTES_0.1.0-alpha.7.12.md
+            gh release create 0.1.0-alpha.7.12 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.12 - G6 Step 4B EMS Combination Validation" --notes-file RELEASE_NOTES_0.1.0-alpha.7.12.md
           fi
