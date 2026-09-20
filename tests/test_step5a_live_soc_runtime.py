@@ -79,8 +79,10 @@ def test_shadow_diagnostic_sensor_is_compact_and_non_actuating() -> None:
     assert '"startup_delay_runtime_gate_active": False' in runtime
     assert '"shadow_plan_store_active": True' in runtime
     assert '"scheduler_invoked": bool(self.scheduler_result)' in runtime
-    assert '"prestart_validator_invoked": False' in runtime
-    assert '"execution_controller_invoked": False' in runtime
+    assert '"prestart_validator_invoked": bool(self.downstream_result)' in runtime
+    assert '"execution_controller_invoked": bool(self.downstream_result)' in runtime
+    assert '"automatic_execution_armed": False' in runtime
+    assert '"mode_switch_service_calls_available": False' in runtime
     assert '"service_calls_performed": False' in runtime
     assert '"physical_execution_authority": False' in runtime
     for field in ("invalid_slot_count","first_invalid_slot","last_invalid_slot","invalid_slots"):
