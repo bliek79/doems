@@ -20,6 +20,7 @@ from .const import CONF_SOC_ENTITY
 from .ems_alpha76_adapter import run_shadow_chain
 from .ems_live_input import build_live_ems_input
 from .ems_settings import EMSSettings
+from .ems_soc import UNAVAILABLE_SOC_STATES, parse_soc_percent
 
 
 class DOEMSEMSShadowRuntime:
@@ -134,14 +135,11 @@ class DOEMSEMSShadowRuntime:
         if state is None:
             return None, "entity_missing", None
         updated = state.last_updated.isoformat()
-        if state.state in {"unknown", "unavailable", "none", "None", ""}:
+        if state.state in UNAVAILABLE_SOC_STATES:
             return None, "unavailable", updated
-        try:
-            value = float(state.state)
-        except (TypeError, ValueError):
+        value = parse_soc_percent(state.state)
+        if value is None:
             return None, "invalid_value", updated
-        if not 0.0 <= value <= 100.0:
-            return None, "out_of_range", updated
         return value, "ok", updated
 
     async def async_refresh(self, trigger: str) -> None:
