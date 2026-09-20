@@ -16,12 +16,25 @@ from homeassistant.core import Event, EventStateChangedData, HomeAssistant, call
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_SOC_ENTITY
+from .const import (
+    CONF_SOC_ENTITY,
+    CONF_DEVICE_STATUS_ENTITY,
+    CONF_CHARGE_POWER_ENTITY,
+    CONF_DISCHARGE_POWER_ENTITY,
+    CONF_OPERATING_MODE_ENTITY,
+    CONF_ACTION_DIRECTION_ENTITY,
+    CONF_POWER_SETPOINT_ENTITY,
+)
 from .ems_alpha76_adapter import run_shadow_chain
 from .ems_alpha76.plan_store import DOEMSShadowPlanStore
 from .ems_alpha76.scheduler import DOEMSShadowScheduler
 from .ems_alpha76.planner_action_bridge import build_planner_action_bridge
+from .ems_alpha76.prestart_validator import AnkerEmsPreStartValidator
+from .ems_alpha76.safety_guard import AnkerEmsSafetyGuard
+from .ems_alpha76.action_controller import AnkerEmsActionController
+from .ems_alpha76.execution_shadow import DOEMSShadowExecutionGates
 from .ems_live_input import build_live_ems_input
+from .energy_sources import normalize_power_w
 from .ems_settings import EMSSettings
 from .ems_soc import UNAVAILABLE_SOC_STATES, parse_soc_percent
 
@@ -62,6 +75,11 @@ class DOEMSEMSShadowRuntime:
         self.plan_store_result: dict[str, Any] = {}
         self.handoff_result: dict[str, Any] = {}
         self.expired_release_result: dict[str, Any] = {}
+        self.downstream_result: dict[str, Any] = {}
+        self.prestart = AnkerEmsPreStartValidator()
+        self.safety_guard = AnkerEmsSafetyGuard()
+        self.action_controller = AnkerEmsActionController()
+        self.execution_gates = DOEMSShadowExecutionGates()
 
         self._listeners: list[Callable[[], None]] = []
         self._unsubs: list[Callable[[], None]] = []
@@ -72,6 +90,79 @@ class DOEMSEMSShadowRuntime:
     def soc_entity_id(self) -> str | None:
         value = self.entry.options.get(CONF_SOC_ENTITY)
         return str(value) if value else None
+
+    @property
+    def observation_entity_ids(self) -> list[str]:
+        keys = (
+            CONF_DEVICE_STATUS_ENTITY,
+            CONF_CHARGE_POWER_ENTITY,
+            CONF_DISCHARGE_POWER_ENTITY,
+            CONF_OPERATING_MODE_ENTITY,
+            CONF_ACTION_DIRECTION_ENTITY,
+            CONF_POWER_SETPOINT_ENTITY,
+        )
+        return [
+            str(self.entry.options[key])
+            for key in keys
+            if self.entry.options.get(key)
+        ]
+
+    def _state_value(self, key: str) -> str | None:
+        entity_id = self.entry.options.get(key)
+        if not entity_id:
+            return None
+        state = self.hass.states.get(str(entity_id))
+        if state is None or state.state in {"unknown", "unavailable", "none", "None", ""}:
+            return None
+        return str(state.state)
+
+    def _power_value(self, key: str) -> float | None:
+        entity_id = self.entry.options.get(key)
+        if not entity_id:
+            return None
+        state = self.hass.states.get(str(entity_id))
+        if state is None:
+            return None
+        unit = state.attributes.get("unit_of_measurement")
+        return normalize_power_w(state.state, unit, allow_negative=False)
+
+    def _number_value(self, key: str) -> float | None:
+        entity_id = self.entry.options.get(key)
+        if not entity_id:
+            return None
+        state = self.hass.states.get(str(entity_id))
+        if state is None or state.state in {"unknown", "unavailable", "none", "None", ""}:
+            return None
+        try:
+            value = float(state.state)
+        except (TypeError, ValueError):
+            return None
+        unit = state.attributes.get("unit_of_measurement")
+        if unit == "kW":
+            value *= 1000.0
+        return value
+
+    def _observation_snapshot(self) -> dict[str, Any]:
+        control_path_configured = all(
+            bool(self.entry.options.get(key))
+            for key in (
+                CONF_OPERATING_MODE_ENTITY,
+                CONF_ACTION_DIRECTION_ENTITY,
+                CONF_POWER_SETPOINT_ENTITY,
+            )
+        )
+        return {
+            "device_status": self._state_value(CONF_DEVICE_STATUS_ENTITY),
+            "charge_power_w": self._power_value(CONF_CHARGE_POWER_ENTITY),
+            "discharge_power_w": self._power_value(CONF_DISCHARGE_POWER_ENTITY),
+            "operating_mode": self._state_value(CONF_OPERATING_MODE_ENTITY),
+            "action_direction": self._state_value(CONF_ACTION_DIRECTION_ENTITY),
+            "power_setpoint_w": self._number_value(CONF_POWER_SETPOINT_ENTITY),
+            "control_path_configured": control_path_configured,
+            "physical_test_active": False,
+            "execution_active": False,
+            "simulation_mode": True,
+        }
 
     async def async_setup(self) -> None:
         """Load shadow plans, attach read-only listeners and perform first refresh."""
@@ -94,6 +185,16 @@ class DOEMSEMSShadowRuntime:
                     self.hass,
                     [self.soc_entity_id],
                     self._soc_state_changed,
+                )
+            )
+
+        observation_ids = self.observation_entity_ids
+        if observation_ids:
+            self._unsubs.append(
+                async_track_state_change_event(
+                    self.hass,
+                    observation_ids,
+                    self._observation_state_changed,
                 )
             )
 
@@ -124,6 +225,10 @@ class DOEMSEMSShadowRuntime:
     @callback
     def _soc_state_changed(self, _event: Event[EventStateChangedData]) -> None:
         self._request_refresh("soc_state_change")
+
+    @callback
+    def _observation_state_changed(self, _event: Event[EventStateChangedData]) -> None:
+        self._request_refresh("ems_observation_state_change")
 
     @callback
     def _request_refresh(self, trigger: str) -> None:
@@ -166,6 +271,7 @@ class DOEMSEMSShadowRuntime:
         self.plan_store_result = {}
         self.handoff_result = {}
         self.expired_release_result = {}
+        self.downstream_result = {}
 
         soc, soc_status, soc_updated = self._read_soc()
         self.soc_percent = soc
@@ -226,6 +332,7 @@ class DOEMSEMSShadowRuntime:
             "max_charge_power_w": self.settings.max_charge_power_w,
             "max_discharge_power_w": self.settings.max_discharge_power_w,
             "battery_capacity_kwh": self.settings.battery_capacity_kwh,
+            "soc": self.soc_percent,
             "charge_efficiency_percent": self.settings.charge_efficiency_percent,
             "discharge_efficiency_percent": self.settings.discharge_efficiency_percent,
         }
@@ -339,6 +446,25 @@ class DOEMSEMSShadowRuntime:
             "auto_bridge_execution_enabled": False,
             "auto_bridge_observational_only": False,
         }
+        self._run_downstream_shadow({**refreshed_data, **self.bridge_result})
+
+    def _run_downstream_shadow(self, data: dict[str, Any]) -> None:
+        """Run frozen downstream gates in Alpha76 order without actuation."""
+        work = {
+            **data,
+            **self.bridge_result,
+            **self._observation_snapshot(),
+            "soc": self.soc_percent,
+            "forecast_ready": True,
+        }
+        work.update(self.prestart.evaluate(work))
+        work.update(self.safety_guard.evaluate_automatic_handoff(work))
+        work.update(self.execution_gates.evaluate_automatic_handoff(work))
+        work.update(self.execution_gates.evaluate_final_revalidation(work))
+        work.update(self.execution_gates.evaluate_mode_switch_transaction(work))
+        work.update(self.safety_guard.evaluate(work))
+        work.update(self.action_controller.evaluate(work))
+        self.downstream_result = work
 
     def snapshot(self) -> dict[str, Any]:
         """Return compact entity-safe diagnostics without publishing Plan72 arrays."""
@@ -350,6 +476,7 @@ class DOEMSEMSShadowRuntime:
         time_contract = input_result.get("time_contract") or {}
         bridge = self.bridge_result or {}
         scheduler = self.scheduler_result or {}
+        downstream = self.downstream_result or {}
         slots = scheduler.get("scheduler_slots") or {}
 
         def slot_snapshot(slot: int) -> dict[str, Any]:
@@ -419,14 +546,49 @@ class DOEMSEMSShadowRuntime:
             "shadow_slot_1": slot_snapshot(1),
             "shadow_slot_2": slot_snapshot(2),
             "shadow_slot_3": slot_snapshot(3),
+            "shadow_prestart_diagnostic_status": downstream.get("auto_prestart_diagnostic_status"),
+            "shadow_prestart_diagnostic_phase": downstream.get("auto_prestart_diagnostic_phase"),
+            "shadow_prestart_diagnostic_safe": downstream.get("auto_prestart_diagnostic_safe"),
+            "shadow_prestart_minutes_to_start": downstream.get("auto_prestart_diagnostic_minutes_to_start"),
+            "shadow_prestart_status": downstream.get("auto_prestart_status"),
+            "shadow_prestart_required": downstream.get("auto_prestart_required"),
+            "shadow_prestart_safe": downstream.get("auto_prestart_safe"),
+            "shadow_prestart_reasons": downstream.get("auto_prestart_reasons", []),
+            "shadow_prestart_warnings": downstream.get("auto_prestart_warnings", []),
+            "shadow_safety_handoff_status": downstream.get("auto_safety_handoff_status"),
+            "shadow_safety_handoff_required": downstream.get("auto_safety_handoff_required"),
+            "shadow_safety_handoff_safe": downstream.get("auto_safety_handoff_safe"),
+            "shadow_safety_handoff_reasons": downstream.get("auto_safety_handoff_reasons", []),
+            "shadow_execution_handoff_status": downstream.get("auto_execution_handoff_status"),
+            "shadow_execution_handoff_required": downstream.get("auto_execution_handoff_required"),
+            "shadow_execution_handoff_ready": downstream.get("auto_execution_handoff_ready"),
+            "shadow_execution_handoff_reasons": downstream.get("auto_execution_handoff_reasons", []),
+            "shadow_final_revalidation_status": downstream.get("auto_final_revalidation_status"),
+            "shadow_final_revalidation_required": downstream.get("auto_final_revalidation_required"),
+            "shadow_final_revalidation_safe": downstream.get("auto_final_revalidation_safe"),
+            "shadow_final_revalidation_reasons": downstream.get("auto_final_revalidation_reasons", []),
+            "shadow_mode_switch_preview_status": downstream.get("auto_mode_switch_preview_status"),
+            "shadow_mode_switch_preview_required": downstream.get("auto_mode_switch_preview_required"),
+            "shadow_mode_switch_preview_ready": downstream.get("auto_mode_switch_preview_ready"),
+            "shadow_mode_switch_preview_blockers": downstream.get("auto_mode_switch_preview_blockers", []),
+            "shadow_legacy_safety_status": downstream.get("safety_status"),
+            "shadow_action_controller_status": downstream.get("controller_status"),
+            "shadow_action_controller_ready": downstream.get("controller_ready"),
+            "shadow_control_path_configured": downstream.get("control_path_configured"),
+            "shadow_operating_mode": downstream.get("operating_mode"),
+            "shadow_charge_power_w": downstream.get("charge_power_w"),
+            "shadow_discharge_power_w": downstream.get("discharge_power_w"),
+            "shadow_power_setpoint_w": downstream.get("power_setpoint_w"),
             "shadow_planner_runtime_active": True,
             "startup_delay_runtime_gate_active": False,
             "shadow_plan_store_active": True,
             "scheduler_invoked": bool(self.scheduler_result),
-            "prestart_validator_invoked": False,
-            "safety_guard_invoked": False,
-            "action_controller_invoked": False,
-            "execution_controller_invoked": False,
+            "prestart_validator_invoked": bool(self.downstream_result),
+            "safety_guard_invoked": bool(self.downstream_result),
+            "action_controller_invoked": bool(self.downstream_result),
+            "execution_controller_invoked": bool(self.downstream_result),
+            "automatic_execution_armed": False,
+            "mode_switch_service_calls_available": False,
             "service_calls_performed": False,
             "physical_execution_authority": False,
         }
