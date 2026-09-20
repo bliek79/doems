@@ -52,7 +52,8 @@ def test_live_shadow_runtime_uses_existing_doems_forecast_and_alpha76_chain() ->
     assert "run_shadow_chain(" in runtime
     assert 'coordinator.forecast(now=reference)' in live
     assert 'solar_forecast.points' in live
-    assert 'prices.timeline_slots' in live
+    assert 'prices.price_window(window_start=window_start, slot_count=288)' in live
+    assert 'prices.timeline_slots' not in live
     assert '"input_source": "existing_doems_forecast"' in live
 
 
