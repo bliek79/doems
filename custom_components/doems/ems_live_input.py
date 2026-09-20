@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from .const import FORECAST_SLOTS
 from .ems_input_contract import build_alpha41_transport_input
 from .energy_forecast import ceil_quarter
 
@@ -36,7 +37,7 @@ def build_live_ems_input(
             "export_all_in": item.get("export_all_in"),
             "kind": item.get("kind"),
         }
-        for item in prices.price_window(window_start=window_start, slot_count=288)
+        for item in prices.price_window(window_start=window_start, slot_count=FORECAST_SLOTS)
     ]
     result = build_alpha41_transport_input(
         window_start=window_start,
