@@ -75,7 +75,8 @@ def test_step5a_part1_uses_existing_doems_forecast_and_stays_shadow_only():
     adapter=(INTEGRATION/"ems_alpha76_adapter.py").read_text(encoding="utf-8")
     assert 'coordinator.forecast(now=reference)' in live
     assert 'solar_forecast.points' in live
-    assert 'prices.timeline_slots' in live
+    assert 'prices.price_window(window_start=window_start, slot_count=288)' in live
+    assert 'prices.timeline_slots' not in live
     assert '"input_source": "existing_doems_forecast"' in live
     assert '"planner_runtime_active": False' in live
     assert '"physical_execution_authority": False' in live
