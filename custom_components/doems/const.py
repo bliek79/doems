@@ -4,7 +4,7 @@ from __future__ import annotations
 
 DOMAIN = "doems"
 NAME = "DOEMS"
-VERSION = "0.1.0-alpha.7.12"
+VERSION = "0.1.0-alpha.7.13"
 
 CONF_INSTANCE_NAME = "instance_name"
 DEFAULT_INSTANCE_NAME = NAME
@@ -32,6 +32,9 @@ CONF_CHARGE_EFFICIENCY_PERCENT = "charge_efficiency_percent"
 CONF_DISCHARGE_EFFICIENCY_PERCENT = "discharge_efficiency_percent"
 CONF_MINIMUM_TRADE_MARGIN_EUR_PER_KWH = "minimum_trade_margin_eur_per_kwh"
 CONF_STARTUP_DELAY_SECONDS = "startup_delay_seconds"
+
+# Legacy Alpha7.10-7.12 Away Options keys. Kept only for one-time migration into
+# the runtime PresenceStore; they are no longer exposed as Options.
 CONF_AWAY_SCHEDULE_ENABLED = "away_schedule_enabled"
 CONF_AWAY_START = "away_start"
 CONF_AWAY_END = "away_end"
@@ -66,6 +69,10 @@ PROFILE_UNCLASSIFIED = "unclassified"
 PROFILE_MIXED = "mixed"
 PROFILE_LEARNING_OPTIONS = [PROFILE_NORMAL, PROFILE_AWAY]
 PROFILE_OPTIONS = [PROFILE_NORMAL, PROFILE_AWAY, PROFILE_UNCLASSIFIED]
+
+# Shared DOEMS Presence/Away runtime contract.
+PRESENCE_STORAGE_VERSION = 1
+PRESENCE_STORAGE_KEY = f"{DOMAIN}.presence"
 
 # Solar P3 Foundation/install contract.
 CONF_SOLAR_FOUNDATION_ENABLED = "solar_foundation_enabled"
@@ -140,7 +147,7 @@ MIN_VALID_COVERAGE = 0.90
 STORAGE_VERSION = 1
 STORAGE_KEY = f"{DOMAIN}.energy_forecast"
 ENERGY_STORE_SCHEMA_VERSION = 1
-PLATFORMS = ["sensor", "select", "binary_sensor"]
+PLATFORMS = ["sensor", "select", "binary_sensor", "switch", "datetime"]
 DEVICE_IDENTIFIER = "main"
 FOUNDATION_PHASE = "solar_p3_0_foundation"
 CANONICAL_HOME_POWER_ENTITY = "sensor.doems_source_home_power"
