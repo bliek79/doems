@@ -9,7 +9,8 @@ from homeassistant.core import Event, EventStateChangedData, HomeAssistant, call
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
 
-from .const import CONF_ENERGY_FORECAST_ENABLED, CONF_PRICES_ENABLED, DOMAIN, PLATFORMS
+from .const import CONF_EMS_ENABLED, CONF_ENERGY_FORECAST_ENABLED, CONF_PRICES_ENABLED, DOMAIN, PLATFORMS
+from .ems_settings import EMSSettings
 from .energy_coordinator import DOEMSEnergyCoordinator
 from .prices_runtime import DOEMSRegisteredPricesManager
 from .presence import DOEMSPresenceStore
@@ -59,6 +60,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
     presence = DOEMSPresenceStore(hass, entry, coordinator)
     await presence.async_setup()
 
+    ems_settings = (
+        EMSSettings.from_options(entry.options)
+        if entry.options.get(CONF_EMS_ENABLED, False)
+        else None
+    )
+
     entry.runtime_data = coordinator
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "energy_forecast_enabled": coordinator is not None,
@@ -66,6 +73,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
         "solar_forecast": solar_forecast,
         "prices": prices,
         "presence": presence,
+        "ems_settings": ems_settings,
     }
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
