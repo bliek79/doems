@@ -1,4 +1,4 @@
-name: DOEMS CI and Alpha7.19 G6 Step 5A Prices 76h Rolling Window Fix Release
+name: DOEMS CI and Alpha7.20 G6 Step 5A Downstream Shadow Parity Release
 
 on:
   pull_request:
@@ -29,9 +29,9 @@ jobs:
               json.loads(path.read_text(encoding='utf-8'))
               print(f'valid: {path}')
           PY
-      - name: Validate Alpha7.19 release contract
+      - name: Validate Alpha7.20 release contract
         run: |
-          test -f RELEASE_NOTES_0.1.0-alpha.7.19.md
+          test -f RELEASE_NOTES_0.1.0-alpha.7.20.md
           test -f examples/prices_p4_forecast_card.yaml
           test -f custom_components/doems/prices.py
           test -f custom_components/doems/prices_model.py
@@ -41,8 +41,8 @@ jobs:
           test ! -f scripts/build_brand_assets.py
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
-          grep -F 'VERSION = "0.1.0-alpha.7.19"' custom_components/doems/const.py
-          grep -F '"version": "0.1.0-alpha.7.19"' custom_components/doems/manifest.json
+          grep -F 'VERSION = "0.1.0-alpha.7.20"' custom_components/doems/const.py
+          grep -F '"version": "0.1.0-alpha.7.20"' custom_components/doems/manifest.json
           grep -F 'CONF_EMS_ENABLED = "ems_enabled"' custom_components/doems/const.py
           grep -F 'CONF_SOC_ENTITY = "soc_entity"' custom_components/doems/const.py
           grep -F '_optional_entity(CONF_SOC_ENTITY' custom_components/doems/config_flow.py
@@ -64,8 +64,19 @@ jobs:
           grep -F 'build_planner_action_bridge' custom_components/doems/ems_shadow_runtime.py
           grep -F 'async_sync_automatic_plans' custom_components/doems/ems_shadow_runtime.py
           grep -F 'async_handoff_automatic_plans' custom_components/doems/ems_shadow_runtime.py
-          grep -F '"prestart_validator_invoked": False' custom_components/doems/ems_shadow_runtime.py
-          grep -F '"execution_controller_invoked": False' custom_components/doems/ems_shadow_runtime.py
+          test -f custom_components/doems/ems_alpha76/prestart_validator.py
+          test -f custom_components/doems/ems_alpha76/safety_guard.py
+          test -f custom_components/doems/ems_alpha76/action_controller.py
+          test -f custom_components/doems/ems_alpha76/execution_shadow.py
+          grep -F 'work.update(self.prestart.evaluate(work))' custom_components/doems/ems_shadow_runtime.py
+          grep -F 'work.update(self.safety_guard.evaluate_automatic_handoff(work))' custom_components/doems/ems_shadow_runtime.py
+          grep -F 'work.update(self.execution_gates.evaluate_automatic_handoff(work))' custom_components/doems/ems_shadow_runtime.py
+          grep -F 'work.update(self.execution_gates.evaluate_final_revalidation(work))' custom_components/doems/ems_shadow_runtime.py
+          grep -F 'work.update(self.execution_gates.evaluate_mode_switch_transaction(work))' custom_components/doems/ems_shadow_runtime.py
+          grep -F '"automatic_execution_armed": False' custom_components/doems/ems_shadow_runtime.py
+          grep -F '"mode_switch_service_calls_available": False' custom_components/doems/ems_shadow_runtime.py
+          ! grep -R -F '.services.async_call(' custom_components/doems/ems_alpha76/prestart_validator.py custom_components/doems/ems_alpha76/safety_guard.py custom_components/doems/ems_alpha76/action_controller.py custom_components/doems/ems_alpha76/execution_shadow.py custom_components/doems/ems_shadow_runtime.py
+          ! grep -F 'async def async_run_' custom_components/doems/ems_alpha76/execution_shadow.py
           grep -F 'CONF_BATTERY_CAPACITY_KWH = "battery_capacity_kwh"' custom_components/doems/const.py
           grep -F 'CONF_TECHNICAL_MIN_SOC_PERCENT = "technical_min_soc_percent"' custom_components/doems/const.py
           grep -F 'CONF_MAX_SOC_PERCENT = "max_soc_percent"' custom_components/doems/const.py
@@ -82,6 +93,10 @@ jobs:
           test -f custom_components/doems/ems_alpha76/planner_action_bridge.py
           test -f custom_components/doems/ems_alpha76/plan_store.py
           test -f custom_components/doems/ems_alpha76/scheduler.py
+          test -f custom_components/doems/ems_alpha76/prestart_validator.py
+          test -f custom_components/doems/ems_alpha76/safety_guard.py
+          test -f custom_components/doems/ems_alpha76/action_controller.py
+          test -f custom_components/doems/ems_alpha76/execution_shadow.py
           test -f custom_components/doems/ems_input_contract.py
           test -f custom_components/doems/ems_live_input.py
           test -f custom_components/doems/ems_alpha76_adapter.py
@@ -157,7 +172,7 @@ jobs:
           ! grep -R -F 'doems_capture_alpha41_solar_freeze' custom_components/doems
           ! grep -R -F 'doems_alpha41_solar_freeze_captured' custom_components/doems
 
-  publish-alpha7-19:
+  publish-alpha7-20:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
@@ -167,7 +182,7 @@ jobs:
           fetch-depth: 0
       - name: Build release archive
         run: |
-          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.7.19.md
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.7.20.md
           sha256sum doems.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - name: Verify EMS settings, Presence and Prices runtime are packaged
@@ -196,12 +211,12 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/icon.png'
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
-      - name: Publish Alpha7.19 G6 Step 5A release
+      - name: Publish Alpha7.20 G6 Step 5A release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view 0.1.0-alpha.7.19 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.7.19 --title "DOEMS 0.1.0-alpha.7.19 - G6 Step 5A Prices 76h Rolling Window Fix" --notes-file RELEASE_NOTES_0.1.0-alpha.7.19.md
+          if gh release view 0.1.0-alpha.7.20 >/dev/null 2>&1; then
+            gh release edit 0.1.0-alpha.7.20 --title "DOEMS 0.1.0-alpha.7.20 - G6 Step 5A Downstream Shadow Parity" --notes-file RELEASE_NOTES_0.1.0-alpha.7.20.md
           else
-            gh release create 0.1.0-alpha.7.19 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.19 - G6 Step 5A Prices 76h Rolling Window Fix" --notes-file RELEASE_NOTES_0.1.0-alpha.7.19.md
+            gh release create 0.1.0-alpha.7.20 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.20 - G6 Step 5A Downstream Shadow Parity" --notes-file RELEASE_NOTES_0.1.0-alpha.7.20.md
           fi
