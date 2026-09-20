@@ -162,6 +162,7 @@ class DOEMSEMSSettingsSensor(SensorEntity):
     ) -> None:
         self.settings = settings
         self.shadow = shadow
+        self._remove_listener = None
         self._attr_device_info = _device_info(entry)
 
     @property
@@ -179,6 +180,20 @@ class DOEMSEMSSettingsSensor(SensorEntity):
             "shadow_runtime_status": self.shadow.status if self.shadow is not None else None,
             "physical_execution_authority": False,
         }
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if self.shadow is not None:
+            self._remove_listener = self.shadow.async_add_listener(self._handle_shadow_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._remove_listener is not None:
+            self._remove_listener()
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_shadow_update(self) -> None:
+        self.async_write_ha_state()
 
 
 class DOEMSEMSShadowSensor(SensorEntity):
