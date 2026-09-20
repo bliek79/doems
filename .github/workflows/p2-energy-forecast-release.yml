@@ -171,5 +171,5 @@ jobs:
           if gh release view 0.1.0-alpha.7.15 >/dev/null 2>&1; then
             gh release edit 0.1.0-alpha.7.15 --title "DOEMS 0.1.0-alpha.7.15 - G6 Step 5A Consumer Wiring Part 1" --notes-file RELEASE_NOTES_0.1.0-alpha.7.15.md
           else
-            gh release create 0.1.0-alpha.7.15 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.15 - G6 Step 5A EMS Settings Config Reads" --notes-file RELEASE_NOTES_0.1.0-alpha.7.15.md
+            gh release create 0.1.0-alpha.7.15 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.15 - G6 Step 5A Consumer Wiring Part 1" --notes-file RELEASE_NOTES_0.1.0-alpha.7.15.md
           fi
