@@ -57,6 +57,14 @@ def test_missing_native_quarter_blocks_only_its_transport_row():
     )
     assert result["status"]=="partial"
     assert result["native_valid_slot_count"]==287
+    assert result["invalid_slot_count"]==1
+    assert result["first_invalid_slot"]=={
+        "index": 7,
+        "start": (start+timedelta(minutes=15*7)).isoformat(),
+        "missing_inputs": ["solar"],
+    }
+    assert result["last_invalid_slot"]==result["first_invalid_slot"]
+    assert result["invalid_slots"]==[result["first_invalid_slot"]]
     assert result["rows"][1]["fully_valid"] is False
     assert result["rows"][0]["fully_valid"] is True
     assert result["rows"][2]["fully_valid"] is True
