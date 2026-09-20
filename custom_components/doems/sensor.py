@@ -14,6 +14,7 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_EMS_ENABLED,
     CONF_ENERGY_FORECAST_ENABLED,
     CONF_INSTANCE_NAME,
     DEFAULT_INSTANCE_NAME,
@@ -29,6 +30,7 @@ from .const import (
     STORAGE_KEY,
     VERSION,
 )
+from .ems_settings import EMSSettings
 from .energy_coordinator import DOEMSEnergyCoordinator
 from .energy_forecast import EnergyBaselineForecast, ceil_quarter
 from .prices import DOEMSPricesManager
@@ -79,6 +81,10 @@ async def async_setup_entry(
     if isinstance(presence, DOEMSPresenceStore):
         entities.append(DOEMSPresenceContextSensor(entry, presence))
 
+    ems_settings = entry_data.get("ems_settings")
+    if isinstance(ems_settings, EMSSettings):
+        entities.append(DOEMSEMSSettingsSensor(entry, ems_settings))
+
     solar_forecast = entry_data.get("solar_forecast")
     if isinstance(solar_forecast, SolarForecastManager):
         entities.extend(build_solar_sensors(entry, solar_forecast))
@@ -128,6 +134,36 @@ class DOEMSPresenceContextSensor(SensorEntity):
         self.async_write_ha_state()
 
 
+class DOEMSEMSSettingsSensor(SensorEntity):
+    """Expose the immutable Step-5A EMS settings snapshot for live validation."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+    _attr_name = "DOEMS EMS Settings"
+    _attr_unique_id = "doems_ems_settings"
+    _attr_suggested_object_id = "doems_ems_settings"
+    _attr_icon = "mdi:tune-variant"
+
+    def __init__(self, entry: ConfigEntry, settings: EMSSettings) -> None:
+        self.settings = settings
+        self._attr_device_info = _device_info(entry)
+
+    @property
+    def native_value(self) -> str:
+        return "ready"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            **self.settings.as_contract(),
+            "settings_source": "config_entry_options",
+            "settings_snapshot_immutable": True,
+            "startup_delay_runtime_gate_active": False,
+            "planner_logic_active": False,
+            "physical_execution_authority": False,
+        }
+
+
 class DOEMSFoundationStatusSensor(SensorEntity):
     """Expose clean DOEMS identity, component and safety status."""
 
@@ -163,7 +199,7 @@ class DOEMSFoundationStatusSensor(SensorEntity):
             "energy_storage_key": STORAGE_KEY if enabled else None,
             "installation_required_input_count": configured_fields if enabled else 0,
             "forecast_enabled": enabled,
-            "ems_enabled": False,
+            "ems_enabled": bool(self.entry.options.get(CONF_EMS_ENABLED, False)),
             "physical_execution_authority": False,
             "identity_pure": True,
             "public_object_id_prefix": "doems_",
