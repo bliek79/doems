@@ -7,7 +7,7 @@ from typing import Any
 from homeassistant.util import dt as dt_util
 
 from .const import PLAN_SLOT_COUNT
-from .plan_store import AnkerEmsPlanStore
+from .plan_store import DOEMSShadowPlanStore
 
 
 @dataclass(frozen=True)
@@ -19,10 +19,10 @@ class SchedulerCandidate:
     ready_since: datetime
 
 
-class AnkerEmsScheduler:
+class DOEMSShadowScheduler:
     """Evaluate persistent plan slots without executing physical actions."""
 
-    def __init__(self, plan_store: AnkerEmsPlanStore) -> None:
+    def __init__(self, plan_store: DOEMSShadowPlanStore) -> None:
         self.plan_store = plan_store
 
     @staticmethod
