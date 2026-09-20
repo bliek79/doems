@@ -126,7 +126,7 @@ def build_72h_plan_preview(
     minimum_stored_kwh = capacity * min_soc_limit / 100.0
     base_reserve_floor_kwh = minimum_stored_kwh + reserve_kwh
     base_reserve_floor_kwh = min(
-        capacity,
+        max_stored_kwh,
         max(minimum_stored_kwh, base_reserve_floor_kwh),
     )
     execution_buffer_kwh = capacity * execution_buffer_percent / 100.0
@@ -177,7 +177,7 @@ def build_72h_plan_preview(
 
         stored_need_kwh = net_home_need_kwh / discharge_eff
         floor_kwh = min(
-            capacity,
+            max_stored_kwh,
             max(
                 minimum_stored_kwh,
                 base_reserve_floor_kwh + stored_need_kwh,
@@ -318,7 +318,7 @@ def build_72h_plan_preview(
                     (sim_row["solar_kwh"] - sim_row["home_kwh"]) * frac,
                 )
                 estimated_stored = min(
-                    capacity,
+                    max_stored_kwh,
                     estimated_stored + solar_surplus * charge_eff,
                 )
                 key = sim_row["time"].isoformat()
@@ -414,7 +414,7 @@ def build_72h_plan_preview(
         available_charge_input = charge_input_limit
 
         # 1) Solar surplus charges first.
-        if solar_surplus > _MIN_ENERGY_KWH and stored_kwh < capacity - _MIN_ENERGY_KWH:
+        if solar_surplus > _MIN_ENERGY_KWH and stored_kwh < max_stored_kwh - _MIN_ENERGY_KWH:
             max_input_by_capacity = (max_stored_kwh - stored_kwh) / charge_eff
             solar_charge_input = min(solar_surplus, available_charge_input, max_input_by_capacity)
             stored_added = solar_charge_input * charge_eff
@@ -436,7 +436,7 @@ def build_72h_plan_preview(
             dynamic_safety_target_stored,
         )
 
-        if safety_target_stored > _MIN_ENERGY_KWH and stored_kwh < capacity - _MIN_ENERGY_KWH:
+        if safety_target_stored > _MIN_ENERGY_KWH and stored_kwh < max_stored_kwh - _MIN_ENERGY_KWH:
             max_input_by_capacity = (max_stored_kwh - stored_kwh) / charge_eff
             requested_input = safety_target_stored / charge_eff
             grid_safety_input = min(
@@ -454,7 +454,7 @@ def build_72h_plan_preview(
             and best_charge_time is not None
             and hour == best_charge_time
             and available_charge_input > _MIN_ENERGY_KWH
-            and stored_kwh < capacity - _MIN_ENERGY_KWH
+            and stored_kwh < max_stored_kwh - _MIN_ENERGY_KWH
         ):
             free_capacity_stored = max(0.0, max_stored_kwh - stored_kwh)
             solar_fill_stored = future_solar_charge_potential(index, best_discharge_time)
@@ -495,7 +495,7 @@ def build_72h_plan_preview(
         # energy reserved for a later, more valuable trade discharge.
         operational_floor = execution_floor_end_kwh + trade_energy_reserved_kwh
         operational_floor = min(
-            capacity,
+            max_stored_kwh,
             max(execution_floor_end_kwh, operational_floor),
         )
 
@@ -563,7 +563,7 @@ def build_72h_plan_preview(
                 )
 
         stored_kwh = max(
-            capacity * float(MIN_SOC_PERCENT) / 100.0,
+            minimum_stored_kwh,
             min(max_stored_kwh, stored_kwh),
         )
         soc_start = plan[-1]["soc_end"] if plan else start_soc
