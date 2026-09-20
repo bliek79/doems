@@ -1,10 +1,10 @@
-"""Select entities for DOEMS."""
+"""Date/time entities for DOEMS Away scheduling."""
 
 from __future__ import annotations
 
-from typing import Any
+from datetime import datetime
 
-from homeassistant.components.select import SelectEntity
+from homeassistant.components.datetime import DateTimeEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -16,8 +16,6 @@ from .const import (
     DEVICE_IDENTIFIER,
     DOMAIN,
     NAME,
-    PROFILE_AWAY,
-    PROFILE_NORMAL,
     VERSION,
 )
 from .presence import DOEMSPresenceStore
@@ -38,47 +36,47 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the shared DOEMS presence profile select."""
     presence = hass.data.get(DOMAIN, {}).get(entry.entry_id, {}).get("presence")
     if isinstance(presence, DOEMSPresenceStore):
-        async_add_entities([DOEMSPresenceProfileSelect(entry, presence)])
+        async_add_entities(
+            [
+                DOEMSAwayDateTime(entry, presence, "start"),
+                DOEMSAwayDateTime(entry, presence, "end"),
+            ]
+        )
 
 
-class DOEMSPresenceProfileSelect(SelectEntity):
-    """Manual normal/Away profile control backed by the PresenceStore."""
+class DOEMSAwayDateTime(DateTimeEntity):
+    """Runtime Away start/end boundary."""
 
     _attr_should_poll = False
     _attr_has_entity_name = False
-    _attr_name = "DOEMS Presence Profile"
-    _attr_unique_id = "doems_presence_profile"
-    _attr_suggested_object_id = "doems_presence_profile"
-    _attr_options = [PROFILE_NORMAL, PROFILE_AWAY]
-    _attr_icon = "mdi:home-account"
 
-    def __init__(self, entry: ConfigEntry, presence: DOEMSPresenceStore) -> None:
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        presence: DOEMSPresenceStore,
+        boundary: str,
+    ) -> None:
         self.presence = presence
+        self.boundary = boundary
         self._remove_listener = None
+        is_start = boundary == "start"
+        self._attr_name = "DOEMS Away Start" if is_start else "DOEMS Away End"
+        self._attr_unique_id = "doems_away_start" if is_start else "doems_away_end"
+        self._attr_suggested_object_id = "doems_away_start" if is_start else "doems_away_end"
+        self._attr_icon = "mdi:calendar-start" if is_start else "mdi:calendar-end"
         self._attr_device_info = _device_info(entry)
 
     @property
-    def current_option(self) -> str | None:
-        return self.presence.manual_profile if self.presence.manual_profile in self.options else None
+    def native_value(self) -> datetime | None:
+        return self.presence.away_start if self.boundary == "start" else self.presence.away_end
 
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        return {
-            "effective_profile": self.presence.effective_profile,
-            "profile_source": self.presence.profile_source,
-            "previous_profile": self.presence.previous_profile,
-            "profile_changed_at": self.presence.profile_changed_at,
-            "manual_override_active": self.presence.manual_override_active,
-            "schedule_active": self.presence.schedule_active,
-        }
-
-    async def async_select_option(self, option: str) -> None:
-        if option not in self.options:
-            raise ValueError(f"Unsupported profile: {option}")
-        await self.presence.async_set_manual_profile(option)
+    async def async_set_value(self, value: datetime) -> None:
+        if self.boundary == "start":
+            await self.presence.async_set_away_start(value)
+        else:
+            await self.presence.async_set_away_end(value)
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()

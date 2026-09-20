@@ -1,10 +1,8 @@
-"""Select entities for DOEMS."""
+"""Switch entities for DOEMS."""
 
 from __future__ import annotations
 
-from typing import Any
-
-from homeassistant.components.select import SelectEntity
+from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -16,8 +14,6 @@ from .const import (
     DEVICE_IDENTIFIER,
     DOMAIN,
     NAME,
-    PROFILE_AWAY,
-    PROFILE_NORMAL,
     VERSION,
 )
 from .presence import DOEMSPresenceStore
@@ -38,22 +34,20 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the shared DOEMS presence profile select."""
     presence = hass.data.get(DOMAIN, {}).get(entry.entry_id, {}).get("presence")
     if isinstance(presence, DOEMSPresenceStore):
-        async_add_entities([DOEMSPresenceProfileSelect(entry, presence)])
+        async_add_entities([DOEMSAwayScheduleEnabledSwitch(entry, presence)])
 
 
-class DOEMSPresenceProfileSelect(SelectEntity):
-    """Manual normal/Away profile control backed by the PresenceStore."""
+class DOEMSAwayScheduleEnabledSwitch(SwitchEntity):
+    """Enable or disable the runtime Away schedule."""
 
     _attr_should_poll = False
     _attr_has_entity_name = False
-    _attr_name = "DOEMS Presence Profile"
-    _attr_unique_id = "doems_presence_profile"
-    _attr_suggested_object_id = "doems_presence_profile"
-    _attr_options = [PROFILE_NORMAL, PROFILE_AWAY]
-    _attr_icon = "mdi:home-account"
+    _attr_name = "DOEMS Away Schedule Enabled"
+    _attr_unique_id = "doems_away_schedule_enabled"
+    _attr_suggested_object_id = "doems_away_schedule_enabled"
+    _attr_icon = "mdi:calendar-clock"
 
     def __init__(self, entry: ConfigEntry, presence: DOEMSPresenceStore) -> None:
         self.presence = presence
@@ -61,24 +55,14 @@ class DOEMSPresenceProfileSelect(SelectEntity):
         self._attr_device_info = _device_info(entry)
 
     @property
-    def current_option(self) -> str | None:
-        return self.presence.manual_profile if self.presence.manual_profile in self.options else None
+    def is_on(self) -> bool:
+        return self.presence.schedule_enabled
 
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        return {
-            "effective_profile": self.presence.effective_profile,
-            "profile_source": self.presence.profile_source,
-            "previous_profile": self.presence.previous_profile,
-            "profile_changed_at": self.presence.profile_changed_at,
-            "manual_override_active": self.presence.manual_override_active,
-            "schedule_active": self.presence.schedule_active,
-        }
+    async def async_turn_on(self, **kwargs) -> None:
+        await self.presence.async_set_schedule_enabled(True)
 
-    async def async_select_option(self, option: str) -> None:
-        if option not in self.options:
-            raise ValueError(f"Unsupported profile: {option}")
-        await self.presence.async_set_manual_profile(option)
+    async def async_turn_off(self, **kwargs) -> None:
+        await self.presence.async_set_schedule_enabled(False)
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()

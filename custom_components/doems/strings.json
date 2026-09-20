@@ -26,10 +26,9 @@
       },
       "energy_forecast": {
         "title": "Energy Forecast",
-        "description": "Choose the Home Power input route and the initial learning profile.",
+        "description": "Choose only the Home Power input route. The active profile is controlled through DOEMS Presence entities.",
         "data": {
-          "energy_source_mode": "Home Power source mode",
-          "energy_start_profile": "Initial learning profile"
+          "energy_source_mode": "Home Power source mode"
         }
       },
       "energy_direct": {
@@ -116,7 +115,7 @@
       },
       "ems": {
         "title": "EMS battery settings",
-        "description": "Configure the G6 Step 3A/3B/3C battery, reserve, efficiency, trade-margin and time/mode settings. This screen does not enable planner logic, Away runtime or physical execution.",
+        "description": "Configure only the static G6 EMS settings. Away and profile control are handled through Home Assistant entities.",
         "data": {
           "battery_capacity_kwh": "Battery capacity",
           "technical_min_soc_percent": "Technical minimum SOC",
@@ -127,10 +126,7 @@
           "charge_efficiency_percent": "Charge efficiency",
           "discharge_efficiency_percent": "Discharge efficiency",
           "minimum_trade_margin_eur_per_kwh": "Minimum trade margin",
-          "startup_delay_seconds": "Startup delay",
-          "away_schedule_enabled": "Enable Away schedule",
-          "away_start": "Away start",
-          "away_end": "Away end"
+          "startup_delay_seconds": "Startup delay"
         }
       },
       "prices_gas": {
@@ -161,12 +157,7 @@
       "ems_below_minimum": "The value is below the allowed minimum.",
       "ems_above_maximum": "The value is above the allowed maximum.",
       "ems_invalid_step": "The value does not match the allowed step.",
-      "ems_invalid_boolean": "Select a valid on/off value.",
-      "ems_invalid_datetime": "Enter a valid full date and time.",
-      "ems_soc_range_invalid": "Maximum SOC must be higher than technical minimum SOC.",
-      "ems_away_start_required": "Away start is required when Away schedule is enabled.",
-      "ems_away_end_required": "Away end is required when Away schedule is enabled.",
-      "ems_away_end_not_after_start": "Away end must be later than Away start."
+      "ems_soc_range_invalid": "Maximum SOC must be higher than technical minimum SOC."
     },
     "abort": {
       "solar_foundation_invalid": "The Solar Foundation topology did not pass structural validation."

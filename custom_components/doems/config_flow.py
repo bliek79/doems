@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any, Literal
 from uuid import uuid4
 
@@ -12,7 +11,6 @@ from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntry, ConfigFlowResult, OptionsFlow
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import selector
-from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_BATTERY_CHARGE_POWER_ENTITY,
@@ -81,7 +79,6 @@ from .const import (
     DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
     DEFAULT_MINIMUM_TRADE_MARGIN_EUR_PER_KWH,
     DEFAULT_STARTUP_DELAY_SECONDS,
-    DEFAULT_AWAY_SCHEDULE_ENABLED,
     EMS_MIN_STARTUP_DELAY_SECONDS,
     EMS_MAX_STARTUP_DELAY_SECONDS,
     EMS_MAX_POWER_W,
@@ -96,8 +93,6 @@ from .const import (
     PRICES_RESOLUTION_15_MIN,
     PRICES_RESOLUTION_60_MIN,
     PRICES_RESOLUTION_AUTO,
-    PROFILE_AWAY,
-    PROFILE_NORMAL,
     SOLAR_LOCATION_HOME_ASSISTANT,
     SOLAR_LOCATION_OVERRIDE,
     SOLAR_MAX_ARRAYS,
@@ -156,23 +151,6 @@ def _optional_entity(key: str, current: str | None) -> vol.Marker:
 
 def _optional_config_entry(key: str, current: str | None) -> vol.Marker:
     return vol.Optional(key, default=current) if current else vol.Optional(key)
-
-
-def _optional_datetime(key: str, current: str | None) -> vol.Marker:
-    return vol.Optional(key, default=current) if current else vol.Optional(key)
-
-
-def _timezone_aware_iso(hass: HomeAssistant, value: Any) -> str:
-    """Store a selector datetime as an ISO string with timezone information."""
-    if isinstance(value, datetime):
-        parsed = value
-    else:
-        parsed = dt_util.parse_datetime(str(value))
-    if parsed is None:
-        return str(value)
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=dt_util.get_time_zone(hass.config.time_zone))
-    return parsed.isoformat()
 
 
 def _validate_power_entity(hass: HomeAssistant, entity_id: str | None, *, allow_negative: bool) -> str | None:
@@ -242,6 +220,14 @@ class DOEMSOptionsFlow(OptionsFlow):
         return self._pending.get(key, default)
 
     def _save(self) -> ConfigFlowResult:
+        # Away/profile runtime state is owned by PresenceStore entities, not Options.
+        for key in (
+            CONF_AWAY_SCHEDULE_ENABLED,
+            CONF_AWAY_START,
+            CONF_AWAY_END,
+            CONF_ENERGY_START_PROFILE,
+        ):
+            self._pending.pop(key, None)
         return self.async_create_entry(title="", data=self._pending)
 
     async def _continue_after_energy(self) -> ConfigFlowResult:
@@ -292,6 +278,7 @@ class DOEMSOptionsFlow(OptionsFlow):
     async def async_step_energy_forecast(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
             self._pending.update(user_input)
+            self._pending.pop(CONF_ENERGY_START_PROFILE, None)
             if user_input[CONF_ENERGY_SOURCE_MODE] == ENERGY_SOURCE_DIRECT:
                 return await self.async_step_energy_direct()
             return await self.async_step_energy_balance()
@@ -301,9 +288,6 @@ class DOEMSOptionsFlow(OptionsFlow):
                 vol.Required(CONF_ENERGY_SOURCE_MODE, default=self._current(CONF_ENERGY_SOURCE_MODE, ENERGY_SOURCE_DIRECT)): _select([
                     (ENERGY_SOURCE_DIRECT, "Direct Home Power"),
                     (ENERGY_SOURCE_BALANCE, "Power Balance"),
-                ]),
-                vol.Required(CONF_ENERGY_START_PROFILE, default=self._current(CONF_ENERGY_START_PROFILE, PROFILE_NORMAL)): _select([
-                    (PROFILE_NORMAL, "Normal"), (PROFILE_AWAY, "Away")
                 ]),
             }),
         )
@@ -528,16 +512,8 @@ class DOEMSOptionsFlow(OptionsFlow):
                         errors[key] = error
             if not errors:
                 normalized = dict(user_input)
-                for key in (CONF_AWAY_START, CONF_AWAY_END):
-                    if normalized.get(key):
-                        normalized[key] = _timezone_aware_iso(self.hass, normalized[key])
-                    else:
-                        normalized.pop(key, None)
                 errors.update(validate_ems_combination(normalized))
                 if not errors:
-                    for key in (CONF_AWAY_START, CONF_AWAY_END):
-                        if key not in normalized:
-                            self._pending.pop(key, None)
                     self._pending.update(normalized)
                     return self._save()
 
@@ -584,12 +560,6 @@ class DOEMSOptionsFlow(OptionsFlow):
                     CONF_STARTUP_DELAY_SECONDS,
                     default=int(self._current(CONF_STARTUP_DELAY_SECONDS, DEFAULT_STARTUP_DELAY_SECONDS)),
                 ): _number(EMS_MIN_STARTUP_DELAY_SECONDS, EMS_MAX_STARTUP_DELAY_SECONDS, 5, "s"),
-                vol.Required(
-                    CONF_AWAY_SCHEDULE_ENABLED,
-                    default=bool(self._current(CONF_AWAY_SCHEDULE_ENABLED, DEFAULT_AWAY_SCHEDULE_ENABLED)),
-                ): bool,
-                _optional_datetime(CONF_AWAY_START, self._current(CONF_AWAY_START)): selector.DateTimeSelector(),
-                _optional_datetime(CONF_AWAY_END, self._current(CONF_AWAY_END)): selector.DateTimeSelector(),
             }),
             errors=errors,
         )

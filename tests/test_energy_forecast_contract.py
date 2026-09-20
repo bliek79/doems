@@ -23,7 +23,7 @@ def _load_pure_module(name: str):
 
 def test_manifest_and_clean_identity_contract() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["domain"] == "doems" and manifest["name"] == "DOEMS" and manifest["version"] == "0.1.0-alpha.7.12"
+    assert manifest["domain"] == "doems" and manifest["name"] == "DOEMS" and manifest["version"] == "0.1.0-alpha.7.13"
     for path in INTEGRATION.rglob("*"):
         if not path.is_file() or path.suffix not in {".py", ".json", ".yaml", ".yml"}: continue
         text = path.read_text(encoding="utf-8")
@@ -32,7 +32,7 @@ def test_manifest_and_clean_identity_contract() -> None:
 
 def test_public_entity_object_ids_are_doems_prefixed() -> None:
     suggested=[]; unique=[]
-    for path in [INTEGRATION / "sensor.py", INTEGRATION / "solar_sensor.py", INTEGRATION / "prices_sensor.py", INTEGRATION / "select.py", INTEGRATION / "binary_sensor.py"]:
+    for path in [INTEGRATION / "sensor.py", INTEGRATION / "solar_sensor.py", INTEGRATION / "prices_sensor.py", INTEGRATION / "select.py", INTEGRATION / "binary_sensor.py", INTEGRATION / "switch.py", INTEGRATION / "datetime.py"]:
         tree=ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node,(ast.Assign,ast.AnnAssign)): continue
@@ -59,18 +59,21 @@ def test_no_physical_control_surface() -> None:
 def test_install_contract_is_component_scoped() -> None:
     text=(INTEGRATION / "config_flow.py").read_text(encoding="utf-8")
     const=(INTEGRATION / "const.py").read_text(encoding="utf-8")
-    for token in ("direct_home_power","power_balance","grid_sign_convention","battery_present","energy_start_profile"):
+    for token in ("direct_home_power","power_balance","grid_sign_convention","battery_present"):
         assert token in text or token in const
     for token in ("solar_foundation_enabled","solar_location_source","solar_inverter_groups","solar_arrays","solar_latitude","solar_longitude"):
         assert token in text or token in const
-    for token in ("ems_enabled","battery_capacity_kwh","technical_min_soc_percent","max_soc_percent","max_charge_power_w","max_discharge_power_w","software_reserve_percent","charge_efficiency_percent","discharge_efficiency_percent","minimum_trade_margin_eur_per_kwh","startup_delay_seconds","away_schedule_enabled","away_start","away_end"):
+    for token in ("ems_enabled","battery_capacity_kwh","technical_min_soc_percent","max_soc_percent","max_charge_power_w","max_discharge_power_w","software_reserve_percent","charge_efficiency_percent","discharge_efficiency_percent","minimum_trade_margin_eur_per_kwh","startup_delay_seconds"):
         assert token in text or token in const
     assert "physical_execution" not in text
     config_flow=(INTEGRATION / "config_flow.py").read_text(encoding="utf-8")
     assert "validate_ems_combination(normalized)" in config_flow
     validation=(INTEGRATION / "ems_config_validation.py").read_text(encoding="utf-8")
-    for token in ("EMS_VALIDATED_FIELDS","validate_ems_combination","ems_invalid_number","ems_below_minimum","ems_above_maximum","ems_invalid_step","ems_invalid_boolean","ems_invalid_datetime","ems_soc_range_invalid","ems_away_start_required","ems_away_end_required","ems_away_end_not_after_start"):
+    for token in ("EMS_VALIDATED_FIELDS","validate_ems_combination","ems_invalid_number","ems_below_minimum","ems_above_maximum","ems_invalid_step","ems_soc_range_invalid"):
         assert token in validation
+    assert "CONF_AWAY_START" not in validation
+    assert "CONF_AWAY_END" not in validation
+    assert "CONF_AWAY_SCHEDULE_ENABLED" not in validation
 
 
 def test_alpha41_equivalent_forecast_shape_and_hierarchy() -> None:

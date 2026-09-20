@@ -32,6 +32,7 @@ from .const import (
 from .energy_coordinator import DOEMSEnergyCoordinator
 from .energy_forecast import EnergyBaselineForecast, ceil_quarter
 from .prices import DOEMSPricesManager
+from .presence import DOEMSPresenceStore
 from .prices_sensor import build_prices_sensors
 from .solar_forecast import SolarForecastManager
 from .solar_sensor import build_solar_sensors
@@ -74,6 +75,10 @@ async def async_setup_entry(
         )
 
     entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    presence = entry_data.get("presence")
+    if isinstance(presence, DOEMSPresenceStore):
+        entities.append(DOEMSPresenceContextSensor(entry, presence))
+
     solar_forecast = entry_data.get("solar_forecast")
     if isinstance(solar_forecast, SolarForecastManager):
         entities.extend(build_solar_sensors(entry, solar_forecast))
@@ -83,6 +88,44 @@ async def async_setup_entry(
         entities.extend(build_prices_sensors(entry, prices))
 
     async_add_entities(entities)
+
+
+
+class DOEMSPresenceContextSensor(SensorEntity):
+    """Expose the shared DOEMS Presence/Away runtime context."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+    _attr_name = "DOEMS Presence Context"
+    _attr_unique_id = "doems_presence_context"
+    _attr_suggested_object_id = "doems_presence_context"
+    _attr_icon = "mdi:home-account"
+
+    def __init__(self, entry: ConfigEntry, presence: DOEMSPresenceStore) -> None:
+        self.presence = presence
+        self._remove_listener = None
+        self._attr_device_info = _device_info(entry)
+
+    @property
+    def native_value(self) -> str:
+        return self.presence.effective_profile
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return self.presence.context()
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._remove_listener = self.presence.async_add_listener(self._handle_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._remove_listener is not None:
+            self._remove_listener()
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
 
 
 class DOEMSFoundationStatusSensor(SensorEntity):

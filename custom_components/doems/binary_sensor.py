@@ -19,7 +19,10 @@ from .const import (
     SOLAR_FOUNDATION_STORAGE_KEY,
     VERSION,
 )
+from .presence import DOEMSPresenceStore
 from .solar_foundation import SolarFoundationManager
+
+
 def _foundation_manager(hass: HomeAssistant, entry: ConfigEntry) -> SolarFoundationManager:
     return hass.data[DOMAIN][entry.entry_id]["solar_foundation"]
 
@@ -39,11 +42,18 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    async_add_entities(
-        [
-            DOEMSSolarFoundationReadySensor(entry, _foundation_manager(hass, entry)),
-        ]
-    )
+    entities: list[BinarySensorEntity] = [
+        DOEMSSolarFoundationReadySensor(entry, _foundation_manager(hass, entry)),
+    ]
+    presence = hass.data.get(DOMAIN, {}).get(entry.entry_id, {}).get("presence")
+    if isinstance(presence, DOEMSPresenceStore):
+        entities.extend(
+            [
+                DOEMSAwayActiveSensor(entry, presence),
+                DOEMSAwayScheduleValidSensor(entry, presence),
+            ]
+        )
+    async_add_entities(entities)
 
 
 class DOEMSSolarFoundationReadySensor(BinarySensorEntity):
@@ -93,4 +103,68 @@ class DOEMSSolarFoundationReadySensor(BinarySensorEntity):
             "storage_key": SOLAR_FOUNDATION_STORAGE_KEY,
             "forecast_runtime_active": self.manager.forecast_runtime_active,
             "physical_execution_authority": False,
+        }
+
+
+
+class _DOEMSPresenceBinarySensor(BinarySensorEntity):
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+
+    def __init__(self, entry: ConfigEntry, presence: DOEMSPresenceStore) -> None:
+        self.presence = presence
+        self._remove_listener = None
+        self._attr_device_info = _device_info(entry)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._remove_listener = self.presence.async_add_listener(self._handle_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._remove_listener is not None:
+            self._remove_listener()
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
+
+
+class DOEMSAwayActiveSensor(_DOEMSPresenceBinarySensor):
+    _attr_name = "DOEMS Away Active"
+    _attr_unique_id = "doems_away_active"
+    _attr_suggested_object_id = "doems_away_active"
+    _attr_icon = "mdi:home-export-outline"
+
+    @property
+    def is_on(self) -> bool:
+        return self.presence.effective_profile == "away"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "effective_profile": self.presence.effective_profile,
+            "profile_source": self.presence.profile_source,
+            "schedule_active": self.presence.schedule_active,
+            "manual_override_active": self.presence.manual_override_active,
+        }
+
+
+class DOEMSAwayScheduleValidSensor(_DOEMSPresenceBinarySensor):
+    _attr_name = "DOEMS Away Schedule Valid"
+    _attr_unique_id = "doems_away_schedule_valid"
+    _attr_suggested_object_id = "doems_away_schedule_valid"
+    _attr_icon = "mdi:calendar-check-outline"
+
+    @property
+    def is_on(self) -> bool:
+        return self.presence.schedule_valid
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "schedule_enabled": self.presence.schedule_enabled,
+            "away_start": self.presence.away_start.isoformat() if self.presence.away_start else None,
+            "away_end": self.presence.away_end.isoformat() if self.presence.away_end else None,
+            "blockers": list(self.presence.blockers),
         }
