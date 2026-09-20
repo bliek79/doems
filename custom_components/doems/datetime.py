@@ -61,11 +61,11 @@ class DOEMSAwayDateTime(DateTimeEntity):
         self.presence = presence
         self.boundary = boundary
         self._remove_listener = None
-        title = "Start" if boundary == "start" else "End"
-        self._attr_name = f"DOEMS Away {title}"
-        self._attr_unique_id = f"doems_away_{boundary}"
-        self._attr_suggested_object_id = f"doems_away_{boundary}"
-        self._attr_icon = "mdi:calendar-start" if boundary == "start" else "mdi:calendar-end"
+        is_start = boundary == "start"
+        self._attr_name = "DOEMS Away Start" if is_start else "DOEMS Away End"
+        self._attr_unique_id = "doems_away_start" if is_start else "doems_away_end"
+        self._attr_suggested_object_id = "doems_away_start" if is_start else "doems_away_end"
+        self._attr_icon = "mdi:calendar-start" if is_start else "mdi:calendar-end"
         self._attr_device_info = _device_info(entry)
 
     @property
