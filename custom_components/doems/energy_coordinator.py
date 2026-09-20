@@ -339,8 +339,8 @@ class DOEMSEnergyCoordinator:
         source: str = "manual_select",
         now: datetime | None = None,
     ) -> None:
-        if profile not in PROFILE_LEARNING_OPTIONS:
-            raise ValueError(f"Unsupported learning profile: {profile}")
+        if profile not in PROFILE_OPTIONS:
+            raise ValueError(f"Unsupported profile: {profile}")
         if profile == self.profile:
             return
         now_utc = dt_util.as_utc(now or dt_util.utcnow())
