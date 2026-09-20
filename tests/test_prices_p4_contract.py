@@ -128,3 +128,16 @@ def test_electricity_to_gas_ratio_and_missing_semantics():
     assert m.electricity_to_gas_price_ratio(0.35, 0.0) is None
     assert m.gas_equivalent_eur_kwh(None, energy_factor_kwh_m3=9.77) is None
     assert m.gas_equivalent_eur_kwh(1.71, energy_factor_kwh_m3=0) is None
+
+
+def test_price_window_rolls_inside_304_slot_buffer_without_losing_last_quarter():
+    m = _load("prices_model")
+    start = datetime(2026, 9, 20, 19, 0, tzinfo=timezone.utc)
+    buffer_starts = m.expected_quarter_starts(start, m.PRICE_BUFFER_SLOT_COUNT)
+    assert len(buffer_starts) == 304
+    # A consumer moving one quarter forward still has a complete 288-slot window.
+    shifted = start + timedelta(minutes=15)
+    selected = [ts for ts in buffer_starts if shifted <= ts < shifted + timedelta(minutes=15 * 288)]
+    assert len(selected) == 288
+    assert selected[0] == shifted
+    assert selected[-1] == shifted + timedelta(minutes=15 * 287)
