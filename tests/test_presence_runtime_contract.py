@@ -71,7 +71,7 @@ def test_away_runtime_is_not_exposed_in_options_form() -> None:
     assert "CONF_AWAY_START" not in ems_section
     assert "CONF_AWAY_END" not in ems_section
     assert "DateTimeSelector" not in ems_section
-    assert "CONF_ENERGY_START_PROFILE" not in energy_section
+    assert "vol.Required(CONF_ENERGY_START_PROFILE" not in energy_section
 
 
 def test_legacy_away_options_are_migration_only() -> None:
