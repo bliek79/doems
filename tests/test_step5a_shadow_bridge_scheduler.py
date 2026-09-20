@@ -41,7 +41,7 @@ def test_bridge_keeps_frozen_action_thresholds_and_handoff_semantics() -> None:
 
 def test_scheduler_keeps_frozen_priority_and_never_controls_physical_device() -> None:
     scheduler = (ALPHA / "scheduler.py").read_text(encoding="utf-8")
-    assert "0 if item.execution_mode == "gepland" else 1" in scheduler
+    assert '0 if item.execution_mode == "gepland" else 1' in scheduler
     assert "item.ready_since" in scheduler
     assert "item.slot" in scheduler
     assert '"scheduler_physical_control": False' in scheduler
