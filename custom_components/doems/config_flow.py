@@ -100,6 +100,7 @@ from .const import (
     SOLAR_MAX_INVERTER_GROUPS,
 )
 from .energy_sources import normalize_power_w
+from .ems_soc import UNAVAILABLE_SOC_STATES, parse_soc_percent
 from .ems_config_validation import EMS_VALIDATED_FIELDS, validate_ems_combination, validate_ems_field
 from .solar_foundation_model import validate_solar_foundation
 
@@ -185,13 +186,8 @@ def _validate_soc_entity(hass: HomeAssistant, entity_id: str | None) -> str | No
         return "source_not_found"
     if state.attributes.get("unit_of_measurement") != "%":
         return "unsupported_soc_unit"
-    if state.state not in {"unknown", "unavailable", "none", "None", ""}:
-        try:
-            value = float(state.state)
-        except (TypeError, ValueError):
-            return "invalid_soc_value"
-        if not 0.0 <= value <= 100.0:
-            return "invalid_soc_value"
+    if state.state not in UNAVAILABLE_SOC_STATES and parse_soc_percent(state.state) is None:
+        return "invalid_soc_value"
     return None
 
 
