@@ -82,4 +82,6 @@ def test_shadow_diagnostic_sensor_is_compact_and_non_actuating() -> None:
     assert '"execution_controller_invoked": False' in runtime
     assert '"service_calls_performed": False' in runtime
     assert '"physical_execution_authority": False' in runtime
+    for field in ("invalid_slot_count","first_invalid_slot","last_invalid_slot","invalid_slots"):
+        assert f'"{field}"' in runtime
     assert '"auto_plan_72h_plan"' not in runtime
