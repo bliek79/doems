@@ -79,11 +79,12 @@ def test_step5a_live_diagnostics_are_read_only_and_non_actuating() -> None:
     assert '"settings_source": "config_entry_options"' in sensor
     assert '"settings_snapshot_immutable": True' in sensor
     assert '"startup_delay_runtime_gate_active": False' in sensor
-    assert '"planner_logic_active": False' in sensor
+    assert '"planner_logic_active": self.shadow is not None' in sensor
+    assert '"shadow_runtime_status": self.shadow.status if self.shadow is not None else None' in sensor
     assert '"physical_execution_authority": False' in sensor
 
 
-def test_step5a_does_not_activate_startup_gate_or_planner() -> None:
+def test_step5a_settings_layer_does_not_itself_activate_startup_gate() -> None:
     settings = (INTEGRATION / "ems_settings.py").read_text(encoding="utf-8")
     assert "startup_delay_seconds" in settings
     assert ".services.async_call(" not in settings
