@@ -31,6 +31,12 @@ from .const import (
     CONF_AWAY_END,
     CONF_EMS_ENABLED,
     CONF_SOC_ENTITY,
+    CONF_DEVICE_STATUS_ENTITY,
+    CONF_CHARGE_POWER_ENTITY,
+    CONF_DISCHARGE_POWER_ENTITY,
+    CONF_OPERATING_MODE_ENTITY,
+    CONF_ACTION_DIRECTION_ENTITY,
+    CONF_POWER_SETPOINT_ENTITY,
     CONF_ELECTRICITY_EXPORT_SUPPLIER,
     CONF_ELECTRICITY_EXPORT_TAX,
     CONF_ELECTRICITY_FIXED_SUPPLY_PER_DAY,
@@ -188,6 +194,26 @@ def _validate_soc_entity(hass: HomeAssistant, entity_id: str | None) -> str | No
         return "unsupported_soc_unit"
     if state.state not in UNAVAILABLE_SOC_STATES and parse_soc_percent(state.state) is None:
         return "invalid_soc_value"
+    return None
+
+
+def _validate_optional_entity_domain(
+    hass: HomeAssistant,
+    entity_id: str | None,
+    *,
+    domain: str | None = None,
+) -> str | None:
+    """Validate an optional read-only EMS observation entity."""
+    if not entity_id:
+        return None
+    object_id = entity_id.split(".", 1)[1] if "." in entity_id else entity_id
+    if object_id.startswith("doems_"):
+        return "doems_source_not_allowed"
+    state = hass.states.get(entity_id)
+    if state is None:
+        return "source_not_found"
+    if domain is not None and not entity_id.startswith(f"{domain}."):
+        return "unsupported_entity_domain"
     return None
 
 
@@ -533,19 +559,50 @@ class DOEMSOptionsFlow(OptionsFlow):
             soc_error = _validate_soc_entity(self.hass, user_input.get(CONF_SOC_ENTITY))
             if soc_error:
                 errors[CONF_SOC_ENTITY] = soc_error
+            for key in (CONF_CHARGE_POWER_ENTITY, CONF_DISCHARGE_POWER_ENTITY):
+                if user_input.get(key):
+                    error = _validate_power_entity(self.hass, user_input.get(key), allow_negative=False)
+                    if error:
+                        errors[key] = error
+            for key, domain in (
+                (CONF_DEVICE_STATUS_ENTITY, "sensor"),
+                (CONF_OPERATING_MODE_ENTITY, "select"),
+                (CONF_ACTION_DIRECTION_ENTITY, "select"),
+                (CONF_POWER_SETPOINT_ENTITY, "number"),
+            ):
+                error = _validate_optional_entity_domain(
+                    self.hass, user_input.get(key), domain=domain
+                )
+                if error:
+                    errors[key] = error
             if not errors:
                 normalized = dict(user_input)
                 errors.update(validate_ems_combination(normalized))
                 if not errors:
                     self._pending.update(normalized)
-                    if not normalized.get(CONF_SOC_ENTITY):
-                        self._pending.pop(CONF_SOC_ENTITY, None)
+                    for key in (
+                        CONF_SOC_ENTITY,
+                        CONF_DEVICE_STATUS_ENTITY,
+                        CONF_CHARGE_POWER_ENTITY,
+                        CONF_DISCHARGE_POWER_ENTITY,
+                        CONF_OPERATING_MODE_ENTITY,
+                        CONF_ACTION_DIRECTION_ENTITY,
+                        CONF_POWER_SETPOINT_ENTITY,
+                    ):
+                        if not normalized.get(key):
+                            self._pending.pop(key, None)
                     return self._save()
 
         return self.async_show_form(
             step_id="ems",
             data_schema=vol.Schema({
                 _optional_entity(CONF_SOC_ENTITY, self._current(CONF_SOC_ENTITY)): _sensor_selector(),
+                _optional_entity(CONF_DEVICE_STATUS_ENTITY, self._current(CONF_DEVICE_STATUS_ENTITY)): _sensor_selector(),
+                _optional_entity(CONF_CHARGE_POWER_ENTITY, self._current(CONF_CHARGE_POWER_ENTITY)): _power_selector(),
+                _optional_entity(CONF_DISCHARGE_POWER_ENTITY, self._current(CONF_DISCHARGE_POWER_ENTITY)): _power_selector(),
+                _optional_entity(CONF_OPERATING_MODE_ENTITY, self._current(CONF_OPERATING_MODE_ENTITY)): selector.EntitySelector(selector.EntitySelectorConfig(domain="select")),
+                _optional_entity(CONF_ACTION_DIRECTION_ENTITY, self._current(CONF_ACTION_DIRECTION_ENTITY)): selector.EntitySelector(selector.EntitySelectorConfig(domain="select")),
+                _optional_entity(CONF_POWER_SETPOINT_ENTITY, self._current(CONF_POWER_SETPOINT_ENTITY)): selector.EntitySelector(selector.EntitySelectorConfig(domain="number")),
                 vol.Required(
                     CONF_BATTERY_CAPACITY_KWH,
                     default=float(self._current(CONF_BATTERY_CAPACITY_KWH, DEFAULT_BATTERY_CAPACITY_KWH)),

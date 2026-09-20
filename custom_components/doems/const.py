@@ -4,7 +4,7 @@ from __future__ import annotations
 
 DOMAIN = "doems"
 NAME = "DOEMS"
-VERSION = "0.1.0-alpha.7.19"
+VERSION = "0.1.0-alpha.7.20"
 
 CONF_INSTANCE_NAME = "instance_name"
 DEFAULT_INSTANCE_NAME = NAME
@@ -23,6 +23,12 @@ CONF_BATTERY_DISCHARGE_POWER_ENTITY = "battery_discharge_power_entity"
 # G6 EMS configuration contract - Steps 3A/3B/3C.
 CONF_EMS_ENABLED = "ems_enabled"
 CONF_SOC_ENTITY = "soc_entity"
+CONF_DEVICE_STATUS_ENTITY = "device_status_entity"
+CONF_CHARGE_POWER_ENTITY = "charge_power_entity"
+CONF_DISCHARGE_POWER_ENTITY = "discharge_power_entity"
+CONF_OPERATING_MODE_ENTITY = "operating_mode_entity"
+CONF_ACTION_DIRECTION_ENTITY = "action_direction_entity"
+CONF_POWER_SETPOINT_ENTITY = "power_setpoint_entity"
 CONF_BATTERY_CAPACITY_KWH = "battery_capacity_kwh"
 CONF_TECHNICAL_MIN_SOC_PERCENT = "technical_min_soc_percent"
 CONF_MAX_SOC_PERCENT = "max_soc_percent"
