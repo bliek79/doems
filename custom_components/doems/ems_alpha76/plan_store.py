@@ -46,8 +46,8 @@ DEFAULT_PLAN: dict[str, Any] = {
 }
 
 
-class AnkerEmsPlanStore:
-    """Persistent storage for the three independent EMS plan slots."""
+class DOEMSShadowPlanStore:
+    """Persistent shadow storage for the three independent EMS plan slots."""
 
     def __init__(self, hass: HomeAssistant, entry_id: str) -> None:
         self.hass = hass
