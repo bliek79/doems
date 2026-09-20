@@ -31,6 +31,7 @@ from .const import (
     VERSION,
 )
 from .ems_settings import EMSSettings
+from .ems_shadow_runtime import DOEMSEMSShadowRuntime
 from .energy_coordinator import DOEMSEnergyCoordinator
 from .energy_forecast import EnergyBaselineForecast, ceil_quarter
 from .prices import DOEMSPricesManager
@@ -82,8 +83,17 @@ async def async_setup_entry(
         entities.append(DOEMSPresenceContextSensor(entry, presence))
 
     ems_settings = entry_data.get("ems_settings")
+    ems_shadow = entry_data.get("ems_shadow")
     if isinstance(ems_settings, EMSSettings):
-        entities.append(DOEMSEMSSettingsSensor(entry, ems_settings))
+        entities.append(
+            DOEMSEMSSettingsSensor(
+                entry,
+                ems_settings,
+                ems_shadow if isinstance(ems_shadow, DOEMSEMSShadowRuntime) else None,
+            )
+        )
+    if isinstance(ems_shadow, DOEMSEMSShadowRuntime):
+        entities.append(DOEMSEMSShadowSensor(entry, ems_shadow))
 
     solar_forecast = entry_data.get("solar_forecast")
     if isinstance(solar_forecast, SolarForecastManager):
@@ -144,8 +154,14 @@ class DOEMSEMSSettingsSensor(SensorEntity):
     _attr_suggested_object_id = "doems_ems_settings"
     _attr_icon = "mdi:tune-variant"
 
-    def __init__(self, entry: ConfigEntry, settings: EMSSettings) -> None:
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        settings: EMSSettings,
+        shadow: DOEMSEMSShadowRuntime | None = None,
+    ) -> None:
         self.settings = settings
+        self.shadow = shadow
         self._attr_device_info = _device_info(entry)
 
     @property
@@ -159,9 +175,47 @@ class DOEMSEMSSettingsSensor(SensorEntity):
             "settings_source": "config_entry_options",
             "settings_snapshot_immutable": True,
             "startup_delay_runtime_gate_active": False,
-            "planner_logic_active": False,
+            "planner_logic_active": self.shadow is not None,
+            "shadow_runtime_status": self.shadow.status if self.shadow is not None else None,
             "physical_execution_authority": False,
         }
+
+
+class DOEMSEMSShadowSensor(SensorEntity):
+    """Expose compact live Step-5A shadow planner diagnostics."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+    _attr_name = "DOEMS EMS Shadow"
+    _attr_unique_id = "doems_ems_shadow"
+    _attr_suggested_object_id = "doems_ems_shadow"
+    _attr_icon = "mdi:chart-timeline-variant-shimmer"
+
+    def __init__(self, entry: ConfigEntry, runtime: DOEMSEMSShadowRuntime) -> None:
+        self.runtime = runtime
+        self._remove_listener = None
+        self._attr_device_info = _device_info(entry)
+
+    @property
+    def native_value(self) -> str:
+        return self.runtime.status
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return self.runtime.snapshot()
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._remove_listener = self.runtime.async_add_listener(self._handle_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._remove_listener is not None:
+            self._remove_listener()
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
 
 
 class DOEMSFoundationStatusSensor(SensorEntity):
