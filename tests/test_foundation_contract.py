@@ -24,6 +24,7 @@ def test_required_p2_files_exist() -> None:
         "energy_sources.py",
         "manifest.json",
         "presence.py",
+        "ems_settings.py",
         "select.py",
         "switch.py",
         "datetime.py",
