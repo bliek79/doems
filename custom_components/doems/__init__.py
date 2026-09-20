@@ -12,6 +12,7 @@ from homeassistant.helpers.storage import Store
 from .const import CONF_ENERGY_FORECAST_ENABLED, CONF_PRICES_ENABLED, DOMAIN, PLATFORMS
 from .energy_coordinator import DOEMSEnergyCoordinator
 from .prices_runtime import DOEMSRegisteredPricesManager
+from .presence import DOEMSPresenceStore
 from .solar_forecast import SolarForecastManager
 from .solar_foundation import SolarFoundationManager
 
@@ -55,12 +56,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
         prices = DOEMSRegisteredPricesManager(hass, entry)
         await prices.async_setup()
 
+    presence = DOEMSPresenceStore(hass, entry, coordinator)
+    await presence.async_setup()
+
     entry.runtime_data = coordinator
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "energy_forecast_enabled": coordinator is not None,
         "solar_foundation": foundation,
         "solar_forecast": solar_forecast,
         "prices": prices,
+        "presence": presence,
     }
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -103,6 +108,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> bo
         await coordinator.async_shutdown()
 
     entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    presence = entry_data.get("presence")
+    if isinstance(presence, DOEMSPresenceStore):
+        await presence.async_shutdown()
+
     prices = entry_data.get("prices")
     if isinstance(prices, DOEMSRegisteredPricesManager):
         await prices.async_shutdown()
