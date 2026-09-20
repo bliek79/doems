@@ -64,12 +64,14 @@ def test_runtime_mirrors_frozen_bridge_store_scheduler_sequence() -> None:
     assert positions == sorted(positions)
 
 
-def test_shadow_chain_stops_before_prestart_safety_controller_execution() -> None:
+def test_shadow_chain_extends_through_non_actuating_downstream_gates() -> None:
     runtime = (INTEGRATION / "ems_shadow_runtime.py").read_text(encoding="utf-8")
-    assert '"prestart_validator_invoked": False' in runtime
-    assert '"safety_guard_invoked": False' in runtime
-    assert '"action_controller_invoked": False' in runtime
-    assert '"execution_controller_invoked": False' in runtime
+    assert '"prestart_validator_invoked": bool(self.downstream_result)' in runtime
+    assert '"safety_guard_invoked": bool(self.downstream_result)' in runtime
+    assert '"action_controller_invoked": bool(self.downstream_result)' in runtime
+    assert '"execution_controller_invoked": bool(self.downstream_result)' in runtime
+    assert '"automatic_execution_armed": False' in runtime
+    assert '"mode_switch_service_calls_available": False' in runtime
     assert '"service_calls_performed": False' in runtime
     assert '"physical_execution_authority": False' in runtime
     assert ".services.async_call(" not in runtime
