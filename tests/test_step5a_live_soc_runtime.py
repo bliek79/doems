@@ -76,8 +76,10 @@ def test_shadow_diagnostic_sensor_is_compact_and_non_actuating() -> None:
     assert 'doems_ems_shadow' in sensor
     assert '"shadow_planner_runtime_active": True' in runtime
     assert '"startup_delay_runtime_gate_active": False' in runtime
-    assert '"plan_store_write": False' in runtime
-    assert '"scheduler_invoked": False' in runtime
+    assert '"shadow_plan_store_active": True' in runtime
+    assert '"scheduler_invoked": bool(self.scheduler_result)' in runtime
+    assert '"prestart_validator_invoked": False' in runtime
+    assert '"execution_controller_invoked": False' in runtime
     assert '"service_calls_performed": False' in runtime
     assert '"physical_execution_authority": False' in runtime
     assert '"auto_plan_72h_plan"' not in runtime
