@@ -78,6 +78,7 @@ def test_step5a_part1_uses_existing_doems_forecast_and_stays_shadow_only():
     assert 'prices.price_window(window_start=window_start, slot_count=288)' in live
     assert 'prices.timeline_slots' not in live
     assert '"input_source": "existing_doems_forecast"' in live
+    assert '"prices_source": "doems_prices_76h_buffer_window"' in live
     assert '"planner_runtime_active": False' in live
     assert '"physical_execution_authority": False' in live
     assert 'run_shadow_chain' in adapter
