@@ -1,4 +1,4 @@
-name: DOEMS CI and Alpha7.17 G6 Step 5A Shadow Bridge Plan Store Scheduler Release
+name: DOEMS CI and Alpha7.18 G6 Step 5A Forecast Contract Diagnostics Release
 
 on:
   pull_request:
@@ -29,9 +29,9 @@ jobs:
               json.loads(path.read_text(encoding='utf-8'))
               print(f'valid: {path}')
           PY
-      - name: Validate Alpha7.17 release contract
+      - name: Validate Alpha7.18 release contract
         run: |
-          test -f RELEASE_NOTES_0.1.0-alpha.7.17.md
+          test -f RELEASE_NOTES_0.1.0-alpha.7.18.md
           test -f examples/prices_p4_forecast_card.yaml
           test -f custom_components/doems/prices.py
           test -f custom_components/doems/prices_model.py
@@ -41,8 +41,8 @@ jobs:
           test ! -f scripts/build_brand_assets.py
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
-          grep -F 'VERSION = "0.1.0-alpha.7.17"' custom_components/doems/const.py
-          grep -F '"version": "0.1.0-alpha.7.17"' custom_components/doems/manifest.json
+          grep -F 'VERSION = "0.1.0-alpha.7.18"' custom_components/doems/const.py
+          grep -F '"version": "0.1.0-alpha.7.18"' custom_components/doems/manifest.json
           grep -F 'CONF_EMS_ENABLED = "ems_enabled"' custom_components/doems/const.py
           grep -F 'CONF_SOC_ENTITY = "soc_entity"' custom_components/doems/const.py
           grep -F '_optional_entity(CONF_SOC_ENTITY' custom_components/doems/config_flow.py
@@ -50,6 +50,10 @@ jobs:
           grep -F 'waiting_for_soc_source' custom_components/doems/ems_shadow_runtime.py
           grep -F 'waiting_for_valid_soc' custom_components/doems/ems_shadow_runtime.py
           grep -F 'waiting_for_complete_forecast' custom_components/doems/ems_shadow_runtime.py
+          grep -F '"invalid_slot_count": len(invalid_slots)' custom_components/doems/ems_input_contract.py
+          grep -F '"missing_inputs": missing_inputs' custom_components/doems/ems_input_contract.py
+          grep -F '"invalid_slots": input_result.get("invalid_slots", [])' custom_components/doems/ems_shadow_runtime.py
+          grep -F 'self.shadow.async_add_listener(self._handle_shadow_update)' custom_components/doems/sensor.py
           grep -F 'run_shadow_chain(' custom_components/doems/ems_shadow_runtime.py
           grep -F 'doems_ems_shadow' custom_components/doems/sensor.py
           grep -F 'shadow_plans' custom_components/doems/ems_alpha76/plan_store.py
@@ -149,7 +153,7 @@ jobs:
           ! grep -R -F 'doems_capture_alpha41_solar_freeze' custom_components/doems
           ! grep -R -F 'doems_alpha41_solar_freeze_captured' custom_components/doems
 
-  publish-alpha7-17:
+  publish-alpha7-18:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
@@ -159,7 +163,7 @@ jobs:
           fetch-depth: 0
       - name: Build release archive
         run: |
-          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.7.17.md
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.7.18.md
           sha256sum doems.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - name: Verify EMS settings, Presence and Prices runtime are packaged
@@ -188,12 +192,12 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/icon.png'
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
-      - name: Publish Alpha7.17 G6 Step 5A release
+      - name: Publish Alpha7.18 G6 Step 5A release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view 0.1.0-alpha.7.17 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.7.17 --title "DOEMS 0.1.0-alpha.7.17 - G6 Step 5A Shadow Bridge Plan Store Scheduler" --notes-file RELEASE_NOTES_0.1.0-alpha.7.17.md
+          if gh release view 0.1.0-alpha.7.18 >/dev/null 2>&1; then
+            gh release edit 0.1.0-alpha.7.18 --title "DOEMS 0.1.0-alpha.7.18 - G6 Step 5A Forecast Contract Diagnostics" --notes-file RELEASE_NOTES_0.1.0-alpha.7.18.md
           else
-            gh release create 0.1.0-alpha.7.17 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.17 - G6 Step 5A Shadow Bridge Plan Store Scheduler" --notes-file RELEASE_NOTES_0.1.0-alpha.7.17.md
+            gh release create 0.1.0-alpha.7.18 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.18 - G6 Step 5A Forecast Contract Diagnostics" --notes-file RELEASE_NOTES_0.1.0-alpha.7.18.md
           fi
