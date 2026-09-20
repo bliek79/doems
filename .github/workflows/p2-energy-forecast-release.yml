@@ -1,4 +1,4 @@
-name: DOEMS CI and Alpha7.13 G6 Away Presence Entities Release
+name: DOEMS CI and Alpha7.14 G6 Step 5A EMS Settings Config Reads Release
 
 on:
   pull_request:
@@ -29,9 +29,9 @@ jobs:
               json.loads(path.read_text(encoding='utf-8'))
               print(f'valid: {path}')
           PY
-      - name: Validate Alpha7.13 release contract
+      - name: Validate Alpha7.14 release contract
         run: |
-          test -f RELEASE_NOTES_0.1.0-alpha.7.13.md
+          test -f RELEASE_NOTES_0.1.0-alpha.7.14.md
           test -f examples/prices_p4_forecast_card.yaml
           test -f custom_components/doems/prices.py
           test -f custom_components/doems/prices_model.py
@@ -41,8 +41,8 @@ jobs:
           test ! -f scripts/build_brand_assets.py
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
-          grep -F 'VERSION = "0.1.0-alpha.7.13"' custom_components/doems/const.py
-          grep -F '"version": "0.1.0-alpha.7.13"' custom_components/doems/manifest.json
+          grep -F 'VERSION = "0.1.0-alpha.7.14"' custom_components/doems/const.py
+          grep -F '"version": "0.1.0-alpha.7.14"' custom_components/doems/manifest.json
           grep -F 'CONF_EMS_ENABLED = "ems_enabled"' custom_components/doems/const.py
           grep -F 'CONF_BATTERY_CAPACITY_KWH = "battery_capacity_kwh"' custom_components/doems/const.py
           grep -F 'CONF_TECHNICAL_MIN_SOC_PERCENT = "technical_min_soc_percent"' custom_components/doems/const.py
@@ -54,6 +54,15 @@ jobs:
           grep -F 'CONF_DISCHARGE_EFFICIENCY_PERCENT = "discharge_efficiency_percent"' custom_components/doems/const.py
           grep -F 'CONF_MINIMUM_TRADE_MARGIN_EUR_PER_KWH = "minimum_trade_margin_eur_per_kwh"' custom_components/doems/const.py
           grep -F 'CONF_STARTUP_DELAY_SECONDS = "startup_delay_seconds"' custom_components/doems/const.py
+          test -f custom_components/doems/ems_settings.py
+          grep -F 'class EMSSettings' custom_components/doems/ems_settings.py
+          grep -F 'EMSSettings.from_options(entry.options)' custom_components/doems/__init__.py
+          grep -F 'doems_ems_settings' custom_components/doems/sensor.py
+          grep -F '"settings_source": "config_entry_options"' custom_components/doems/sensor.py
+          grep -F '"settings_snapshot_immutable": True' custom_components/doems/sensor.py
+          grep -F '"startup_delay_runtime_gate_active": False' custom_components/doems/sensor.py
+          grep -F '"planner_logic_active": False' custom_components/doems/sensor.py
+          grep -F '"physical_execution_authority": False' custom_components/doems/sensor.py
           grep -F 'CONF_AWAY_SCHEDULE_ENABLED = "away_schedule_enabled"' custom_components/doems/const.py
           grep -F 'CONF_AWAY_START = "away_start"' custom_components/doems/const.py
           grep -F 'CONF_AWAY_END = "away_end"' custom_components/doems/const.py
@@ -108,7 +117,7 @@ jobs:
           ! grep -R -F 'doems_capture_alpha41_solar_freeze' custom_components/doems
           ! grep -R -F 'doems_alpha41_solar_freeze_captured' custom_components/doems
 
-  publish-alpha7-13:
+  publish-alpha7-14:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
@@ -118,11 +127,12 @@ jobs:
           fetch-depth: 0
       - name: Build release archive
         run: |
-          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.7.13.md
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.7.14.md
           sha256sum doems.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
-      - name: Verify Presence and Prices runtime are packaged
+      - name: Verify EMS settings, Presence and Prices runtime are packaged
         run: |
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_settings.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/presence.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/switch.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/datetime.py'
@@ -137,12 +147,12 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/icon.png'
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
-      - name: Publish Alpha7.13 G6 Away Presence release
+      - name: Publish Alpha7.14 G6 Step 5A release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view 0.1.0-alpha.7.13 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.7.13 --title "DOEMS 0.1.0-alpha.7.13 - G6 Away Presence Entities" --notes-file RELEASE_NOTES_0.1.0-alpha.7.13.md
+          if gh release view 0.1.0-alpha.7.14 >/dev/null 2>&1; then
+            gh release edit 0.1.0-alpha.7.14 --title "DOEMS 0.1.0-alpha.7.14 - G6 Step 5A EMS Settings Config Reads" --notes-file RELEASE_NOTES_0.1.0-alpha.7.14.md
           else
-            gh release create 0.1.0-alpha.7.13 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.13 - G6 Away Presence Entities" --notes-file RELEASE_NOTES_0.1.0-alpha.7.13.md
+            gh release create 0.1.0-alpha.7.14 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.14 - G6 Step 5A EMS Settings Config Reads" --notes-file RELEASE_NOTES_0.1.0-alpha.7.14.md
           fi
