@@ -53,6 +53,11 @@ jobs:
           grep -F '"invalid_slot_count": len(invalid_slots)' custom_components/doems/ems_input_contract.py
           grep -F '"missing_inputs": missing_inputs' custom_components/doems/ems_input_contract.py
           grep -F '"invalid_slots": input_result.get("invalid_slots", [])' custom_components/doems/ems_shadow_runtime.py
+          grep -F 'def price_window(' custom_components/doems/prices.py
+          grep -F 'self._price_buffer_by_start.get(expected_start)' custom_components/doems/prices.py
+          grep -F 'prices.price_window(window_start=window_start, slot_count=FORECAST_SLOTS)' custom_components/doems/ems_live_input.py
+          ! grep -F 'prices.timeline_slots' custom_components/doems/ems_live_input.py
+          grep -F '"prices_source": "doems_prices_76h_buffer_window"' custom_components/doems/ems_live_input.py
           grep -F 'self.shadow.async_add_listener(self._handle_shadow_update)' custom_components/doems/sensor.py
           grep -F 'def price_window(' custom_components/doems/prices.py
           grep -F 'self._price_buffer_by_start.get(expected_start)' custom_components/doems/prices.py
