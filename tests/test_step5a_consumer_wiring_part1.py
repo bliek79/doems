@@ -2,11 +2,23 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-
-from custom_components.doems.ems_input_contract import build_alpha41_transport_input
+import importlib
+import sys
+import types
 
 ROOT = Path(__file__).resolve().parents[1]
 INTEGRATION = ROOT / "custom_components" / "doems"
+
+def _load_input_contract():
+    if "custom_components" not in sys.modules:
+        package = types.ModuleType("custom_components")
+        package.__path__ = [str(ROOT / "custom_components")]
+        sys.modules["custom_components"] = package
+    if "custom_components.doems" not in sys.modules:
+        package = types.ModuleType("custom_components.doems")
+        package.__path__ = [str(INTEGRATION)]
+        sys.modules["custom_components.doems"] = package
+    return importlib.import_module("custom_components.doems.ems_input_contract")
 
 
 def _slots(start: datetime):
@@ -22,7 +34,7 @@ def _slots(start: datetime):
 def test_alpha41_mapping_is_exact_288_to_72_and_keeps_quarter_offset():
     start=datetime(2026,9,20,10,15,tzinfo=timezone.utc)
     energy,solar,prices=_slots(start)
-    result=build_alpha41_transport_input(
+    result=_load_input_contract().build_alpha41_transport_input(
         window_start=start,energy_slots=energy,solar_slots=solar,price_slots=prices
     )
     assert result["status"]=="ready"
@@ -40,7 +52,7 @@ def test_missing_native_quarter_blocks_only_its_transport_row():
     start=datetime(2026,9,20,10,30,tzinfo=timezone.utc)
     energy,solar,prices=_slots(start)
     solar.pop(7)
-    result=build_alpha41_transport_input(
+    result=_load_input_contract().build_alpha41_transport_input(
         window_start=start,energy_slots=energy,solar_slots=solar,price_slots=prices
     )
     assert result["status"]=="partial"
