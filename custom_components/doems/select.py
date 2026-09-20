@@ -61,8 +61,8 @@ class DOEMSPresenceProfileSelect(SelectEntity):
         self._attr_device_info = _device_info(entry)
 
     @property
-    def current_option(self) -> str:
-        return self.presence.manual_profile
+    def current_option(self) -> str | None:
+        return self.presence.manual_profile if self.presence.manual_profile in self.options else None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
