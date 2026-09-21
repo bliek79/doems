@@ -85,7 +85,13 @@ async def async_setup_entry(
     ems_settings = entry_data.get("ems_settings")
     ems_runtime = entry_data.get("ems_runtime")
     if isinstance(ems_settings, EMSSettings):
-        entities.append(\n            DOEMSEMSSettingsSensor(\n                entry,\n                ems_settings,\n                ems_runtime if isinstance(ems_runtime, DOEMSEMSRuntime) else None,\n            )\n        )
+        entities.append(
+            DOEMSEMSSettingsSensor(
+                entry,
+                ems_settings,
+                ems_runtime if isinstance(ems_runtime, DOEMSEMSRuntime) else None,
+            )
+        )
     if isinstance(ems_runtime, DOEMSEMSRuntime):
         entities.extend(
             [
@@ -154,7 +160,16 @@ class DOEMSEMSSettingsSensor(SensorEntity):
     _attr_suggested_object_id = "doems_ems_settings"
     _attr_icon = "mdi:tune-variant"
 
-    def __init__(\n        self,\n        entry: ConfigEntry,\n        settings: EMSSettings,\n        runtime: DOEMSEMSRuntime | None = None,\n    ) -> None:\n        self.settings = settings\n        self.runtime = runtime\n        self._remove_listener = None\n        self._attr_device_info = _device_info(entry)
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        settings: EMSSettings,
+        runtime: DOEMSEMSRuntime | None = None,
+    ) -> None:
+        self.settings = settings
+        self.runtime = runtime
+        self._remove_listener = None
+        self._attr_device_info = _device_info(entry)
 
     @property
     def native_value(self) -> str:
@@ -167,7 +182,25 @@ class DOEMSEMSSettingsSensor(SensorEntity):
             "settings_source": "config_entry_options",
             "settings_snapshot_immutable": True,
             "startup_delay_runtime_gate_active": False,
-            "planner_logic_active": self.runtime is not None,\n            "planning_runtime_status": self.runtime.status if self.runtime is not None else None,\n            "physical_execution_authority": False,\n        }\n\n    async def async_added_to_hass(self) -> None:\n        await super().async_added_to_hass()\n        if self.runtime is not None:\n            self._remove_listener = self.runtime.async_add_listener(self._handle_runtime_update)\n\n    async def async_will_remove_from_hass(self) -> None:\n        if self._remove_listener is not None:\n            self._remove_listener()\n        await super().async_will_remove_from_hass()\n\n    @callback\n    def _handle_runtime_update(self) -> None:\n        self.async_write_ha_state()\n
+            "planner_logic_active": self.runtime is not None,
+            "planning_runtime_status": self.runtime.status if self.runtime is not None else None,
+            "physical_execution_authority": False,
+        }
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if self.runtime is not None:
+            self._remove_listener = self.runtime.async_add_listener(self._handle_runtime_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._remove_listener is not None:
+            self._remove_listener()
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_runtime_update(self) -> None:
+        self.async_write_ha_state()
+
 
 class DOEMSFoundationStatusSensor(SensorEntity):
     """Expose clean DOEMS identity, component and safety status."""
