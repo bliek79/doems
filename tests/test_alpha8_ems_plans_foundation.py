@@ -137,6 +137,6 @@ def test_alpha8_carries_quarter_roll_identity_continuity_into_definitive_bridge(
         "continuity",
         "planner_identity",
         "planner_signature",
-        "timedelta(minutes=15)",
+        "15 * 60",
     ):
         assert token in bridge
