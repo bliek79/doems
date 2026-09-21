@@ -31,6 +31,7 @@ from .const import (
     VERSION,
 )
 from .ems_settings import EMSSettings
+from .ems_runtime import DOEMSEMSRuntime
 from .energy_coordinator import DOEMSEnergyCoordinator
 from .energy_forecast import EnergyBaselineForecast, ceil_quarter
 from .prices import DOEMSPricesManager
@@ -82,8 +83,17 @@ async def async_setup_entry(
         entities.append(DOEMSPresenceContextSensor(entry, presence))
 
     ems_settings = entry_data.get("ems_settings")
+    ems_runtime = entry_data.get("ems_runtime")
     if isinstance(ems_settings, EMSSettings):
         entities.append(DOEMSEMSSettingsSensor(entry, ems_settings))
+    if isinstance(ems_runtime, DOEMSEMSRuntime):
+        entities.extend(
+            [
+                DOEMSEMSStatusSensor(entry, ems_runtime),
+                DOEMSSchedulerStatusSensor(entry, ems_runtime),
+                *(DOEMSPlanStatusSensor(entry, ems_runtime, slot) for slot in range(1, 4)),
+            ]
+        )
 
     solar_forecast = entry_data.get("solar_forecast")
     if isinstance(solar_forecast, SolarForecastManager):
@@ -546,3 +556,131 @@ class DOEMSEnergyForecastConfidenceSensor(DOEMSEnergyBaseSensor):
     @property
     def native_value(self) -> float | None:
         return EnergyBaselineForecast.average_confidence(self._forecast())
+
+
+
+class _DOEMSEMSRuntimeSensor(SensorEntity):
+    """Base entity for the definitive Alpha8 DOEMS EMS runtime."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+
+    def __init__(self, entry: ConfigEntry, runtime: DOEMSEMSRuntime) -> None:
+        self.runtime = runtime
+        self._remove_listener = None
+        self._attr_device_info = _device_info(entry)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._remove_listener = self.runtime.async_add_listener(self._handle_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._remove_listener is not None:
+            self._remove_listener()
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
+
+
+class DOEMSEMSStatusSensor(_DOEMSEMSRuntimeSensor):
+    """Central non-actuating DOEMS EMS status."""
+
+    _attr_name = "DOEMS EMS"
+    _attr_unique_id = "doems_ems"
+    _attr_suggested_object_id = "doems_ems"
+    _attr_icon = "mdi:home-lightning-bolt"
+
+    @property
+    def native_value(self) -> str:
+        return self.runtime.status
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return self.runtime.snapshot()
+
+
+class DOEMSSchedulerStatusSensor(_DOEMSEMSRuntimeSensor):
+    """Central definitive DOEMS Scheduler status."""
+
+    _attr_name = "DOEMS Scheduler"
+    _attr_unique_id = "doems_scheduler"
+    _attr_suggested_object_id = "doems_scheduler"
+    _attr_icon = "mdi:calendar-clock"
+
+    @property
+    def native_value(self) -> str:
+        return str((self.runtime.scheduler_result or {}).get("scheduler_status") or "idle")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        scheduler = self.runtime.scheduler_result or {}
+        return {
+            "selected_slot": scheduler.get("scheduler_selected_slot"),
+            "selected_action": scheduler.get("scheduler_selected_action"),
+            "selected_execution_mode": scheduler.get("scheduler_selected_execution_mode"),
+            "selected_start_time": scheduler.get("scheduler_selected_start_time"),
+            "next_future_slot": scheduler.get("scheduler_next_future_slot"),
+            "next_future_start": scheduler.get("scheduler_next_future_start"),
+            "ready": bool(scheduler.get("scheduler_ready")),
+            "physical_control": False,
+            "mode": "validation",
+        }
+
+
+class DOEMSPlanStatusSensor(_DOEMSEMSRuntimeSensor):
+    """Status of one definitive persistent DOEMS plan slot."""
+
+    def __init__(self, entry: ConfigEntry, runtime: DOEMSEMSRuntime, slot: int) -> None:
+        super().__init__(entry, runtime)
+        self.slot = slot
+        self._attr_name = f"DOEMS Plan {slot} Status"
+        self._attr_unique_id = f"doems_plan_{slot}_status"
+        self._attr_suggested_object_id = f"doems_plan_{slot}_status"
+        self._attr_icon = "mdi:clipboard-text-clock-outline"
+
+    def _detail(self) -> dict[str, Any]:
+        scheduler = self.runtime.scheduler_result or {}
+        slots = scheduler.get("scheduler_slots") or {}
+        detail = slots.get(self.slot) or slots.get(str(self.slot))
+        if isinstance(detail, dict):
+            return dict(detail)
+        plan = self.runtime.plan_store.get_plan(self.slot)
+        return {
+            **plan,
+            "slot": self.slot,
+            "status": self.runtime.plan_store.plan_status(self.slot),
+            "selected": False,
+            "physical_control": False,
+        }
+
+    @property
+    def native_value(self) -> str:
+        return str(self._detail().get("status") or "leeg")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        detail = self._detail()
+        return {
+            "slot": self.slot,
+            "action": detail.get("action"),
+            "execution_mode": detail.get("execution_mode"),
+            "start_time": detail.get("start_time"),
+            "start_window_end": detail.get("start_window_end"),
+            "power_w": detail.get("power_w"),
+            "target_soc": detail.get("target_soc"),
+            "max_runtime_h": detail.get("max_runtime_h"),
+            "max_start_delay_min": detail.get("max_start_delay_min"),
+            "planned_energy_kwh": detail.get("planned_energy_kwh"),
+            "planned_end_time": detail.get("planned_end_time"),
+            "lifecycle_status": detail.get("lifecycle_status"),
+            "lifecycle_reason": detail.get("lifecycle_reason"),
+            "origin": detail.get("origin"),
+            "purpose": detail.get("purpose"),
+            "planner_identity": detail.get("planner_identity"),
+            "planner_signature": detail.get("planner_signature"),
+            "selected": bool(detail.get("selected")),
+            "physical_control": False,
+            "mode": "validation",
+        }
