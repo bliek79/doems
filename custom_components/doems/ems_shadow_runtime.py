@@ -38,6 +38,7 @@ from .ems_live_input import build_live_ems_input
 from .energy_sources import normalize_power_w
 from .ems_settings import EMSSettings
 from .ems_soc import UNAVAILABLE_SOC_STATES, parse_soc_percent
+from .ems_step5b import ExecutionEnvelope, build_execution_envelope, build_step5b_rehearsal
 
 
 class DOEMSEMSShadowRuntime:
@@ -77,6 +78,8 @@ class DOEMSEMSShadowRuntime:
         self.handoff_result: dict[str, Any] = {}
         self.expired_release_result: dict[str, Any] = {}
         self.downstream_result: dict[str, Any] = {}
+        self.step5b_result: dict[str, Any] = {}
+        self.step5b_envelope: ExecutionEnvelope | None = None
         self.prestart = AnkerEmsPreStartValidator()
         self.safety_guard = AnkerEmsSafetyGuard()
         self.action_controller = AnkerEmsActionController()
@@ -501,6 +504,7 @@ class DOEMSEMSShadowRuntime:
         self.handoff_result = {}
         self.expired_release_result = {}
         self.downstream_result = {}
+        self.step5b_result = {}
 
         soc, soc_status, soc_updated = self._read_soc()
         self.soc_percent = soc
@@ -699,6 +703,21 @@ class DOEMSEMSShadowRuntime:
                 armed=False,
             )
         )
+
+        captured, _capture_blockers, _capture_warnings = build_execution_envelope(work)
+        if self.step5b_envelope is None and captured is not None:
+            self.step5b_envelope = captured
+
+        self.step5b_result = build_step5b_rehearsal(
+            work,
+            previous_envelope=self.step5b_envelope,
+        )
+        if self.step5b_result.get("step5b_status") == "aborted_disarmed":
+            # Preserve this refresh's abort diagnostics, but require a fresh
+            # full Step 5A validation before a new envelope may be captured.
+            self.step5b_envelope = None
+        work.update(self.step5b_result)
+
         work.update(self.safety_guard.evaluate(work))
         work.update(self.action_controller.evaluate(work))
         self.downstream_result = work
@@ -852,6 +871,18 @@ class DOEMSEMSShadowRuntime:
             "shadow_charge_power_w": downstream.get("charge_power_w"),
             "shadow_discharge_power_w": downstream.get("discharge_power_w"),
             "shadow_power_setpoint_w": downstream.get("power_setpoint_w"),
+            "step5b_status": downstream.get("step5b_status"),
+            "step5b_envelope_ready": downstream.get("step5b_envelope_ready", False),
+            "step5b_envelope_fingerprint": downstream.get("step5b_envelope_fingerprint"),
+            "step5b_envelope": downstream.get("step5b_envelope"),
+            "step5b_transaction_phase": downstream.get("step5b_transaction_phase"),
+            "step5b_transaction_ready": downstream.get("step5b_transaction_ready", False),
+            "step5b_rehearsal_phases": downstream.get("step5b_rehearsal_phases", []),
+            "step5b_blockers": downstream.get("step5b_blockers", []),
+            "step5b_warnings": downstream.get("step5b_warnings", []),
+            "step5b_abort_reason": downstream.get("step5b_abort_reason"),
+            "step5b_authority_fence": False,
+            "step5b_service_calls_performed": False,
             "shadow_planner_runtime_active": True,
             "startup_delay_runtime_gate_active": False,
             "shadow_plan_store_active": True,
