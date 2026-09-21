@@ -4,7 +4,7 @@ from __future__ import annotations
 
 DOMAIN = "doems"
 NAME = "DOEMS"
-VERSION = "0.1.0-alpha.7.24"
+VERSION = "0.1.0-alpha.7.25"
 
 CONF_INSTANCE_NAME = "instance_name"
 DEFAULT_INSTANCE_NAME = NAME
@@ -29,6 +29,8 @@ CONF_DISCHARGE_POWER_ENTITY = "discharge_power_entity"
 CONF_OPERATING_MODE_ENTITY = "operating_mode_entity"
 CONF_ACTION_DIRECTION_ENTITY = "action_direction_entity"
 CONF_POWER_SETPOINT_ENTITY = "power_setpoint_entity"
+CONF_LEGACY_AUTOMATIC_EXECUTION_ENTITY = "legacy_automatic_execution_entity"
+CONF_LEGACY_AUTHORITY_ENTITY = "legacy_authority_entity"
 CONF_BATTERY_CAPACITY_KWH = "battery_capacity_kwh"
 CONF_TECHNICAL_MIN_SOC_PERCENT = "technical_min_soc_percent"
 CONF_MAX_SOC_PERCENT = "max_soc_percent"
