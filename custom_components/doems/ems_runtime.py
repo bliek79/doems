@@ -171,6 +171,17 @@ class DOEMSEMSRuntime:
         self.handoff_result = {}
         self.expired_release_result = {}
 
+        # The definitive DOEMS Scheduler is independent from automatic planning.
+        # Evaluate persisted/manual plans even when SOC or forecast inputs are not
+        # available yet. Automatic Plan72 writes remain gated below.
+        self.scheduler_result = self.scheduler.evaluate(
+            self.settings.max_charge_power_w,
+            self.settings.max_discharge_power_w,
+            now=self.last_refresh,
+            technical_min_soc_percent=self.settings.technical_min_soc_percent,
+            max_soc_percent=self.settings.max_soc_percent,
+        )
+
         soc, soc_status, soc_updated = self._read_soc()
         self.soc_percent = soc
         self.soc_source_status = soc_status
