@@ -37,6 +37,8 @@ from .const import (
     CONF_OPERATING_MODE_ENTITY,
     CONF_ACTION_DIRECTION_ENTITY,
     CONF_POWER_SETPOINT_ENTITY,
+    CONF_LEGACY_AUTOMATIC_EXECUTION_ENTITY,
+    CONF_LEGACY_AUTHORITY_ENTITY,
     CONF_ELECTRICITY_EXPORT_SUPPLIER,
     CONF_ELECTRICITY_EXPORT_TAX,
     CONF_ELECTRICITY_FIXED_SUPPLY_PER_DAY,
@@ -569,6 +571,8 @@ class DOEMSOptionsFlow(OptionsFlow):
                 (CONF_OPERATING_MODE_ENTITY, "select"),
                 (CONF_ACTION_DIRECTION_ENTITY, "select"),
                 (CONF_POWER_SETPOINT_ENTITY, "number"),
+                (CONF_LEGACY_AUTOMATIC_EXECUTION_ENTITY, "switch"),
+                (CONF_LEGACY_AUTHORITY_ENTITY, "sensor"),
             ):
                 error = _validate_optional_entity_domain(
                     self.hass, user_input.get(key), domain=domain
@@ -588,6 +592,8 @@ class DOEMSOptionsFlow(OptionsFlow):
                         CONF_OPERATING_MODE_ENTITY,
                         CONF_ACTION_DIRECTION_ENTITY,
                         CONF_POWER_SETPOINT_ENTITY,
+                        CONF_LEGACY_AUTOMATIC_EXECUTION_ENTITY,
+                        CONF_LEGACY_AUTHORITY_ENTITY,
                     ):
                         if not normalized.get(key):
                             self._pending.pop(key, None)
@@ -603,6 +609,8 @@ class DOEMSOptionsFlow(OptionsFlow):
                 _optional_entity(CONF_OPERATING_MODE_ENTITY, self._current(CONF_OPERATING_MODE_ENTITY)): selector.EntitySelector(selector.EntitySelectorConfig(domain="select")),
                 _optional_entity(CONF_ACTION_DIRECTION_ENTITY, self._current(CONF_ACTION_DIRECTION_ENTITY)): selector.EntitySelector(selector.EntitySelectorConfig(domain="select")),
                 _optional_entity(CONF_POWER_SETPOINT_ENTITY, self._current(CONF_POWER_SETPOINT_ENTITY)): selector.EntitySelector(selector.EntitySelectorConfig(domain="number")),
+                _optional_entity(CONF_LEGACY_AUTOMATIC_EXECUTION_ENTITY, self._current(CONF_LEGACY_AUTOMATIC_EXECUTION_ENTITY)): selector.EntitySelector(selector.EntitySelectorConfig(domain="switch")),
+                _optional_entity(CONF_LEGACY_AUTHORITY_ENTITY, self._current(CONF_LEGACY_AUTHORITY_ENTITY)): _sensor_selector(),
                 vol.Required(
                     CONF_BATTERY_CAPACITY_KWH,
                     default=float(self._current(CONF_BATTERY_CAPACITY_KWH, DEFAULT_BATTERY_CAPACITY_KWH)),
