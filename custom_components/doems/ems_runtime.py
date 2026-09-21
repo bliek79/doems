@@ -238,6 +238,8 @@ class DOEMSEMSRuntime:
             self.settings.max_charge_power_w,
             self.settings.max_discharge_power_w,
             now=self.last_refresh,
+            technical_min_soc_percent=self.settings.technical_min_soc_percent,
+            max_soc_percent=self.settings.max_soc_percent,
         )
         expired_slots = {
             int(slot)
@@ -252,6 +254,8 @@ class DOEMSEMSRuntime:
             self.settings.max_charge_power_w,
             self.settings.max_discharge_power_w,
             now=self.last_refresh,
+            technical_min_soc_percent=self.settings.technical_min_soc_percent,
+            max_soc_percent=self.settings.max_soc_percent,
         )
         data.update(scheduler_snapshot)
 
@@ -304,6 +308,8 @@ class DOEMSEMSRuntime:
             self.settings.max_charge_power_w,
             self.settings.max_discharge_power_w,
             now=self.last_refresh,
+            technical_min_soc_percent=self.settings.technical_min_soc_percent,
+            max_soc_percent=self.settings.max_soc_percent,
         )
         refreshed_data = {**data, **self.scheduler_result}
         refreshed_bridge = build_planner_action_bridge(
