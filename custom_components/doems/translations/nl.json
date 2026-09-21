@@ -20,7 +20,8 @@
           "instance_name": "Weergavenaam",
           "energy_forecast_enabled": "Energy Forecast activeren",
           "solar_foundation_enabled": "Solar Foundation activeren",
-          "prices_enabled": "Prices Forecast activeren"
+          "prices_enabled": "Prices Forecast activeren",
+          "ems_enabled": "EMS-configuratie activeren"
         }
       },
       "energy_forecast": {
@@ -123,6 +124,14 @@
           "gas_tax_incl_vat": "Gas belasting incl. btw",
           "gas_fixed_supply_per_day": "Vaste gasleveringskosten per dag",
           "gas_grid_per_day": "Gasnetkosten per dag"
+        }
+      },
+      "ems": {
+        "title": "EMS",
+        "description": "",
+        "data": {
+          "legacy_automatic_execution_entity": "Legacy Automatic Execution-schakelaar (alleen lezen)",
+          "legacy_authority_entity": "Legacy authority-diagnosesensor (alleen lezen)"
         }
       }
     },
