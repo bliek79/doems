@@ -1,4 +1,4 @@
-name: DOEMS CI and Alpha7.24 G6 Step 5B Disarmed Execution Authority Preparation Release
+name: DOEMS CI and Alpha7.25 G6 Step 5C Disarmed Authority Transfer Foundation Release
 
 on:
   pull_request:
@@ -29,9 +29,9 @@ jobs:
               json.loads(path.read_text(encoding='utf-8'))
               print(f'valid: {path}')
           PY
-      - name: Validate Alpha7.24 release contract
+      - name: Validate Alpha7.25 release contract
         run: |
-          test -f RELEASE_NOTES_0.1.0-alpha.7.24.md
+          test -f RELEASE_NOTES_0.1.0-alpha.7.25.md
           test -f examples/prices_p4_forecast_card.yaml
           test -f custom_components/doems/prices.py
           test -f custom_components/doems/prices_model.py
@@ -41,8 +41,8 @@ jobs:
           test ! -f scripts/build_brand_assets.py
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
-          grep -F 'VERSION = "0.1.0-alpha.7.24"' custom_components/doems/const.py
-          grep -F '"version": "0.1.0-alpha.7.24"' custom_components/doems/manifest.json
+          grep -F 'VERSION = "0.1.0-alpha.7.25"' custom_components/doems/const.py
+          grep -F '"version": "0.1.0-alpha.7.25"' custom_components/doems/manifest.json
           grep -F 'CONF_EMS_ENABLED = "ems_enabled"' custom_components/doems/const.py
           grep -F 'CONF_SOC_ENTITY = "soc_entity"' custom_components/doems/const.py
           grep -F '_optional_entity(CONF_SOC_ENTITY' custom_components/doems/config_flow.py
@@ -88,6 +88,18 @@ jobs:
           test -f tests/test_step5a_quarter_roll_identity_continuity.py
           test -f custom_components/doems/ems_step5b.py
           test -f tests/test_step5b_execution_authority_preparation.py
+          test -f custom_components/doems/ems_step5c.py
+          test -f tests/test_step5c_authority_transfer_foundation.py
+          grep -F 'def build_step5c_disarmed_foundation(' custom_components/doems/ems_step5c.py
+          grep -F '"step5c_live_transfer_enabled": False' custom_components/doems/ems_step5c.py
+          grep -F '"step5c_arm_available": False' custom_components/doems/ems_step5c.py
+          grep -F '"step5c_service_calls_performed": False' custom_components/doems/ems_step5c.py
+          grep -F '"physical_execution_authority": False' custom_components/doems/ems_step5c.py
+          ! grep -F '.services.async_call(' custom_components/doems/ems_step5c.py
+          grep -F 'build_step5c_disarmed_foundation(' custom_components/doems/ems_shadow_runtime.py
+          grep -F '"authority_owner"' custom_components/doems/ems_shadow_runtime.py
+          grep -F '"legacy_write_fence"' custom_components/doems/ems_shadow_runtime.py
+          grep -F '"doems_write_fence"' custom_components/doems/ems_shadow_runtime.py
           grep -F 'class ExecutionEnvelope' custom_components/doems/ems_step5b.py
           grep -F 'def build_execution_envelope(' custom_components/doems/ems_step5b.py
           grep -F 'def build_step5b_rehearsal(' custom_components/doems/ems_step5b.py
@@ -210,7 +222,7 @@ jobs:
           ! grep -R -F 'doems_capture_alpha41_solar_freeze' custom_components/doems
           ! grep -R -F 'doems_alpha41_solar_freeze_captured' custom_components/doems
 
-  publish-alpha7-24:
+  publish-alpha7-25:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
@@ -220,7 +232,7 @@ jobs:
           fetch-depth: 0
       - name: Build release archive
         run: |
-          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.7.24.md
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.7.25.md
           sha256sum doems.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - name: Verify EMS settings, Presence and Prices runtime are packaged
@@ -233,6 +245,7 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_alpha76/scheduler.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_alpha76/automatic_execution_shadow.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_step5b.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_step5c.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_input_contract.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_live_input.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_alpha76_adapter.py'
@@ -251,12 +264,12 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/icon.png'
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
-      - name: Publish Alpha7.24 G6 Step 5A release
+      - name: Publish Alpha7.25 G6 Step 5A release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view 0.1.0-alpha.7.24 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.7.24 --title "DOEMS 0.1.0-alpha.7.24 - G6 Step 5B Disarmed Execution Authority Preparation" --notes-file RELEASE_NOTES_0.1.0-alpha.7.24.md
+          if gh release view 0.1.0-alpha.7.25 >/dev/null 2>&1; then
+            gh release edit 0.1.0-alpha.7.25 --title "DOEMS 0.1.0-alpha.7.25 - G6 Step 5C Disarmed Authority Transfer Foundation" --notes-file RELEASE_NOTES_0.1.0-alpha.7.25.md --prerelease
           else
-            gh release create 0.1.0-alpha.7.24 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.24 - G6 Step 5B Disarmed Execution Authority Preparation" --notes-file RELEASE_NOTES_0.1.0-alpha.7.24.md
+            gh release create 0.1.0-alpha.7.25 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.25 - G6 Step 5C Disarmed Authority Transfer Foundation" --notes-file RELEASE_NOTES_0.1.0-alpha.7.25.md
           fi
