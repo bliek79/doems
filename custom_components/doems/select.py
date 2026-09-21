@@ -19,8 +19,11 @@ from .const import (
     PROFILE_AWAY,
     PROFILE_NORMAL,
     VERSION,
+    CONF_EMS_ENABLED,
+    PLAN_SLOT_COUNT,
 )
 from .presence import DOEMSPresenceStore
+from .ems_runtime import DOEMSEMSRuntime
 
 
 def _device_info(entry: ConfigEntry) -> DeviceInfo:
@@ -40,8 +43,23 @@ async def async_setup_entry(
 ) -> None:
     """Set up the shared DOEMS presence profile select."""
     presence = hass.data.get(DOMAIN, {}).get(entry.entry_id, {}).get("presence")
+    entities: list[SelectEntity] = []
     if isinstance(presence, DOEMSPresenceStore):
-        async_add_entities([DOEMSPresenceProfileSelect(entry, presence)])
+        entities.append(DOEMSPresenceProfileSelect(entry, presence))
+
+    if entry.options.get(CONF_EMS_ENABLED, False):
+        runtime = hass.data.get(DOMAIN, {}).get(entry.entry_id, {}).get("ems_runtime")
+        if isinstance(runtime, DOEMSEMSRuntime):
+            for slot in range(1, PLAN_SLOT_COUNT + 1):
+                entities.extend(
+                    [
+                        DOEMSPlanSelect(entry, runtime, slot, "action", "Action", ["geen", "laden", "ontladen"]),
+                        DOEMSPlanSelect(entry, runtime, slot, "execution_mode", "Execution Mode", ["direct", "gepland"]),
+                    ]
+                )
+
+    if entities:
+        async_add_entities(entities)
 
 
 class DOEMSPresenceProfileSelect(SelectEntity):
@@ -92,3 +110,43 @@ class DOEMSPresenceProfileSelect(SelectEntity):
     @callback
     def _handle_update(self) -> None:
         self.async_write_ha_state()
+
+
+class DOEMSPlanSelect(SelectEntity):
+    """Editable select field for one definitive DOEMS EMS plan slot."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        runtime: DOEMSEMSRuntime,
+        slot: int,
+        field: str,
+        label: str,
+        options: list[str],
+    ) -> None:
+        self.runtime = runtime
+        self.plan_store = runtime.plan_store
+        self.slot = slot
+        self.field = field
+        self._attr_name = f"DOEMS Plan {slot} {label}"
+        self._attr_unique_id = f"doems_plan_{slot}_{field}"
+        self._attr_suggested_object_id = f"doems_plan_{slot}_{field}"
+        self._attr_options = options
+        self._attr_device_info = _device_info(entry)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(self.plan_store.add_listener(self.async_write_ha_state))
+
+    @property
+    def current_option(self) -> str | None:
+        value = self.plan_store.get_value(self.slot, self.field)
+        return str(value) if value in self.options else None
+
+    async def async_select_option(self, option: str) -> None:
+        if option not in self.options:
+            raise ValueError(f"Unsupported option: {option}")
+        await self.plan_store.async_set_value(self.slot, self.field, option)
