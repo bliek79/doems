@@ -4,7 +4,7 @@ from __future__ import annotations
 
 DOMAIN = "doems"
 NAME = "DOEMS"
-VERSION = "0.1.0-alpha.7.15"
+VERSION = "0.1.0-alpha.8"
 
 CONF_INSTANCE_NAME = "instance_name"
 DEFAULT_INSTANCE_NAME = NAME
@@ -22,6 +22,7 @@ CONF_BATTERY_DISCHARGE_POWER_ENTITY = "battery_discharge_power_entity"
 
 # G6 EMS configuration contract - Steps 3A/3B/3C.
 CONF_EMS_ENABLED = "ems_enabled"
+CONF_SOC_ENTITY = "soc_entity"
 CONF_BATTERY_CAPACITY_KWH = "battery_capacity_kwh"
 CONF_TECHNICAL_MIN_SOC_PERCENT = "technical_min_soc_percent"
 CONF_MAX_SOC_PERCENT = "max_soc_percent"
@@ -53,6 +54,7 @@ DEFAULT_AWAY_SCHEDULE_ENABLED = False
 EMS_MIN_STARTUP_DELAY_SECONDS = 30
 EMS_MAX_STARTUP_DELAY_SECONDS = 300
 EMS_MAX_POWER_W = 3500
+PLAN_SLOT_COUNT = 3
 
 ENERGY_SOURCE_DIRECT = "direct_home_power"
 ENERGY_SOURCE_BALANCE = "power_balance"
@@ -147,7 +149,7 @@ MIN_VALID_COVERAGE = 0.90
 STORAGE_VERSION = 1
 STORAGE_KEY = f"{DOMAIN}.energy_forecast"
 ENERGY_STORE_SCHEMA_VERSION = 1
-PLATFORMS = ["sensor", "select", "binary_sensor", "switch", "datetime"]
+PLATFORMS = ["sensor", "select", "number", "binary_sensor", "switch", "datetime"]
 DEVICE_IDENTIFIER = "main"
 FOUNDATION_PHASE = "solar_p3_0_foundation"
 CANONICAL_HOME_POWER_ENTITY = "sensor.doems_source_home_power"
