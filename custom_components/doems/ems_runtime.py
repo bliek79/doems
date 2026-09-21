@@ -75,6 +75,11 @@ class DOEMSEMSRuntime:
     async def async_setup(self) -> None:
         """Load DOEMS plans, attach listeners and perform first refresh."""
         await self.plan_store.async_load()
+        self._unsubs.append(
+            self.plan_store.add_listener(
+                lambda: self._request_refresh("plan_store_change")
+            )
+        )
         for source, trigger in (
             (self.coordinator, "energy_forecast_update"),
             (self.solar_forecast, "solar_forecast_update"),
