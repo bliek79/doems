@@ -131,7 +131,7 @@ class DOEMSScheduler:
                 detail["status"] = lifecycle_status
             elif action == "geen":
                 detail["status"] = "leeg"
-            elif lifecycle_status == "concept":
+            elif lifecycle_status == "concept" and str(plan.get("origin") or "manual") == "automatic_72h_planner":
                 detail["status"] = "concept"
             elif not self._base_valid(
                 plan,
