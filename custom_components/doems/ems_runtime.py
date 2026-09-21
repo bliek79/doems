@@ -159,7 +159,7 @@ class DOEMSEMSRuntime:
         self.refresh_count += 1
         self.last_error = None
         self.input_result = None
-        self.shadow_result = None
+        self.planner_result = None
         self.bridge_result = {}
         self.scheduler_result = {}
         self.plan_store_result = {}
@@ -201,7 +201,7 @@ class DOEMSEMSRuntime:
                 self._notify()
                 return
 
-            self.shadow_result = run_ems_chain(
+            self.planner_result = run_ems_chain(
                 input_result=input_result,
                 settings=self.settings,
                 soc_percent=soc,
@@ -216,8 +216,8 @@ class DOEMSEMSRuntime:
         self._notify()
 
     async def _async_run_bridge_planstore_scheduler(self) -> None:
-        """Mirror the frozen Alpha76 Bridge -> Plan Store -> Scheduler shadow chain."""
-        shadow = self.shadow_result or {}
+        """Run the copied Bridge -> DOEMS Plan Store -> DOEMS Scheduler chain."""
+        planner = self.planner_result or {}
         plan72 = dict(planner.get("plan72") or {})
         data: dict[str, Any] = {
             **plan72,
@@ -342,7 +342,7 @@ class DOEMSEMSRuntime:
     def snapshot(self) -> dict[str, Any]:
         """Return compact entity-safe diagnostics without publishing Plan72 arrays."""
         input_result = self.input_result or {}
-        shadow = self.shadow_result or {}
+        planner = self.planner_result or {}
         need = planner.get("energy_need") or {}
         preview = planner.get("planner_preview") or {}
         plan72 = planner.get("plan72") or {}
@@ -422,7 +422,6 @@ class DOEMSEMSRuntime:
             "safety_guard_invoked": False,
             "action_controller_invoked": False,
             "execution_controller_invoked": False,
-            "service_calls_performed": False,
             "execution_mode": "validation",
             "automatic_execution_armed": False,
             "service_calls_performed": False,
