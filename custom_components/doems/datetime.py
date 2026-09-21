@@ -17,8 +17,11 @@ from .const import (
     DOMAIN,
     NAME,
     VERSION,
+    CONF_EMS_ENABLED,
+    PLAN_SLOT_COUNT,
 )
 from .presence import DOEMSPresenceStore
+from .ems_runtime import DOEMSEMSRuntime
 
 
 def _device_info(entry: ConfigEntry) -> DeviceInfo:
@@ -37,13 +40,25 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     presence = hass.data.get(DOMAIN, {}).get(entry.entry_id, {}).get("presence")
+    entities: list[DateTimeEntity] = []
     if isinstance(presence, DOEMSPresenceStore):
-        async_add_entities(
+        entities.extend(
             [
                 DOEMSAwayDateTime(entry, presence, "start"),
                 DOEMSAwayDateTime(entry, presence, "end"),
             ]
         )
+
+    if entry.options.get(CONF_EMS_ENABLED, False):
+        runtime = hass.data.get(DOMAIN, {}).get(entry.entry_id, {}).get("ems_runtime")
+        if isinstance(runtime, DOEMSEMSRuntime):
+            entities.extend(
+                DOEMSPlanStartTime(entry, runtime, slot)
+                for slot in range(1, PLAN_SLOT_COUNT + 1)
+            )
+
+    if entities:
+        async_add_entities(entities)
 
 
 class DOEMSAwayDateTime(DateTimeEntity):
@@ -90,3 +105,42 @@ class DOEMSAwayDateTime(DateTimeEntity):
     @callback
     def _handle_update(self) -> None:
         self.async_write_ha_state()
+
+
+class DOEMSPlanStartTime(DateTimeEntity):
+    """Start time entity for one definitive DOEMS EMS plan slot."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+
+    def __init__(self, entry: ConfigEntry, runtime: DOEMSEMSRuntime, slot: int) -> None:
+        self.runtime = runtime
+        self.plan_store = runtime.plan_store
+        self.slot = slot
+        self._attr_name = f"DOEMS Plan {slot} Start Time"
+        self._attr_unique_id = f"doems_plan_{slot}_start_time"
+        self._attr_suggested_object_id = f"doems_plan_{slot}_start_time"
+        self._attr_icon = "mdi:calendar-clock"
+        self._attr_device_info = _device_info(entry)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(self.plan_store.add_listener(self.async_write_ha_state))
+
+    @property
+    def native_value(self) -> datetime | None:
+        value = self.plan_store.get_value(self.slot, "start_time")
+        if not value:
+            return None
+        from homeassistant.util import dt as dt_util
+        parsed = dt_util.parse_datetime(str(value))
+        if parsed is None:
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
+        return parsed
+
+    async def async_set_value(self, value: datetime) -> None:
+        if value.tzinfo is None:
+            raise ValueError("DOEMS plan start time must be timezone-aware")
+        await self.plan_store.async_set_value(self.slot, "start_time", value)
