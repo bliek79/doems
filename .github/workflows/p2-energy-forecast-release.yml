@@ -264,12 +264,12 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/icon.png'
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
-      - name: Publish Alpha7.25 G6 Step 5A release
+      - name: Publish Alpha7.25 G6 Step 5C release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view 0.1.0-alpha.7.25 >/dev/null 2>&1; then
             gh release edit 0.1.0-alpha.7.25 --title "DOEMS 0.1.0-alpha.7.25 - G6 Step 5C Disarmed Authority Transfer Foundation" --notes-file RELEASE_NOTES_0.1.0-alpha.7.25.md --prerelease
           else
-            gh release create 0.1.0-alpha.7.25 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.25 - G6 Step 5C Disarmed Authority Transfer Foundation" --notes-file RELEASE_NOTES_0.1.0-alpha.7.25.md
+            gh release create 0.1.0-alpha.7.25 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.25 - G6 Step 5C Disarmed Authority Transfer Foundation" --notes-file RELEASE_NOTES_0.1.0-alpha.7.25.md --prerelease
           fi
