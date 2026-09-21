@@ -142,16 +142,145 @@ class DOEMSEMSShadowRuntime:
             value *= 1000.0
         return value
 
-    def _observation_snapshot(self) -> dict[str, Any]:
-        control_path_configured = all(
-            bool(self.entry.options.get(key))
-            for key in (
-                CONF_OPERATING_MODE_ENTITY,
-                CONF_ACTION_DIRECTION_ENTITY,
-                CONF_POWER_SETPOINT_ENTITY,
+    def _observation_source_status(
+        self,
+        key: str,
+        *,
+        kind: str,
+    ) -> dict[str, Any]:
+        """Return one compact read-only observation-source diagnostic."""
+        entity_id = self.entry.options.get(key)
+        if not entity_id:
+            return {
+                "entity_id": None,
+                "configured": False,
+                "available": False,
+                "valid": False,
+                "status": "not_configured",
+                "value": None,
+            }
+        entity_id = str(entity_id)
+        state = self.hass.states.get(entity_id)
+        if state is None:
+            return {
+                "entity_id": entity_id,
+                "configured": True,
+                "available": False,
+                "valid": False,
+                "status": "entity_missing",
+                "value": None,
+            }
+        if state.state in {"unknown", "unavailable", "none", "None", ""}:
+            return {
+                "entity_id": entity_id,
+                "configured": True,
+                "available": False,
+                "valid": False,
+                "status": "unavailable",
+                "value": None,
+            }
+
+        if kind == "power":
+            value = normalize_power_w(
+                state.state,
+                state.attributes.get("unit_of_measurement"),
+                allow_negative=False,
             )
-        )
+        elif kind == "number":
+            try:
+                value = float(state.state)
+            except (TypeError, ValueError):
+                value = None
+            if value is not None and state.attributes.get("unit_of_measurement") == "kW":
+                value *= 1000.0
+        else:
+            value = str(state.state)
+
+        valid = value is not None
         return {
+            "entity_id": entity_id,
+            "configured": True,
+            "available": True,
+            "valid": valid,
+            "status": "ok" if valid else "invalid_value",
+            "value": value,
+        }
+
+    def _observation_contract(self) -> dict[str, Any]:
+        """Build the central Step 5A observation-completeness contract."""
+        sources = {
+            "device_status": self._observation_source_status(
+                CONF_DEVICE_STATUS_ENTITY, kind="state"
+            ),
+            "charge_power": self._observation_source_status(
+                CONF_CHARGE_POWER_ENTITY, kind="power"
+            ),
+            "discharge_power": self._observation_source_status(
+                CONF_DISCHARGE_POWER_ENTITY, kind="power"
+            ),
+            "operating_mode": self._observation_source_status(
+                CONF_OPERATING_MODE_ENTITY, kind="state"
+            ),
+            "action_direction": self._observation_source_status(
+                CONF_ACTION_DIRECTION_ENTITY, kind="state"
+            ),
+            "power_setpoint": self._observation_source_status(
+                CONF_POWER_SETPOINT_ENTITY, kind="number"
+            ),
+        }
+
+        configured = [name for name, item in sources.items() if item["configured"]]
+        valid = [name for name, item in sources.items() if item["valid"]]
+        missing = [name for name, item in sources.items() if not item["configured"]]
+        unavailable = [
+            name
+            for name, item in sources.items()
+            if item["configured"] and not item["available"]
+        ]
+        invalid = [
+            name
+            for name, item in sources.items()
+            if item["available"] and not item["valid"]
+        ]
+
+        mode = sources["operating_mode"]
+        direction = sources["action_direction"]
+        setpoint = sources["power_setpoint"]
+
+        pre_mode_ready = bool(mode["valid"])
+        post_mode_required = mode.get("value") == "third_party_control"
+        post_mode_ready = bool(direction["valid"] and setpoint["valid"])
+        control_path_configured = bool(
+            mode["configured"] and direction["configured"] and setpoint["configured"]
+        )
+
+        if len(valid) == len(sources):
+            status = "ready"
+        elif not configured:
+            status = "not_configured"
+        else:
+            status = "partial"
+
+        return {
+            "observation_contract_status": status,
+            "observation_expected_source_count": len(sources),
+            "observation_configured_source_count": len(configured),
+            "observation_valid_source_count": len(valid),
+            "observation_missing_sources": missing,
+            "observation_unavailable_sources": unavailable,
+            "observation_invalid_sources": invalid,
+            "observation_sources": sources,
+            "control_path_configured": control_path_configured,
+            "control_path_pre_mode_ready": pre_mode_ready,
+            "control_path_post_mode_required": post_mode_required,
+            "control_path_post_mode_ready": post_mode_ready,
+        }
+
+    def _observation_snapshot(self) -> dict[str, Any]:
+        contract = self._observation_contract()
+        control_path_configured = contract["control_path_configured"]
+        return {
+            **contract,
             "device_status": self._state_value(CONF_DEVICE_STATUS_ENTITY),
             "charge_power_w": self._power_value(CONF_CHARGE_POWER_ENTITY),
             "discharge_power_w": self._power_value(CONF_DISCHARGE_POWER_ENTITY),
@@ -574,7 +703,23 @@ class DOEMSEMSShadowRuntime:
             "shadow_legacy_safety_status": downstream.get("safety_status"),
             "shadow_action_controller_status": downstream.get("controller_status"),
             "shadow_action_controller_ready": downstream.get("controller_ready"),
+            "shadow_observation_contract_status": downstream.get("observation_contract_status"),
+            "shadow_observation_expected_source_count": downstream.get("observation_expected_source_count"),
+            "shadow_observation_configured_source_count": downstream.get("observation_configured_source_count"),
+            "shadow_observation_valid_source_count": downstream.get("observation_valid_source_count"),
+            "shadow_observation_missing_sources": downstream.get("observation_missing_sources", []),
+            "shadow_observation_unavailable_sources": downstream.get("observation_unavailable_sources", []),
+            "shadow_observation_invalid_sources": downstream.get("observation_invalid_sources", []),
+            "shadow_observation_device_status": (downstream.get("observation_sources") or {}).get("device_status"),
+            "shadow_observation_charge_power": (downstream.get("observation_sources") or {}).get("charge_power"),
+            "shadow_observation_discharge_power": (downstream.get("observation_sources") or {}).get("discharge_power"),
+            "shadow_observation_operating_mode": (downstream.get("observation_sources") or {}).get("operating_mode"),
+            "shadow_observation_action_direction": (downstream.get("observation_sources") or {}).get("action_direction"),
+            "shadow_observation_power_setpoint": (downstream.get("observation_sources") or {}).get("power_setpoint"),
             "shadow_control_path_configured": downstream.get("control_path_configured"),
+            "shadow_control_path_pre_mode_ready": downstream.get("control_path_pre_mode_ready"),
+            "shadow_control_path_post_mode_required": downstream.get("control_path_post_mode_required"),
+            "shadow_control_path_post_mode_ready": downstream.get("control_path_post_mode_ready"),
             "shadow_operating_mode": downstream.get("operating_mode"),
             "shadow_charge_power_w": downstream.get("charge_power_w"),
             "shadow_discharge_power_w": downstream.get("discharge_power_w"),
