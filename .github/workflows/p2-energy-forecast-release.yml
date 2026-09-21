@@ -1,4 +1,4 @@
-name: DOEMS CI and Alpha7.25 G6 Step 5C Disarmed Authority Transfer Foundation Release
+name: DOEMS CI and Alpha8 EMS Plans Foundation Release
 
 on:
   pull_request:
@@ -29,9 +29,9 @@ jobs:
               json.loads(path.read_text(encoding='utf-8'))
               print(f'valid: {path}')
           PY
-      - name: Validate Alpha7.25 release contract
+      - name: Validate Alpha8 release contract
         run: |
-          test -f RELEASE_NOTES_0.1.0-alpha.7.25.md
+          test -f RELEASE_NOTES_0.1.0-alpha.8.md
           test -f examples/prices_p4_forecast_card.yaml
           test -f custom_components/doems/prices.py
           test -f custom_components/doems/prices_model.py
@@ -41,92 +41,9 @@ jobs:
           test ! -f scripts/build_brand_assets.py
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
-          grep -F 'VERSION = "0.1.0-alpha.7.25"' custom_components/doems/const.py
-          grep -F '"version": "0.1.0-alpha.7.25"' custom_components/doems/manifest.json
+          grep -F 'VERSION = "0.1.0-alpha.8"' custom_components/doems/const.py
+          grep -F '"version": "0.1.0-alpha.8"' custom_components/doems/manifest.json
           grep -F 'CONF_EMS_ENABLED = "ems_enabled"' custom_components/doems/const.py
-          grep -F 'CONF_SOC_ENTITY = "soc_entity"' custom_components/doems/const.py
-          grep -F '_optional_entity(CONF_SOC_ENTITY' custom_components/doems/config_flow.py
-          grep -F 'class DOEMSEMSShadowRuntime' custom_components/doems/ems_shadow_runtime.py
-          grep -F 'waiting_for_soc_source' custom_components/doems/ems_shadow_runtime.py
-          grep -F 'waiting_for_valid_soc' custom_components/doems/ems_shadow_runtime.py
-          grep -F 'waiting_for_complete_forecast' custom_components/doems/ems_shadow_runtime.py
-          grep -F '"invalid_slot_count": len(invalid_slots)' custom_components/doems/ems_input_contract.py
-          grep -F '"missing_inputs": missing_inputs' custom_components/doems/ems_input_contract.py
-          grep -F '"invalid_slots": input_result.get("invalid_slots", [])' custom_components/doems/ems_shadow_runtime.py
-          grep -F 'self.shadow.async_add_listener(self._handle_shadow_update)' custom_components/doems/sensor.py
-          grep -F 'def price_window(' custom_components/doems/prices.py
-          grep -F 'self._price_buffer_by_start.get(expected_start)' custom_components/doems/prices.py
-          grep -F 'prices.price_window(window_start=window_start, slot_count=288)' custom_components/doems/ems_live_input.py
-          ! grep -F 'prices.timeline_slots' custom_components/doems/ems_live_input.py
-          grep -F 'run_shadow_chain(' custom_components/doems/ems_shadow_runtime.py
-          grep -F 'doems_ems_shadow' custom_components/doems/sensor.py
-          grep -F 'shadow_plans' custom_components/doems/ems_alpha76/plan_store.py
-          grep -F 'build_planner_action_bridge' custom_components/doems/ems_shadow_runtime.py
-          grep -F 'async_sync_automatic_plans' custom_components/doems/ems_shadow_runtime.py
-          grep -F 'async_handoff_automatic_plans' custom_components/doems/ems_shadow_runtime.py
-          test -f custom_components/doems/ems_alpha76/prestart_validator.py
-          test -f custom_components/doems/ems_alpha76/safety_guard.py
-          test -f custom_components/doems/ems_alpha76/action_controller.py
-          test -f custom_components/doems/ems_alpha76/execution_shadow.py
-          grep -F 'work.update(self.prestart.evaluate(work))' custom_components/doems/ems_shadow_runtime.py
-          grep -F 'work.update(self.safety_guard.evaluate_automatic_handoff(work))' custom_components/doems/ems_shadow_runtime.py
-          grep -F 'work.update(self.execution_gates.evaluate_automatic_handoff(work))' custom_components/doems/ems_shadow_runtime.py
-          grep -F 'work.update(self.execution_gates.evaluate_final_revalidation(work))' custom_components/doems/ems_shadow_runtime.py
-          grep -F 'work.update(self.execution_gates.evaluate_mode_switch_transaction(work))' custom_components/doems/ems_shadow_runtime.py
-          grep -F '"automatic_execution_armed": False' custom_components/doems/ems_shadow_runtime.py
-          grep -F '"mode_switch_service_calls_available": False' custom_components/doems/ems_shadow_runtime.py
-          grep -F 'def _observation_contract(' custom_components/doems/ems_shadow_runtime.py
-          grep -F '"shadow_observation_contract_status"' custom_components/doems/ems_shadow_runtime.py
-          grep -F '"shadow_observation_missing_sources"' custom_components/doems/ems_shadow_runtime.py
-          grep -F '"shadow_control_path_pre_mode_ready"' custom_components/doems/ems_shadow_runtime.py
-          grep -F '"shadow_control_path_post_mode_required"' custom_components/doems/ems_shadow_runtime.py
-          grep -F '"shadow_control_path_post_mode_ready"' custom_components/doems/ems_shadow_runtime.py
-          test -f custom_components/doems/ems_alpha76/automatic_execution_shadow.py
-          grep -F 'def pending_quarter_roll_continuity(' custom_components/doems/ems_alpha76/planner_action_bridge.py
-          grep -F 'shift_seconds <= 15 * 60' custom_components/doems/ems_alpha76/planner_action_bridge.py
-          grep -F '"quarter_roll_identity_continuity"' custom_components/doems/ems_alpha76/planner_action_bridge.py
-          test -f tests/test_step5a_quarter_roll_identity_continuity.py
-          test -f custom_components/doems/ems_step5b.py
-          test -f tests/test_step5b_execution_authority_preparation.py
-          test -f custom_components/doems/ems_step5c.py
-          test -f tests/test_step5c_authority_transfer_foundation.py
-          grep -F 'def build_step5c_disarmed_foundation(' custom_components/doems/ems_step5c.py
-          grep -F '"step5c_live_transfer_enabled": False' custom_components/doems/ems_step5c.py
-          grep -F '"step5c_arm_available": False' custom_components/doems/ems_step5c.py
-          grep -F '"step5c_service_calls_performed": False' custom_components/doems/ems_step5c.py
-          grep -F '"physical_execution_authority": False' custom_components/doems/ems_step5c.py
-          ! grep -F '.services.async_call(' custom_components/doems/ems_step5c.py
-          grep -F 'build_step5c_disarmed_foundation(' custom_components/doems/ems_shadow_runtime.py
-          grep -F '"authority_owner"' custom_components/doems/ems_shadow_runtime.py
-          grep -F '"legacy_write_fence"' custom_components/doems/ems_shadow_runtime.py
-          grep -F '"doems_write_fence"' custom_components/doems/ems_shadow_runtime.py
-          grep -F 'class ExecutionEnvelope' custom_components/doems/ems_step5b.py
-          grep -F 'def build_execution_envelope(' custom_components/doems/ems_step5b.py
-          grep -F 'def build_step5b_rehearsal(' custom_components/doems/ems_step5b.py
-          grep -F '"prepared_disarmed"' custom_components/doems/ems_step5b.py
-          grep -F '"aborted_disarmed"' custom_components/doems/ems_step5b.py
-          grep -F '"step5b_authority_fence": False' custom_components/doems/ems_step5b.py
-          grep -F '"step5b_service_calls_performed": False' custom_components/doems/ems_step5b.py
-          grep -F '"automatic_execution_armed": False' custom_components/doems/ems_step5b.py
-          grep -F '"physical_execution_authority": False' custom_components/doems/ems_step5b.py
-          ! grep -F '.services.async_call(' custom_components/doems/ems_step5b.py
-          ! grep -F 'async def async_run_' custom_components/doems/ems_step5b.py
-          ! grep -F 'async def async_execute_' custom_components/doems/ems_step5b.py
-          grep -F 'build_step5b_rehearsal(' custom_components/doems/ems_shadow_runtime.py
-          grep -F '"step5b_status"' custom_components/doems/ems_shadow_runtime.py
-          grep -F '"step5b_authority_fence": False' custom_components/doems/ems_shadow_runtime.py
-          grep -F 'required_stable_seconds = 60.0' custom_components/doems/ems_shadow_runtime.py
-          grep -F 'build_automatic_execution_shadow(' custom_components/doems/ems_shadow_runtime.py
-          grep -F '"shadow_auto_execution_status"' custom_components/doems/ems_shadow_runtime.py
-          grep -F '"shadow_auto_execution_technical_ready"' custom_components/doems/ems_shadow_runtime.py
-          grep -F '"shadow_auto_execution_blockers"' custom_components/doems/ems_shadow_runtime.py
-          grep -F '"auto_shadow_armed": armed' custom_components/doems/ems_alpha76/automatic_execution_shadow.py
-          grep -F 'armed = bool(armed) and False' custom_components/doems/ems_alpha76/automatic_execution_shadow.py
-          grep -F 'execution_permitted = False' custom_components/doems/ems_alpha76/automatic_execution_shadow.py
-          ! grep -F '.services.async_call(' custom_components/doems/ems_alpha76/automatic_execution_shadow.py
-          ! grep -F 'async def async_run_' custom_components/doems/ems_alpha76/automatic_execution_shadow.py
-          ! grep -R -F '.services.async_call(' custom_components/doems/ems_alpha76/prestart_validator.py custom_components/doems/ems_alpha76/safety_guard.py custom_components/doems/ems_alpha76/action_controller.py custom_components/doems/ems_alpha76/execution_shadow.py custom_components/doems/ems_shadow_runtime.py
-          ! grep -F 'async def async_run_' custom_components/doems/ems_alpha76/execution_shadow.py
           grep -F 'CONF_BATTERY_CAPACITY_KWH = "battery_capacity_kwh"' custom_components/doems/const.py
           grep -F 'CONF_TECHNICAL_MIN_SOC_PERCENT = "technical_min_soc_percent"' custom_components/doems/const.py
           grep -F 'CONF_MAX_SOC_PERCENT = "max_soc_percent"' custom_components/doems/const.py
@@ -138,26 +55,40 @@ jobs:
           grep -F 'CONF_MINIMUM_TRADE_MARGIN_EUR_PER_KWH = "minimum_trade_margin_eur_per_kwh"' custom_components/doems/const.py
           grep -F 'CONF_STARTUP_DELAY_SECONDS = "startup_delay_seconds"' custom_components/doems/const.py
           test -f custom_components/doems/ems_settings.py
-          test -f custom_components/doems/ems_soc.py
-          test -f custom_components/doems/ems_shadow_runtime.py
-          test -f custom_components/doems/ems_alpha76/planner_action_bridge.py
-          test -f custom_components/doems/ems_alpha76/plan_store.py
-          test -f custom_components/doems/ems_alpha76/scheduler.py
-          test -f custom_components/doems/ems_alpha76/prestart_validator.py
-          test -f custom_components/doems/ems_alpha76/safety_guard.py
-          test -f custom_components/doems/ems_alpha76/action_controller.py
-          test -f custom_components/doems/ems_alpha76/execution_shadow.py
           test -f custom_components/doems/ems_input_contract.py
           test -f custom_components/doems/ems_live_input.py
           test -f custom_components/doems/ems_alpha76_adapter.py
+          test -f custom_components/doems/ems_runtime.py
+          test -f custom_components/doems/ems_plan_store.py
+          test -f custom_components/doems/ems_scheduler.py
+          test -f custom_components/doems/ems_planner_bridge.py
+          test -f custom_components/doems/ems_soc.py
+          test -f custom_components/doems/number.py
+          test -f tests/test_alpha8_ems_plans_foundation.py
+          grep -F 'PLAN_SLOT_COUNT = 3' custom_components/doems/const.py
+          grep -F 'class DOEMSPlanStore' custom_components/doems/ems_plan_store.py
+          grep -F 'f"{DOMAIN}.{entry_id}.plans"' custom_components/doems/ems_plan_store.py
+          grep -F 'class DOEMSScheduler' custom_components/doems/ems_scheduler.py
+          grep -F 'class DOEMSEMSRuntime' custom_components/doems/ems_runtime.py
+          grep -F 'run_ems_chain' custom_components/doems/ems_alpha76_adapter.py
+          grep -F 'doems_plan_{slot}_action' custom_components/doems/select.py
+          grep -F 'doems_plan_{slot}_power' custom_components/doems/number.py
+          grep -F 'doems_plan_{slot}_start_time' custom_components/doems/datetime.py
+          grep -F 'doems_plan_{slot}_status' custom_components/doems/sensor.py
+          grep -F 'doems_scheduler' custom_components/doems/sensor.py
+          grep -F 'doems_ems' custom_components/doems/sensor.py
+          test ! -f custom_components/doems/ems_shadow_runtime.py
+          test ! -f custom_components/doems/ems_step5c.py
+          ! grep -R -F 'legacy_authority_entity' custom_components/doems
+          ! grep -R -F 'legacy_automatic_execution_entity' custom_components/doems
           test -f custom_components/doems/ems_alpha76/energy_need.py
           test -f custom_components/doems/ems_alpha76/planner_preview.py
           test -f custom_components/doems/ems_alpha76/planner_72h.py
           grep -F 'alpha41_rolling_quarter_start_no_clock_hour_rounding' custom_components/doems/ems_input_contract.py
           grep -F 'existing_doems_forecast' custom_components/doems/ems_live_input.py
-          grep -F 'planner_runtime_active": False' custom_components/doems/ems_alpha76_adapter.py
-          grep -F 'plan_store_write": False' custom_components/doems/ems_alpha76_adapter.py
-          grep -F 'scheduler_invoked": False' custom_components/doems/ems_alpha76_adapter.py
+          grep -F 'planner_runtime_active": True' custom_components/doems/ems_alpha76_adapter.py
+          grep -F 'plan_store_write": True' custom_components/doems/ems_alpha76_adapter.py
+          grep -F 'scheduler_invoked": True' custom_components/doems/ems_alpha76_adapter.py
           grep -F 'service_calls_performed": False' custom_components/doems/ems_alpha76_adapter.py
           grep -F 'physical_execution_authority": False' custom_components/doems/ems_alpha76_adapter.py
           grep -F 'class EMSSettings' custom_components/doems/ems_settings.py
@@ -166,13 +97,13 @@ jobs:
           grep -F '"settings_source": "config_entry_options"' custom_components/doems/sensor.py
           grep -F '"settings_snapshot_immutable": True' custom_components/doems/sensor.py
           grep -F '"startup_delay_runtime_gate_active": False' custom_components/doems/sensor.py
-          grep -F '"planner_logic_active": self.shadow is not None' custom_components/doems/sensor.py
+          grep -F '"planner_logic_active": self.runtime is not None' custom_components/doems/sensor.py
           grep -F '"physical_execution_authority": False' custom_components/doems/sensor.py
           grep -F 'CONF_AWAY_SCHEDULE_ENABLED = "away_schedule_enabled"' custom_components/doems/const.py
           grep -F 'CONF_AWAY_START = "away_start"' custom_components/doems/const.py
           grep -F 'CONF_AWAY_END = "away_end"' custom_components/doems/const.py
           grep -F 'PRESENCE_STORAGE_KEY = f"{DOMAIN}.presence"' custom_components/doems/const.py
-          grep -F 'PLATFORMS = ["sensor", "select", "binary_sensor", "switch", "datetime"]' custom_components/doems/const.py
+          grep -F 'PLATFORMS = ["sensor", "select", "number", "binary_sensor", "switch", "datetime"]' custom_components/doems/const.py
           test -f custom_components/doems/presence.py
           test -f custom_components/doems/switch.py
           test -f custom_components/doems/datetime.py
@@ -222,7 +153,7 @@ jobs:
           ! grep -R -F 'doems_capture_alpha41_solar_freeze' custom_components/doems
           ! grep -R -F 'doems_alpha41_solar_freeze_captured' custom_components/doems
 
-  publish-alpha7-25:
+  publish-alpha8:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
@@ -232,23 +163,20 @@ jobs:
           fetch-depth: 0
       - name: Build release archive
         run: |
-          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.7.25.md
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.8.md
           sha256sum doems.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - name: Verify EMS settings, Presence and Prices runtime are packaged
         run: |
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_settings.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_soc.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_shadow_runtime.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_alpha76/planner_action_bridge.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_alpha76/plan_store.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_alpha76/scheduler.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_alpha76/automatic_execution_shadow.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_step5b.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_step5c.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_input_contract.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_live_input.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_alpha76_adapter.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_runtime.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_plan_store.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_scheduler.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_planner_bridge.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/number.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_alpha76/planner_72h.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/presence.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/switch.py'
@@ -264,12 +192,12 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/icon.png'
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
-      - name: Publish Alpha7.25 G6 Step 5C release
+      - name: Publish Alpha8 EMS Plans Foundation release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view 0.1.0-alpha.7.25 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.7.25 --title "DOEMS 0.1.0-alpha.7.25 - G6 Step 5C Disarmed Authority Transfer Foundation" --notes-file RELEASE_NOTES_0.1.0-alpha.7.25.md --prerelease
+          if gh release view 0.1.0-alpha.8 >/dev/null 2>&1; then
+            gh release edit 0.1.0-alpha.8 --title "DOEMS 0.1.0-alpha.8 - EMS Plans Foundation" --notes-file RELEASE_NOTES_0.1.0-alpha.8.md --prerelease
           else
-            gh release create 0.1.0-alpha.7.25 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.25 - G6 Step 5C Disarmed Authority Transfer Foundation" --notes-file RELEASE_NOTES_0.1.0-alpha.7.25.md --prerelease
+            gh release create 0.1.0-alpha.8 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.8 - EMS Plans Foundation" --notes-file RELEASE_NOTES_0.1.0-alpha.8.md --prerelease
           fi
