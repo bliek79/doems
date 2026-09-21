@@ -511,6 +511,45 @@ class DOEMSPricesManager:
         current = self._normalized_points_by_start.get(floor_quarter(now))
         self.current_source = current.kind if current is not None and current.kind.startswith("known_") else "missing"
 
+    def price_window(
+        self,
+        *,
+        window_start: datetime,
+        slot_count: int = FORECAST_SLOTS,
+    ) -> list[dict[str, Any]]:
+        """Return an exact rolling price window from the retained 76-hour buffer.
+
+        Consumers such as EMS provide their own quarter-aligned window start.
+        Missing buffer points remain explicit missing slots; they are never
+        shifted, padded or substituted.
+        """
+        start = utc(window_start)
+        if start != floor_quarter(start):
+            raise ValueError("price window start must be quarter-aligned")
+        if slot_count < 1 or slot_count > PRICE_BUFFER_SLOT_COUNT:
+            raise ValueError(
+                f"slot_count must be between 1 and {PRICE_BUFFER_SLOT_COUNT}"
+            )
+
+        result: list[dict[str, Any]] = []
+        for expected_start in expected_quarter_starts(start, slot_count):
+            point = self._price_buffer_by_start.get(expected_start)
+            if point is None:
+                result.append(
+                    {
+                        "time": expected_start.isoformat(),
+                        "market_ex_vat": None,
+                        "market_incl_vat": None,
+                        "import_all_in": None,
+                        "export_all_in": None,
+                        "kind": "missing",
+                        "source_resolution_minutes": None,
+                    }
+                )
+            else:
+                result.append(point.as_dict())
+        return result
+
     def _compose_point(self, start: datetime, market_ex_vat: float, kind: str, source_resolution: int) -> PricePoint:
         return compose_point(
             start,
