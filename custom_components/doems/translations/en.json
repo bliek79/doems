@@ -127,7 +127,9 @@
           "discharge_efficiency_percent": "Discharge efficiency",
           "minimum_trade_margin_eur_per_kwh": "Minimum trade margin",
           "startup_delay_seconds": "Startup delay",
-          "soc_entity": "Battery SOC sensor (read-only)"
+          "soc_entity": "Battery SOC sensor (read-only)",
+          "legacy_automatic_execution_entity": "Legacy Automatic Execution switch (read-only)",
+          "legacy_authority_entity": "Legacy authority diagnostics sensor (read-only)"
         }
       },
       "prices_gas": {
