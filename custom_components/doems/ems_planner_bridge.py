@@ -6,7 +6,7 @@ from typing import Any
 
 from homeassistant.util import dt as dt_util
 
-from .const import (
+from .ems_alpha76.const import (
     DEFAULT_BATTERY_CAPACITY_KWH,
     DEFAULT_CHARGE_EFFICIENCY_PERCENT,
     DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
@@ -132,6 +132,8 @@ def _build_candidate(
     battery_capacity_kwh: float,
     charge_efficiency_percent: float,
     discharge_efficiency_percent: float,
+    technical_min_soc_percent: float,
+    max_soc_percent: float,
 ) -> dict[str, Any]:
     first = segment[0]
     last = segment[-1]
@@ -167,9 +169,9 @@ def _build_candidate(
     if projected_start_soc is None:
         target_soc = None
     elif action == "laden":
-        target_soc = min(100.0, projected_start_soc + (energy_kwh * charge_eff / capacity * 100.0))
+        target_soc = min(float(max_soc_percent), projected_start_soc + (energy_kwh * charge_eff / capacity * 100.0))
     else:
-        target_soc = max(5.0, projected_start_soc - (energy_kwh / discharge_eff / capacity * 100.0))
+        target_soc = max(float(technical_min_soc_percent), projected_start_soc - (energy_kwh / discharge_eff / capacity * 100.0))
 
     valid = True
     reasons: list[str] = []
@@ -182,7 +184,7 @@ def _build_candidate(
     if average_power_w > max_power_w + 1:
         valid = False
         reasons.append("required_power_above_limit")
-    if target_soc is None or not 5 <= target_soc <= 100:
+    if target_soc is None or not float(technical_min_soc_percent) <= target_soc <= float(max_soc_percent):
         valid = False
         reasons.append("invalid_target_soc")
 
@@ -288,6 +290,8 @@ def build_planner_action_bridge(
     battery_capacity_kwh = float(data.get("battery_capacity_kwh") or DEFAULT_BATTERY_CAPACITY_KWH)
     charge_efficiency_percent = float(data.get("charge_efficiency_percent") or DEFAULT_CHARGE_EFFICIENCY_PERCENT)
     discharge_efficiency_percent = float(data.get("discharge_efficiency_percent") or DEFAULT_DISCHARGE_EFFICIENCY_PERCENT)
+    technical_min_soc_percent = float(data.get("technical_min_soc_percent", 5))
+    max_soc_percent = float(data.get("max_soc_percent", 100))
 
     base = {
         "auto_bridge_observational_only": False,
@@ -368,6 +372,8 @@ def build_planner_action_bridge(
             battery_capacity_kwh,
             charge_efficiency_percent,
             discharge_efficiency_percent,
+            technical_min_soc_percent,
+            max_soc_percent,
         )
         for segment in segments
     ]

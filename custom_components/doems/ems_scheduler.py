@@ -7,7 +7,7 @@ from typing import Any
 from homeassistant.util import dt as dt_util
 
 from .const import PLAN_SLOT_COUNT
-from .plan_store import DOEMSShadowPlanStore
+from .ems_plan_store import DOEMSPlanStore
 
 
 @dataclass(frozen=True)
@@ -19,10 +19,10 @@ class SchedulerCandidate:
     ready_since: datetime
 
 
-class DOEMSShadowScheduler:
+class DOEMSScheduler:
     """Evaluate persistent plan slots without executing physical actions."""
 
-    def __init__(self, plan_store: DOEMSShadowPlanStore) -> None:
+    def __init__(self, plan_store: DOEMSPlanStore) -> None:
         self.plan_store = plan_store
 
     @staticmethod
@@ -37,7 +37,13 @@ class DOEMSShadowScheduler:
         return parsed
 
     @staticmethod
-    def _base_valid(plan: dict[str, Any], max_charge_power_w: int, max_discharge_power_w: int) -> bool:
+    def _base_valid(
+        plan: dict[str, Any],
+        max_charge_power_w: int,
+        max_discharge_power_w: int,
+        technical_min_soc_percent: float,
+        max_soc_percent: float,
+    ) -> bool:
         action = plan.get("action")
         execution_mode = plan.get("execution_mode")
         power = plan.get("power_w")
@@ -54,7 +60,7 @@ class DOEMSShadowScheduler:
         max_power_w = max_charge_power_w if action == "laden" else max_discharge_power_w
         if not isinstance(power, (int, float)) or not 100 <= float(power) <= max_power_w:
             return False
-        if not isinstance(target_soc, (int, float)) or not 5 <= float(target_soc) <= 100:
+        if not isinstance(target_soc, (int, float)) or not float(technical_min_soc_percent) <= float(target_soc) <= float(max_soc_percent):
             return False
         if not isinstance(runtime, (int, float)) or not 0.25 <= float(runtime) <= 12:
             return False
@@ -62,7 +68,15 @@ class DOEMSShadowScheduler:
             return False
         return True
 
-    def evaluate(self, max_charge_power_w: int = 3500, max_discharge_power_w: int = 3500, now: datetime | None = None) -> dict[str, Any]:
+    def evaluate(
+        self,
+        max_charge_power_w: int = 3500,
+        max_discharge_power_w: int = 3500,
+        now: datetime | None = None,
+        *,
+        technical_min_soc_percent: float = 5,
+        max_soc_percent: float = 100,
+    ) -> dict[str, Any]:
         """Return deterministic scheduler state for all three slots.
 
         The Scheduler determines which plan is allowed to start and exposes the
@@ -117,9 +131,15 @@ class DOEMSShadowScheduler:
                 detail["status"] = lifecycle_status
             elif action == "geen":
                 detail["status"] = "leeg"
-            elif lifecycle_status == "concept":
+            elif lifecycle_status == "concept" and str(plan.get("origin") or "manual") == "automatic_72h_planner":
                 detail["status"] = "concept"
-            elif not self._base_valid(plan, max_charge_power_w, max_discharge_power_w):
+            elif not self._base_valid(
+                plan,
+                max_charge_power_w,
+                max_discharge_power_w,
+                technical_min_soc_percent,
+                max_soc_percent,
+            ):
                 detail["status"] = "ongeldig"
             elif execution_mode == "direct":
                 detail["status"] = "kandidaat"
@@ -211,6 +231,6 @@ class DOEMSShadowScheduler:
         }
 
     def slot_status(self, slot: int, now: datetime | None = None) -> str:
-        snapshot = self.evaluate(now)
+        snapshot = self.evaluate(now=now)
         detail = snapshot["scheduler_slots"].get(slot, {})
         return str(detail.get("status", "ongeldig"))

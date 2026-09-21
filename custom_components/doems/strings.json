@@ -126,9 +126,7 @@
           "charge_efficiency_percent": "Charge efficiency",
           "discharge_efficiency_percent": "Discharge efficiency",
           "minimum_trade_margin_eur_per_kwh": "Minimum trade margin",
-          "startup_delay_seconds": "Startup delay",
-          "legacy_automatic_execution_entity": "Legacy Automatic Execution switch (read-only)",
-          "legacy_authority_entity": "Legacy authority diagnostics sensor (read-only)"
+          "startup_delay_seconds": "Startup delay"
         }
       },
       "prices_gas": {

@@ -46,8 +46,8 @@ DEFAULT_PLAN: dict[str, Any] = {
 }
 
 
-class DOEMSShadowPlanStore:
-    """Persistent shadow storage for the three independent EMS plan slots."""
+class DOEMSPlanStore:
+    """Persistent storage for the three independent DOEMS EMS plan slots."""
 
     def __init__(self, hass: HomeAssistant, entry_id: str) -> None:
         self.hass = hass
@@ -55,7 +55,7 @@ class DOEMSShadowPlanStore:
         self._store: Store[dict[str, Any]] = Store(
             hass,
             STORAGE_VERSION,
-            f"{DOMAIN}.{entry_id}.shadow_plans",
+            f"{DOMAIN}.{entry_id}.plans",
         )
         self._plans: dict[int, dict[str, Any]] = {
             slot: deepcopy(DEFAULT_PLAN) for slot in range(1, PLAN_SLOT_COUNT + 1)

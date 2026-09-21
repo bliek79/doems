@@ -127,11 +127,20 @@
         }
       },
       "ems": {
-        "title": "EMS",
-        "description": "",
+        "title": "EMS batterij-instellingen",
+        "description": "Configureer de statische EMS-instellingen en kies optioneel een alleen-lezen SOC-bron voor de zelfstandige DOEMS-planning. Afwezigheid en profielsturing lopen via Home Assistant-entiteiten.",
         "data": {
-          "legacy_automatic_execution_entity": "Legacy Automatic Execution-schakelaar (alleen lezen)",
-          "legacy_authority_entity": "Legacy authority-diagnosesensor (alleen lezen)"
+          "battery_capacity_kwh": "Batterijcapaciteit",
+          "technical_min_soc_percent": "Technische minimum-SOC",
+          "max_soc_percent": "Maximum-SOC",
+          "max_charge_power_w": "Maximaal laadvermogen",
+          "max_discharge_power_w": "Maximaal ontlaadvermogen",
+          "software_reserve_percent": "Software-reserve",
+          "charge_efficiency_percent": "Laadrendement",
+          "discharge_efficiency_percent": "Ontlaadrendement",
+          "minimum_trade_margin_eur_per_kwh": "Minimale handelsmarge",
+          "startup_delay_seconds": "Opstartvertraging",
+          "soc_entity": "Batterij-SOC sensor (alleen lezen)"
         }
       }
     },
@@ -144,7 +153,14 @@
       "duplicate_actual_source": "Deze actual-bron is al aan een andere array gekoppeld.",
       "total_actual_reused_as_array": "Bij meerdere arrays mag de totaal-actual niet tegelijk aan één array worden gekoppeld.",
       "energyzero_config_entry_required": "Kies een geldige EnergyZero-configuratie voor de EnergyZero-marktactie.",
-      "unsupported_gas_price_unit": "De generieke gasmarktsensor moet EUR/m3 (of €/m³) gebruiken."
+      "unsupported_gas_price_unit": "De generieke gasmarktsensor moet EUR/m3 (of €/m³) gebruiken.",
+      "ems_invalid_number": "Voer een geldig getal in.",
+      "ems_below_minimum": "De waarde ligt onder het toegestane minimum.",
+      "ems_above_maximum": "De waarde ligt boven het toegestane maximum.",
+      "ems_invalid_step": "De waarde past niet bij de toegestane stapgrootte.",
+      "ems_soc_range_invalid": "Maximum-SOC moet hoger zijn dan de technische minimum-SOC.",
+      "unsupported_soc_unit": "De SOC-sensor moet % als eenheid gebruiken.",
+      "invalid_soc_value": "De SOC-sensor moet een numerieke waarde van 0 tot 100 leveren."
     },
     "abort": {
       "solar_foundation_invalid": "De Solar Foundation-topologie is niet door de structurele validatie gekomen."
