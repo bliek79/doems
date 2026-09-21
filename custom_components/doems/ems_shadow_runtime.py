@@ -24,6 +24,8 @@ from .const import (
     CONF_OPERATING_MODE_ENTITY,
     CONF_ACTION_DIRECTION_ENTITY,
     CONF_POWER_SETPOINT_ENTITY,
+    CONF_LEGACY_AUTOMATIC_EXECUTION_ENTITY,
+    CONF_LEGACY_AUTHORITY_ENTITY,
 )
 from .ems_alpha76_adapter import run_shadow_chain
 from .ems_alpha76.plan_store import DOEMSShadowPlanStore
@@ -39,6 +41,7 @@ from .energy_sources import normalize_power_w
 from .ems_settings import EMSSettings
 from .ems_soc import UNAVAILABLE_SOC_STATES, parse_soc_percent
 from .ems_step5b import ExecutionEnvelope, build_execution_envelope, build_step5b_rehearsal
+from .ems_step5c import build_step5c_disarmed_foundation
 
 
 class DOEMSEMSShadowRuntime:
@@ -104,6 +107,8 @@ class DOEMSEMSShadowRuntime:
             CONF_OPERATING_MODE_ENTITY,
             CONF_ACTION_DIRECTION_ENTITY,
             CONF_POWER_SETPOINT_ENTITY,
+            CONF_LEGACY_AUTOMATIC_EXECUTION_ENTITY,
+            CONF_LEGACY_AUTHORITY_ENTITY,
         )
         return [
             str(self.entry.options[key])
@@ -119,6 +124,18 @@ class DOEMSEMSShadowRuntime:
         if state is None or state.state in {"unknown", "unavailable", "none", "None", ""}:
             return None
         return str(state.state)
+
+    def _entity_state_and_attributes(
+        self, key: str
+    ) -> tuple[str | None, dict[str, Any]]:
+        entity_id = self.entry.options.get(key)
+        if not entity_id:
+            return None, {}
+        state = self.hass.states.get(str(entity_id))
+        if state is None:
+            return None, {}
+        value = None if state.state in {"unknown", "unavailable", "none", "None", ""} else str(state.state)
+        return value, dict(state.attributes)
 
     def _power_value(self, key: str) -> float | None:
         entity_id = self.entry.options.get(key)
@@ -718,6 +735,21 @@ class DOEMSEMSShadowRuntime:
             self.step5b_envelope = None
         work.update(self.step5b_result)
 
+        legacy_auto_state, _legacy_auto_attrs = self._entity_state_and_attributes(
+            CONF_LEGACY_AUTOMATIC_EXECUTION_ENTITY
+        )
+        legacy_authority_state, legacy_authority_attrs = self._entity_state_and_attributes(
+            CONF_LEGACY_AUTHORITY_ENTITY
+        )
+        work.update(
+            build_step5c_disarmed_foundation(
+                work,
+                legacy_automatic_state=legacy_auto_state,
+                legacy_authority_state=legacy_authority_state,
+                legacy_authority_attributes=legacy_authority_attrs,
+            )
+        )
+
         work.update(self.safety_guard.evaluate(work))
         work.update(self.action_controller.evaluate(work))
         self.downstream_result = work
@@ -883,6 +915,39 @@ class DOEMSEMSShadowRuntime:
             "step5b_abort_reason": downstream.get("step5b_abort_reason"),
             "step5b_authority_fence": False,
             "step5b_service_calls_performed": False,
+            "step5c_status": downstream.get("step5c_status"),
+            "step5c_phase": downstream.get("step5c_phase"),
+            "step5c_implementation_mode": downstream.get("step5c_implementation_mode"),
+            "step5c_live_transfer_enabled": downstream.get("step5c_live_transfer_enabled", False),
+            "step5c_arm_available": downstream.get("step5c_arm_available", False),
+            "step5c_service_calls_performed": downstream.get("step5c_service_calls_performed", False),
+            "authority_owner": downstream.get("authority_owner", "anker_ems"),
+            "authority_generation": downstream.get("authority_generation", 0),
+            "authority_transition_id": downstream.get("authority_transition_id"),
+            "legacy_automatic_execution_state": downstream.get("legacy_automatic_execution_state"),
+            "legacy_automatic_execution_enabled": downstream.get("legacy_automatic_execution_enabled", False),
+            "legacy_manual_mode": downstream.get("legacy_manual_mode", False),
+            "legacy_write_fence": downstream.get("legacy_write_fence", "unknown"),
+            "legacy_inflight_calls": downstream.get("legacy_inflight_calls", 0),
+            "legacy_quiesced": downstream.get("legacy_quiesced", False),
+            "legacy_manual_write_blocked": downstream.get("legacy_manual_write_blocked", False),
+            "doems_write_fence": downstream.get("doems_write_fence", "closed"),
+            "zero_power_verified": downstream.get("zero_power_verified", False),
+            "zero_power_observed": downstream.get("zero_power_observed", False),
+            "safe_return_verified": downstream.get("safe_return_verified", False),
+            "safe_return_observed": downstream.get("safe_return_observed", False),
+            "safe_mode_observed": downstream.get("safe_mode_observed", False),
+            "neutral_stable_seconds": downstream.get("neutral_stable_seconds", 0),
+            "cutover_blockers": downstream.get("cutover_blockers", []),
+            "rollback_blockers": downstream.get("rollback_blockers", []),
+            "step5c_warnings": downstream.get("step5c_warnings", []),
+            "step5c_abort_reason": downstream.get("step5c_abort_reason"),
+            "step5c_last_transition_result": downstream.get("step5c_last_transition_result"),
+            "legacy_write_count": downstream.get("legacy_write_count"),
+            "legacy_blocked_write_count": downstream.get("legacy_blocked_write_count"),
+            "legacy_last_write_type": downstream.get("legacy_last_write_type"),
+            "legacy_last_write_at": downstream.get("legacy_last_write_at"),
+            "legacy_observation_ready": downstream.get("legacy_observation_ready", False),
             "shadow_planner_runtime_active": True,
             "startup_delay_runtime_gate_active": False,
             "shadow_plan_store_active": True,
