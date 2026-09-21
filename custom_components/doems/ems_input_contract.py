@@ -51,7 +51,17 @@ def build_alpha41_transport_input(
         solar = None if s is None else s.get("solar_kwh", s.get("total_kwh"))
         imp = None if p is None else p.get("import_price", p.get("import_all_in"))
         exp = None if p is None else p.get("export_price", p.get("export_all_in"))
-        valid = all(value is not None for value in (home, solar, imp, exp))
+        missing_inputs = [
+            name
+            for name, value in (
+                ("home", home),
+                ("solar", solar),
+                ("import_price", imp),
+                ("export_price", exp),
+            )
+            if value is None
+        ]
+        valid = not missing_inputs
         slots.append({
             "index": index,
             "start": slot_start.isoformat(),
@@ -62,6 +72,7 @@ def build_alpha41_transport_input(
             "export_price": exp,
             "price_kind": None if p is None else p.get("kind"),
             "valid": valid,
+            "missing_inputs": missing_inputs,
         })
     rows: list[dict[str, Any]] = []
     for row_index in range(ROW_COUNT):
@@ -81,6 +92,15 @@ def build_alpha41_transport_input(
             "fully_valid": fully_valid,
             "quarter_count": 4,
         })
+    invalid_slots = [
+        {
+            "index": slot["index"],
+            "start": slot["start"],
+            "missing_inputs": list(slot["missing_inputs"]),
+        }
+        for slot in slots
+        if not slot["valid"]
+    ]
     return {
         "status": "ready" if all(row["fully_valid"] for row in rows) else "partial",
         "rows": rows,
@@ -89,6 +109,10 @@ def build_alpha41_transport_input(
         "transport_resolution_minutes": 60,
         "native_expected_slot_count": SLOT_COUNT,
         "native_valid_slot_count": sum(1 for slot in slots if slot["valid"]),
+        "invalid_slot_count": len(invalid_slots),
+        "first_invalid_slot": invalid_slots[0] if invalid_slots else None,
+        "last_invalid_slot": invalid_slots[-1] if invalid_slots else None,
+        "invalid_slots": invalid_slots,
         "time_alignment_valid": True,
         "time_contract": {
             "window_start": start.isoformat(),
