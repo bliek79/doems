@@ -11,7 +11,26 @@ INTEGRATION = ROOT / "custom_components" / "doems"
 ALPHA = INTEGRATION / "ems_alpha76"
 
 
+def _install_homeassistant_dt_stub() -> None:
+    if "homeassistant.util.dt" in sys.modules:
+        return
+    homeassistant = types.ModuleType("homeassistant")
+    util = types.ModuleType("homeassistant.util")
+    dt = types.ModuleType("homeassistant.util.dt")
+    dt.UTC = timezone.utc
+    dt.DEFAULT_TIME_ZONE = timezone.utc
+    dt.utcnow = lambda: datetime.now(timezone.utc)
+    dt.now = lambda: datetime.now(timezone.utc)
+    dt.parse_datetime = lambda value: datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    util.dt = dt
+    homeassistant.util = util
+    sys.modules["homeassistant"] = homeassistant
+    sys.modules["homeassistant.util"] = util
+    sys.modules["homeassistant.util.dt"] = dt
+
+
 def _load_bridge():
+    _install_homeassistant_dt_stub()
     if "custom_components" not in sys.modules:
         package = types.ModuleType("custom_components")
         package.__path__ = [str(ROOT / "custom_components")]
