@@ -119,7 +119,7 @@ def run_plan72(*, input_result: dict[str, Any], settings: EMSSettings, energy_ne
         now=reference,
     )
 
-def run_shadow_chain(*, input_result: dict[str, Any], settings: EMSSettings, soc_percent: float | None, now: datetime | None = None) -> dict[str, Any]:
+def run_ems_chain(*, input_result: dict[str, Any], settings: EMSSettings, soc_percent: float | None, now: datetime | None = None) -> dict[str, Any]:
     need = run_energy_need(input_result=input_result, settings=settings, soc_percent=soc_percent, now=now)
     preview = run_preview(input_result=input_result, settings=settings, energy_need=need, soc_percent=soc_percent, now=now)
     plan72 = run_plan72(input_result=input_result, settings=settings, energy_need=need, planner_preview=preview, soc_percent=soc_percent, now=now)
@@ -130,9 +130,9 @@ def run_shadow_chain(*, input_result: dict[str, Any], settings: EMSSettings, soc
         "ems_policy_source": SOURCE_TAG,
         "adapter_contract": "alpha41_288_to_72",
         "startup_delay_runtime_gate_active": False,
-        "planner_runtime_active": False,
-        "plan_store_write": False,
-        "scheduler_invoked": False,
+        "planner_runtime_active": True,
+        "plan_store_write": True,
+        "scheduler_invoked": True,
         "service_calls_performed": False,
         "physical_execution_authority": False,
     }
