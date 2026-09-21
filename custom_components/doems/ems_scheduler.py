@@ -37,7 +37,7 @@ class DOEMSScheduler:
         return parsed
 
     @staticmethod
-    def _base_valid(plan: dict[str, Any], max_charge_power_w: int, max_discharge_power_w: int) -> bool:
+    def _base_valid(\n        plan: dict[str, Any],\n        max_charge_power_w: int,\n        max_discharge_power_w: int,\n        technical_min_soc_percent: float,\n        max_soc_percent: float,\n    ) -> bool:
         action = plan.get("action")
         execution_mode = plan.get("execution_mode")
         power = plan.get("power_w")
@@ -54,7 +54,7 @@ class DOEMSScheduler:
         max_power_w = max_charge_power_w if action == "laden" else max_discharge_power_w
         if not isinstance(power, (int, float)) or not 100 <= float(power) <= max_power_w:
             return False
-        if not isinstance(target_soc, (int, float)) or not 5 <= float(target_soc) <= 100:
+        if not isinstance(target_soc, (int, float)) or not float(technical_min_soc_percent) <= float(target_soc) <= float(max_soc_percent):
             return False
         if not isinstance(runtime, (int, float)) or not 0.25 <= float(runtime) <= 12:
             return False
@@ -62,7 +62,7 @@ class DOEMSScheduler:
             return False
         return True
 
-    def evaluate(self, max_charge_power_w: int = 3500, max_discharge_power_w: int = 3500, now: datetime | None = None) -> dict[str, Any]:
+    def evaluate(\n        self,\n        max_charge_power_w: int = 3500,\n        max_discharge_power_w: int = 3500,\n        now: datetime | None = None,\n        *,\n        technical_min_soc_percent: float = 5,\n        max_soc_percent: float = 100,\n    ) -> dict[str, Any]:
         """Return deterministic scheduler state for all three slots.
 
         The Scheduler determines which plan is allowed to start and exposes the
@@ -119,7 +119,7 @@ class DOEMSScheduler:
                 detail["status"] = "leeg"
             elif lifecycle_status == "concept":
                 detail["status"] = "concept"
-            elif not self._base_valid(plan, max_charge_power_w, max_discharge_power_w):
+            elif not self._base_valid(\n                plan,\n                max_charge_power_w,\n                max_discharge_power_w,\n                technical_min_soc_percent,\n                max_soc_percent,\n            ):
                 detail["status"] = "ongeldig"
             elif execution_mode == "direct":
                 detail["status"] = "kandidaat"
@@ -211,6 +211,6 @@ class DOEMSScheduler:
         }
 
     def slot_status(self, slot: int, now: datetime | None = None) -> str:
-        snapshot = self.evaluate(now)
+        snapshot = self.evaluate(now=now)
         detail = snapshot["scheduler_slots"].get(slot, {})
         return str(detail.get("status", "ongeldig"))
