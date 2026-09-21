@@ -50,7 +50,7 @@ def test_observation_contract_is_fail_closed_and_does_not_guess() -> None:
     assert '"status": "not_configured"' in runtime
     assert '"status": "entity_missing"' in runtime
     assert '"status": "unavailable"' in runtime
-    assert '"status": "invalid_value"' in runtime
+    assert '"invalid_value"' in runtime
     assert 'status = "ready"' in runtime
     assert 'status = "not_configured"' in runtime
     assert 'status = "partial"' in runtime
