@@ -20,16 +20,16 @@ def test_invalid_slot_diagnostics_are_derived_from_existing_validity_rule() -> N
 
 
 def test_288_fail_closed_gate_is_unchanged() -> None:
-    runtime=(INTEGRATION/"ems_shadow_runtime.py").read_text(encoding="utf-8")
+    runtime=(INTEGRATION/"ems_runtime.py").read_text(encoding="utf-8")
     assert 'input_result.get("native_valid_slot_count") != 288' in runtime
     assert 'self.status = "waiting_for_complete_forecast"' in runtime
     gate=runtime.index('input_result.get("native_valid_slot_count") != 288')
-    planner=runtime.index('self.shadow_result = run_shadow_chain(')
+    planner=runtime.index('self.planner_result = run_ems_chain(')
     assert gate < planner
 
 
-def test_ems_settings_sensor_listens_to_shadow_runtime() -> None:
+def test_ems_settings_sensor_listens_to_planning_runtime() -> None:
     sensor=(INTEGRATION/"sensor.py").read_text(encoding="utf-8")
-    assert 'self.shadow.async_add_listener(self._handle_shadow_update)' in sensor
-    assert 'def _handle_shadow_update(self)' in sensor
+    assert 'self.runtime.async_add_listener(self._handle_runtime_update)' in sensor
+    assert 'def _handle_runtime_update(self)' in sensor
     assert 'self.async_write_ha_state()' in sensor
