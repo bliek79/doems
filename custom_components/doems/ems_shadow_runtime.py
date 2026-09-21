@@ -279,13 +279,6 @@ class DOEMSEMSShadowRuntime:
     def _observation_snapshot(self) -> dict[str, Any]:
         contract = self._observation_contract()
         control_path_configured = contract["control_path_configured"]
-            bool(self.entry.options.get(key))
-            for key in (
-                CONF_OPERATING_MODE_ENTITY,
-                CONF_ACTION_DIRECTION_ENTITY,
-                CONF_POWER_SETPOINT_ENTITY,
-            )
-        )
         return {
             **contract,
             "device_status": self._state_value(CONF_DEVICE_STATUS_ENTITY),
