@@ -71,8 +71,8 @@ jobs:
           grep -F 'class DOEMSScheduler' custom_components/doems/ems_scheduler.py
           grep -F 'class DOEMSEMSRuntime' custom_components/doems/ems_runtime.py
           grep -F 'run_ems_chain' custom_components/doems/ems_alpha76_adapter.py
-          grep -F 'doems_plan_{slot}_action' custom_components/doems/select.py
-          grep -F 'doems_plan_{slot}_power' custom_components/doems/number.py
+          grep -F 'doems_plan_{slot}_{field}' custom_components/doems/select.py
+          grep -F 'doems_plan_{slot}_{definition.object_suffix}' custom_components/doems/number.py
           grep -F 'doems_plan_{slot}_start_time' custom_components/doems/datetime.py
           grep -F 'doems_plan_{slot}_status' custom_components/doems/sensor.py
           grep -F 'doems_scheduler' custom_components/doems/sensor.py
