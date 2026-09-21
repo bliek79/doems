@@ -31,7 +31,7 @@ jobs:
           PY
       - name: Validate Alpha8.1 release contract
         run: |
-          test -f RELEASE_NOTES_0.1.0-alpha.8.1.1.md
+          test -f RELEASE_NOTES_0.1.0-alpha.8.1.md
           test -f examples/prices_p4_forecast_card.yaml
           test -f custom_components/doems/prices.py
           test -f custom_components/doems/prices_model.py
@@ -163,7 +163,7 @@ jobs:
           fetch-depth: 0
       - name: Build release archive
         run: |
-          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.8.1.1.md
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.8.1.md
           sha256sum doems.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - name: Verify EMS settings, Presence and Prices runtime are packaged
@@ -197,7 +197,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view 0.1.0-alpha.8.1 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.8.1 --title "DOEMS 0.1.0-alpha.8.1 - Manual Plan Lifecycle Fix" --notes-file RELEASE_NOTES_0.1.0-alpha.8.1.1.md --prerelease
+            gh release edit 0.1.0-alpha.8.1 --title "DOEMS 0.1.0-alpha.8.1 - Manual Plan Lifecycle Fix" --notes-file RELEASE_NOTES_0.1.0-alpha.8.1.md --prerelease
           else
-            gh release create 0.1.0-alpha.8.1 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.8.1 - Manual Plan Lifecycle Fix" --notes-file RELEASE_NOTES_0.1.0-alpha.8.1.1.md --prerelease
+            gh release create 0.1.0-alpha.8.1 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.8.1 - Manual Plan Lifecycle Fix" --notes-file RELEASE_NOTES_0.1.0-alpha.8.1.md --prerelease
           fi
