@@ -37,7 +37,13 @@ class DOEMSScheduler:
         return parsed
 
     @staticmethod
-    def _base_valid(\n        plan: dict[str, Any],\n        max_charge_power_w: int,\n        max_discharge_power_w: int,\n        technical_min_soc_percent: float,\n        max_soc_percent: float,\n    ) -> bool:
+    def _base_valid(
+        plan: dict[str, Any],
+        max_charge_power_w: int,
+        max_discharge_power_w: int,
+        technical_min_soc_percent: float,
+        max_soc_percent: float,
+    ) -> bool:
         action = plan.get("action")
         execution_mode = plan.get("execution_mode")
         power = plan.get("power_w")
@@ -62,7 +68,15 @@ class DOEMSScheduler:
             return False
         return True
 
-    def evaluate(\n        self,\n        max_charge_power_w: int = 3500,\n        max_discharge_power_w: int = 3500,\n        now: datetime | None = None,\n        *,\n        technical_min_soc_percent: float = 5,\n        max_soc_percent: float = 100,\n    ) -> dict[str, Any]:
+    def evaluate(
+        self,
+        max_charge_power_w: int = 3500,
+        max_discharge_power_w: int = 3500,
+        now: datetime | None = None,
+        *,
+        technical_min_soc_percent: float = 5,
+        max_soc_percent: float = 100,
+    ) -> dict[str, Any]:
         """Return deterministic scheduler state for all three slots.
 
         The Scheduler determines which plan is allowed to start and exposes the
@@ -119,7 +133,13 @@ class DOEMSScheduler:
                 detail["status"] = "leeg"
             elif lifecycle_status == "concept":
                 detail["status"] = "concept"
-            elif not self._base_valid(\n                plan,\n                max_charge_power_w,\n                max_discharge_power_w,\n                technical_min_soc_percent,\n                max_soc_percent,\n            ):
+            elif not self._base_valid(
+                plan,
+                max_charge_power_w,
+                max_discharge_power_w,
+                technical_min_soc_percent,
+                max_soc_percent,
+            ):
                 detail["status"] = "ongeldig"
             elif execution_mode == "direct":
                 detail["status"] = "kandidaat"
