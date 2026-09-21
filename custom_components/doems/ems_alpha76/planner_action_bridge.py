@@ -410,9 +410,12 @@ def build_planner_action_bridge(
                 "slot": slot,
                 "available_for_automatic_write": available,
                 "manual_action": detail.get("action"),
+                "manual_purpose": detail.get("purpose"),
                 "manual_status": detail.get("status"),
                 "manual_lifecycle_status": detail.get("lifecycle_status"),
                 "manual_origin": detail.get("origin"),
+                "start_time": detail.get("start_time"),
+                "max_start_delay_min": detail.get("max_start_delay_min"),
                 "planned_end_time": detail.get("planned_end_time"),
                 "planner_signature": detail.get("planner_signature"),
                 "planner_identity": detail.get("planner_identity") or _identity_from_signature(detail.get("planner_signature")),
@@ -458,6 +461,54 @@ def build_planner_action_bridge(
             and candidate_start < active_end
         )
 
+    def pending_quarter_roll_continuity(
+        item: dict[str, Any],
+        candidate: dict[str, Any],
+    ) -> bool:
+        """Return True for the same pending action after one native 15 min roll.
+
+        DOEMS keeps the Alpha76 60-minute compatibility rows but anchors them to
+        the native rolling quarter. A pending 11:00-12:00 action can therefore
+        reappear as 11:15-12:15 while it is still inside its Scheduler start
+        window. Preserve the stable planner identity only for that narrowly
+        bounded continuity case. The revision signature remains candidate-local.
+        """
+        if item.get("manual_origin") != "automatic_72h_planner":
+            return False
+        if str(item.get("manual_lifecycle_status") or "").lower() != "pending":
+            return False
+        if str(item.get("manual_action") or "") != str(candidate.get("action") or ""):
+            return False
+        if str(item.get("manual_purpose") or "") != str(candidate.get("purpose") or ""):
+            return False
+        if not item.get("planner_identity"):
+            return False
+        if candidate.get("valid") is not True:
+            return False
+
+        old_start = _parse_time(item.get("start_time"))
+        new_start = _parse_time(candidate.get("start_time"))
+        old_end = _parse_time(item.get("planned_end_time"))
+        new_end = _parse_time(candidate.get("planned_end_time"))
+        if None in {old_start, new_start, old_end, new_end}:
+            return False
+
+        shift_seconds = (new_start - old_start).total_seconds()
+        if not 0 < shift_seconds <= 15 * 60:
+            return False
+
+        if not (new_start < old_end and old_start < new_end):
+            return False
+
+        try:
+            delay_min = max(0.0, float(item.get("max_start_delay_min") or 0))
+        except (TypeError, ValueError):
+            return False
+        if now_utc > old_start + timedelta(minutes=delay_min):
+            return False
+
+        return True
+
     for candidate in candidates[:PLAN_SLOT_COUNT]:
         enriched = dict(candidate)
         identity = _candidate_identity(enriched)
@@ -500,6 +551,21 @@ def build_planner_action_bridge(
             ),
             None,
         )
+        quarter_roll_continuity = False
+        if matched is None:
+            matched = next(
+                (
+                    item
+                    for item in slot_statuses
+                    if item["slot"] not in used_slots
+                    and pending_quarter_roll_continuity(item, enriched)
+                ),
+                None,
+            )
+            if matched is not None:
+                enriched["planner_identity"] = matched.get("planner_identity")
+                quarter_roll_continuity = True
+
         if matched is not None:
             actual_slot = matched
             automatic_pending_match = True
@@ -522,6 +588,7 @@ def build_planner_action_bridge(
         enriched["manual_slot_available"] = actual_slot is not None
         enriched["manual_slot_status"] = actual_slot["manual_status"] if actual_slot else None
         enriched["automatic_pending_match"] = automatic_pending_match
+        enriched["quarter_roll_identity_continuity"] = quarter_roll_continuity
         enriched["plan_store_write_permitted"] = bool(
             candidate.get("valid")
             and actual_slot is not None

@@ -1,4 +1,4 @@
-name: DOEMS CI and Alpha7.22 G6 Step 5A Final Automatic Execution Shadow Release
+name: DOEMS CI and Alpha7.23 G6 Step 5A Quarter-roll Planner Identity Continuity Fix Release
 
 on:
   pull_request:
@@ -29,9 +29,9 @@ jobs:
               json.loads(path.read_text(encoding='utf-8'))
               print(f'valid: {path}')
           PY
-      - name: Validate Alpha7.22 release contract
+      - name: Validate Alpha7.23 release contract
         run: |
-          test -f RELEASE_NOTES_0.1.0-alpha.7.22.md
+          test -f RELEASE_NOTES_0.1.0-alpha.7.23.md
           test -f examples/prices_p4_forecast_card.yaml
           test -f custom_components/doems/prices.py
           test -f custom_components/doems/prices_model.py
@@ -41,8 +41,8 @@ jobs:
           test ! -f scripts/build_brand_assets.py
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
-          grep -F 'VERSION = "0.1.0-alpha.7.22"' custom_components/doems/const.py
-          grep -F '"version": "0.1.0-alpha.7.22"' custom_components/doems/manifest.json
+          grep -F 'VERSION = "0.1.0-alpha.7.23"' custom_components/doems/const.py
+          grep -F '"version": "0.1.0-alpha.7.23"' custom_components/doems/manifest.json
           grep -F 'CONF_EMS_ENABLED = "ems_enabled"' custom_components/doems/const.py
           grep -F 'CONF_SOC_ENTITY = "soc_entity"' custom_components/doems/const.py
           grep -F '_optional_entity(CONF_SOC_ENTITY' custom_components/doems/config_flow.py
@@ -82,6 +82,10 @@ jobs:
           grep -F '"shadow_control_path_post_mode_required"' custom_components/doems/ems_shadow_runtime.py
           grep -F '"shadow_control_path_post_mode_ready"' custom_components/doems/ems_shadow_runtime.py
           test -f custom_components/doems/ems_alpha76/automatic_execution_shadow.py
+          grep -F 'def pending_quarter_roll_continuity(' custom_components/doems/ems_alpha76/planner_action_bridge.py
+          grep -F 'shift_seconds <= 15 * 60' custom_components/doems/ems_alpha76/planner_action_bridge.py
+          grep -F '"quarter_roll_identity_continuity"' custom_components/doems/ems_alpha76/planner_action_bridge.py
+          test -f tests/test_step5a_quarter_roll_identity_continuity.py
           grep -F 'required_stable_seconds = 60.0' custom_components/doems/ems_shadow_runtime.py
           grep -F 'build_automatic_execution_shadow(' custom_components/doems/ems_shadow_runtime.py
           grep -F '"shadow_auto_execution_status"' custom_components/doems/ems_shadow_runtime.py
@@ -189,7 +193,7 @@ jobs:
           ! grep -R -F 'doems_capture_alpha41_solar_freeze' custom_components/doems
           ! grep -R -F 'doems_alpha41_solar_freeze_captured' custom_components/doems
 
-  publish-alpha7-22:
+  publish-alpha7-23:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
@@ -199,7 +203,7 @@ jobs:
           fetch-depth: 0
       - name: Build release archive
         run: |
-          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.7.22.md
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.7.23.md
           sha256sum doems.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - name: Verify EMS settings, Presence and Prices runtime are packaged
@@ -229,12 +233,12 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/icon.png'
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
-      - name: Publish Alpha7.22 G6 Step 5A release
+      - name: Publish Alpha7.23 G6 Step 5A release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view 0.1.0-alpha.7.22 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.7.22 --title "DOEMS 0.1.0-alpha.7.22 - G6 Step 5A Final Automatic Execution Shadow" --notes-file RELEASE_NOTES_0.1.0-alpha.7.22.md
+          if gh release view 0.1.0-alpha.7.23 >/dev/null 2>&1; then
+            gh release edit 0.1.0-alpha.7.23 --title "DOEMS 0.1.0-alpha.7.23 - G6 Step 5A Quarter-roll Planner Identity Continuity Fix" --notes-file RELEASE_NOTES_0.1.0-alpha.7.23.md
           else
-            gh release create 0.1.0-alpha.7.22 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.22 - G6 Step 5A Final Automatic Execution Shadow" --notes-file RELEASE_NOTES_0.1.0-alpha.7.22.md
+            gh release create 0.1.0-alpha.7.23 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.23 - G6 Step 5A Quarter-roll Planner Identity Continuity Fix" --notes-file RELEASE_NOTES_0.1.0-alpha.7.23.md
           fi
