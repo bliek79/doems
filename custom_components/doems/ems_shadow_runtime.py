@@ -33,6 +33,7 @@ from .ems_alpha76.prestart_validator import AnkerEmsPreStartValidator
 from .ems_alpha76.safety_guard import AnkerEmsSafetyGuard
 from .ems_alpha76.action_controller import AnkerEmsActionController
 from .ems_alpha76.execution_shadow import DOEMSShadowExecutionGates
+from .ems_alpha76.automatic_execution_shadow import build_automatic_execution_shadow
 from .ems_live_input import build_live_ems_input
 from .energy_sources import normalize_power_w
 from .ems_settings import EMSSettings
@@ -274,6 +275,105 @@ class DOEMSEMSShadowRuntime:
             "control_path_pre_mode_ready": pre_mode_ready,
             "control_path_post_mode_required": post_mode_required,
             "control_path_post_mode_ready": post_mode_ready,
+        }
+
+    def _control_path_readiness(self) -> dict[str, Any]:
+        """Mirror Alpha76 two-stage 60-second control-path stability."""
+        required_stable_seconds = 60.0
+        now = self.last_refresh or dt_util.utcnow()
+
+        def detail(key: str) -> dict[str, Any]:
+            entity_id = self.entry.options.get(key)
+            if not entity_id:
+                return {
+                    "entity_id": None,
+                    "available": False,
+                    "state": None,
+                    "stable_seconds": 0.0,
+                }
+            entity_id = str(entity_id)
+            state = self.hass.states.get(entity_id)
+            available = (
+                state is not None
+                and state.state not in {"unknown", "unavailable", "none", "None", ""}
+            )
+            stable_seconds = 0.0
+            if available and state is not None:
+                stable_seconds = max(
+                    0.0,
+                    (now - state.last_changed).total_seconds(),
+                )
+            return {
+                "entity_id": entity_id,
+                "available": available,
+                "state": None if state is None else state.state,
+                "stable_seconds": round(stable_seconds, 1),
+            }
+
+        mode = detail(CONF_OPERATING_MODE_ENTITY)
+        direction = detail(CONF_ACTION_DIRECTION_ENTITY)
+        power = detail(CONF_POWER_SETPOINT_ENTITY)
+        entities = {
+            "operating_mode": mode,
+            "action_direction": direction,
+            "power_setpoint": power,
+        }
+
+        pre_blockers: list[str] = []
+        if not mode["available"]:
+            pre_blockers.append("operating_mode_unavailable")
+        elif mode["stable_seconds"] < required_stable_seconds:
+            pre_blockers.append("operating_mode_not_stable")
+        pre_mode_ready = not pre_blockers
+        pre_mode_reason = "pre_mode_ready" if pre_mode_ready else ",".join(pre_blockers)
+        pre_mode_stable = mode["stable_seconds"] if mode["available"] else 0.0
+
+        external_active = mode["available"] and mode["state"] == "third_party_control"
+        post_blockers: list[str] = []
+        if not external_active:
+            post_mode_ready = False
+            post_mode_reason = "awaiting_third_party_control"
+            post_mode_stable = 0.0
+        else:
+            for name, item in (
+                ("action_direction", direction),
+                ("power_setpoint", power),
+            ):
+                if not item["available"]:
+                    post_blockers.append(f"{name}_unavailable")
+                elif item["stable_seconds"] < required_stable_seconds:
+                    post_blockers.append(f"{name}_not_stable")
+            post_mode_ready = not post_blockers
+            post_mode_reason = (
+                "post_mode_ready" if post_mode_ready else ",".join(post_blockers)
+            )
+            post_mode_stable = (
+                min(direction["stable_seconds"], power["stable_seconds"])
+                if direction["available"] and power["available"]
+                else 0.0
+            )
+
+        ready = pre_mode_ready and (post_mode_ready if external_active else True)
+        reason = (
+            "control_path_ready"
+            if ready
+            else (post_mode_reason if external_active else pre_mode_reason)
+        )
+        stable_seconds = post_mode_stable if external_active else pre_mode_stable
+
+        return {
+            "ready": ready,
+            "reason": reason,
+            "stable_seconds": round(stable_seconds, 1),
+            "required_stable_seconds": required_stable_seconds,
+            "pre_mode_ready": pre_mode_ready,
+            "pre_mode_reason": pre_mode_reason,
+            "pre_mode_stable_seconds": round(pre_mode_stable, 1),
+            "post_mode_ready": post_mode_ready,
+            "post_mode_reason": post_mode_reason,
+            "post_mode_stable_seconds": round(post_mode_stable, 1),
+            "post_mode_required": external_active,
+            "entities": entities,
         }
 
     def _observation_snapshot(self) -> dict[str, Any]:
@@ -591,6 +691,14 @@ class DOEMSEMSShadowRuntime:
         work.update(self.execution_gates.evaluate_automatic_handoff(work))
         work.update(self.execution_gates.evaluate_final_revalidation(work))
         work.update(self.execution_gates.evaluate_mode_switch_transaction(work))
+        readiness = self._control_path_readiness()
+        work.update(
+            build_automatic_execution_shadow(
+                work,
+                readiness=readiness,
+                armed=False,
+            )
+        )
         work.update(self.safety_guard.evaluate(work))
         work.update(self.action_controller.evaluate(work))
         self.downstream_result = work
@@ -700,6 +808,26 @@ class DOEMSEMSShadowRuntime:
             "shadow_mode_switch_preview_required": downstream.get("auto_mode_switch_preview_required"),
             "shadow_mode_switch_preview_ready": downstream.get("auto_mode_switch_preview_ready"),
             "shadow_mode_switch_preview_blockers": downstream.get("auto_mode_switch_preview_blockers", []),
+            "shadow_auto_execution_status": downstream.get("auto_shadow_status"),
+            "shadow_auto_execution_technical_ready": downstream.get("auto_shadow_technical_ready"),
+            "shadow_auto_execution_armed": downstream.get("auto_shadow_armed", False),
+            "shadow_auto_execution_permitted": downstream.get("auto_shadow_execution_permitted", False),
+            "shadow_auto_execution_selected_slot": downstream.get("auto_shadow_selected_slot"),
+            "shadow_auto_execution_action": downstream.get("auto_shadow_action"),
+            "shadow_auto_execution_purpose": downstream.get("auto_shadow_purpose"),
+            "shadow_auto_execution_power_w": downstream.get("auto_shadow_power_w"),
+            "shadow_auto_execution_target_soc": downstream.get("auto_shadow_target_soc"),
+            "shadow_auto_execution_start_time": downstream.get("auto_shadow_start_time"),
+            "shadow_auto_execution_blockers": downstream.get("auto_shadow_blockers", []),
+            "shadow_auto_execution_warnings": downstream.get("auto_shadow_warnings", []),
+            "shadow_control_path_ready": downstream.get("auto_shadow_control_path_ready"),
+            "shadow_control_path_reason": downstream.get("auto_shadow_control_path_reason"),
+            "shadow_control_path_stable_seconds": downstream.get("auto_shadow_control_path_stable_seconds"),
+            "shadow_control_path_required_stable_seconds": downstream.get("auto_shadow_control_path_required_stable_seconds"),
+            "shadow_control_path_pre_mode_reason": downstream.get("auto_shadow_pre_mode_reason"),
+            "shadow_control_path_pre_mode_stable_seconds": downstream.get("auto_shadow_pre_mode_stable_seconds"),
+            "shadow_control_path_post_mode_reason": downstream.get("auto_shadow_post_mode_reason"),
+            "shadow_control_path_post_mode_stable_seconds": downstream.get("auto_shadow_post_mode_stable_seconds"),
             "shadow_legacy_safety_status": downstream.get("safety_status"),
             "shadow_action_controller_status": downstream.get("controller_status"),
             "shadow_action_controller_ready": downstream.get("controller_ready"),
