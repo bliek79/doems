@@ -36,7 +36,7 @@ def build_live_ems_input(
             "export_all_in": item.get("export_all_in"),
             "kind": item.get("kind"),
         }
-        for item in prices.timeline_slots
+        for item in prices.price_window(window_start=window_start, slot_count=288)
     ]
     result = build_alpha41_transport_input(
         window_start=window_start,
@@ -48,7 +48,7 @@ def build_live_ems_input(
         "input_source": "existing_doems_forecast",
         "energy_source": "doems_energy_forecast",
         "solar_source": "doems_solar_forecast",
-        "prices_source": "doems_prices",
+        "prices_source": "doems_prices_76h_buffer_window",
         "planner_runtime_active": False,
         "service_calls_performed": False,
         "physical_execution_authority": False,
