@@ -4,7 +4,7 @@ from __future__ import annotations
 
 DOMAIN = "doems"
 NAME = "DOEMS"
-VERSION = "0.1.0-alpha.8"
+VERSION = "0.1.0-alpha.8.1"
 
 CONF_INSTANCE_NAME = "instance_name"
 DEFAULT_INSTANCE_NAME = NAME
@@ -55,6 +55,8 @@ EMS_MIN_STARTUP_DELAY_SECONDS = 30
 EMS_MAX_STARTUP_DELAY_SECONDS = 300
 EMS_MAX_POWER_W = 3500
 PLAN_SLOT_COUNT = 3
+SERVICE_SCHEDULE_PLAN = "schedule_plan"
+SERVICE_CANCEL_PLAN = "cancel_plan"
 
 ENERGY_SOURCE_DIRECT = "direct_home_power"
 ENERGY_SOURCE_BALANCE = "power_balance"

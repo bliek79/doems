@@ -4,12 +4,25 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+import voluptuous as vol
+
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
+from homeassistant.core import Event, EventStateChangedData, HomeAssistant, ServiceCall, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
+from homeassistant.util import dt as dt_util
 
-from .const import CONF_EMS_ENABLED, CONF_ENERGY_FORECAST_ENABLED, CONF_PRICES_ENABLED, DOMAIN, PLATFORMS
+from .const import (
+    CONF_EMS_ENABLED,
+    CONF_ENERGY_FORECAST_ENABLED,
+    CONF_PRICES_ENABLED,
+    DOMAIN,
+    PLATFORMS,
+    PLAN_SLOT_COUNT,
+    SERVICE_CANCEL_PLAN,
+    SERVICE_SCHEDULE_PLAN,
+)
 from .ems_settings import EMSSettings
 from .ems_runtime import DOEMSEMSRuntime
 from .energy_coordinator import DOEMSEnergyCoordinator
@@ -37,6 +50,76 @@ async def _async_remove_legacy_solar_freeze_storage(hass: HomeAssistant) -> None
         _LEGACY_SOLAR_FREEZE_STORAGE_KEY,
     )
     await store.async_remove()
+
+
+def _single_ems_runtime(hass: HomeAssistant) -> DOEMSEMSRuntime:
+    """Return the single active DOEMS EMS runtime."""
+    runtimes = []
+    for entry_data in hass.data.get(DOMAIN, {}).values():
+        if not isinstance(entry_data, dict):
+            continue
+        runtime = entry_data.get("ems_runtime")
+        if isinstance(runtime, DOEMSEMSRuntime):
+            runtimes.append(runtime)
+    if len(runtimes) != 1:
+        raise HomeAssistantError(
+            "DOEMS-planbediening vereist precies één geladen EMS-runtime"
+        )
+    return runtimes[0]
+
+
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    """Register non-actuating Alpha8 manual plan lifecycle services."""
+
+    def _slot_from_call(call: ServiceCall) -> int:
+        slot = int(call.data.get("slot", 0))
+        if slot not in range(1, PLAN_SLOT_COUNT + 1):
+            raise HomeAssistantError("Planplaats moet 1, 2 of 3 zijn")
+        return slot
+
+    async def _schedule_plan(call: ServiceCall) -> None:
+        runtime = _single_ems_runtime(hass)
+        slot = _slot_from_call(call)
+        current = runtime.plan_store.get_plan(slot)
+        if current.get("action") == "geen":
+            raise HomeAssistantError(f"Plan {slot} heeft nog geen actie")
+        start_raw = current.get("start_time")
+        start = dt_util.parse_datetime(str(start_raw)) if start_raw else None
+        if start is None:
+            raise HomeAssistantError(f"Plan {slot} heeft geen geldige starttijd")
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
+        if start <= dt_util.now():
+            raise HomeAssistantError(f"Plan {slot} starttijd moet in de toekomst liggen")
+
+        await runtime.plan_store.async_set_value(slot, "execution_mode", "gepland")
+        await runtime.plan_store.async_mark_lifecycle(
+            slot, "pending", "scheduled_by_user"
+        )
+        await runtime.async_refresh("manual_schedule_plan")
+
+    async def _cancel_plan(call: ServiceCall) -> None:
+        runtime = _single_ems_runtime(hass)
+        slot = _slot_from_call(call)
+        await runtime.plan_store.async_mark_lifecycle(
+            slot, "geannuleerd", "manual_cancel"
+        )
+        await runtime.async_refresh("manual_cancel_plan")
+
+    slot_schema = vol.All(vol.Coerce(int), vol.Range(min=1, max=PLAN_SLOT_COUNT))
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SCHEDULE_PLAN,
+        _schedule_plan,
+        schema=vol.Schema({vol.Required("slot"): slot_schema}),
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_CANCEL_PLAN,
+        _cancel_plan,
+        schema=vol.Schema({vol.Required("slot"): slot_schema}),
+    )
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> bool:
