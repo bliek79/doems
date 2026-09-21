@@ -241,6 +241,8 @@ class DOEMSEMSRuntime:
             "max_charge_power_w": self.settings.max_charge_power_w,
             "max_discharge_power_w": self.settings.max_discharge_power_w,
             "battery_capacity_kwh": self.settings.battery_capacity_kwh,
+            "technical_min_soc_percent": self.settings.technical_min_soc_percent,
+            "max_soc_percent": self.settings.max_soc_percent,
             "charge_efficiency_percent": self.settings.charge_efficiency_percent,
             "discharge_efficiency_percent": self.settings.discharge_efficiency_percent,
         }
