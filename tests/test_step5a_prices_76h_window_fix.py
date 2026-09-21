@@ -24,6 +24,6 @@ def test_ems_uses_same_window_start_for_energy_and_prices() -> None:
 
 
 def test_fix_preserves_fail_closed_contract() -> None:
-    runtime=(INTEGRATION/"ems_shadow_runtime.py").read_text(encoding="utf-8")
+    runtime=(INTEGRATION/"ems_runtime.py").read_text(encoding="utf-8")
     assert 'input_result.get("native_valid_slot_count") != 288' in runtime
     assert 'self.status = "waiting_for_complete_forecast"' in runtime
