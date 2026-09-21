@@ -1,4 +1,4 @@
-name: DOEMS CI and Alpha7.15 G6 Step 5A Consumer Wiring Part 1 Release
+name: DOEMS CI and Alpha8 EMS Plans Foundation Release
 
 on:
   pull_request:
@@ -29,9 +29,9 @@ jobs:
               json.loads(path.read_text(encoding='utf-8'))
               print(f'valid: {path}')
           PY
-      - name: Validate Alpha7.15 release contract
+      - name: Validate Alpha8 release contract
         run: |
-          test -f RELEASE_NOTES_0.1.0-alpha.7.15.md
+          test -f RELEASE_NOTES_0.1.0-alpha.8.md
           test -f examples/prices_p4_forecast_card.yaml
           test -f custom_components/doems/prices.py
           test -f custom_components/doems/prices_model.py
@@ -41,8 +41,8 @@ jobs:
           test ! -f scripts/build_brand_assets.py
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
-          grep -F 'VERSION = "0.1.0-alpha.7.15"' custom_components/doems/const.py
-          grep -F '"version": "0.1.0-alpha.7.15"' custom_components/doems/manifest.json
+          grep -F 'VERSION = "0.1.0-alpha.8"' custom_components/doems/const.py
+          grep -F '"version": "0.1.0-alpha.8"' custom_components/doems/manifest.json
           grep -F 'CONF_EMS_ENABLED = "ems_enabled"' custom_components/doems/const.py
           grep -F 'CONF_BATTERY_CAPACITY_KWH = "battery_capacity_kwh"' custom_components/doems/const.py
           grep -F 'CONF_TECHNICAL_MIN_SOC_PERCENT = "technical_min_soc_percent"' custom_components/doems/const.py
@@ -58,14 +58,37 @@ jobs:
           test -f custom_components/doems/ems_input_contract.py
           test -f custom_components/doems/ems_live_input.py
           test -f custom_components/doems/ems_alpha76_adapter.py
+          test -f custom_components/doems/ems_runtime.py
+          test -f custom_components/doems/ems_plan_store.py
+          test -f custom_components/doems/ems_scheduler.py
+          test -f custom_components/doems/ems_planner_bridge.py
+          test -f custom_components/doems/ems_soc.py
+          test -f custom_components/doems/number.py
+          test -f tests/test_alpha8_ems_plans_foundation.py
+          grep -F 'PLAN_SLOT_COUNT = 3' custom_components/doems/const.py
+          grep -F 'class DOEMSPlanStore' custom_components/doems/ems_plan_store.py
+          grep -F 'f"{DOMAIN}.{entry_id}.plans"' custom_components/doems/ems_plan_store.py
+          grep -F 'class DOEMSScheduler' custom_components/doems/ems_scheduler.py
+          grep -F 'class DOEMSEMSRuntime' custom_components/doems/ems_runtime.py
+          grep -F 'run_ems_chain' custom_components/doems/ems_alpha76_adapter.py
+          grep -F 'doems_plan_{slot}_action' custom_components/doems/select.py
+          grep -F 'doems_plan_{slot}_power' custom_components/doems/number.py
+          grep -F 'doems_plan_{slot}_start_time' custom_components/doems/datetime.py
+          grep -F 'doems_plan_{slot}_status' custom_components/doems/sensor.py
+          grep -F 'doems_scheduler' custom_components/doems/sensor.py
+          grep -F 'doems_ems' custom_components/doems/sensor.py
+          test ! -f custom_components/doems/ems_shadow_runtime.py
+          test ! -f custom_components/doems/ems_step5c.py
+          ! grep -R -F 'legacy_authority_entity' custom_components/doems
+          ! grep -R -F 'legacy_automatic_execution_entity' custom_components/doems
           test -f custom_components/doems/ems_alpha76/energy_need.py
           test -f custom_components/doems/ems_alpha76/planner_preview.py
           test -f custom_components/doems/ems_alpha76/planner_72h.py
           grep -F 'alpha41_rolling_quarter_start_no_clock_hour_rounding' custom_components/doems/ems_input_contract.py
           grep -F 'existing_doems_forecast' custom_components/doems/ems_live_input.py
-          grep -F 'planner_runtime_active": False' custom_components/doems/ems_alpha76_adapter.py
-          grep -F 'plan_store_write": False' custom_components/doems/ems_alpha76_adapter.py
-          grep -F 'scheduler_invoked": False' custom_components/doems/ems_alpha76_adapter.py
+          grep -F 'planner_runtime_active": True' custom_components/doems/ems_alpha76_adapter.py
+          grep -F 'plan_store_write": True' custom_components/doems/ems_alpha76_adapter.py
+          grep -F 'scheduler_invoked": True' custom_components/doems/ems_alpha76_adapter.py
           grep -F 'service_calls_performed": False' custom_components/doems/ems_alpha76_adapter.py
           grep -F 'physical_execution_authority": False' custom_components/doems/ems_alpha76_adapter.py
           grep -F 'class EMSSettings' custom_components/doems/ems_settings.py
@@ -74,13 +97,13 @@ jobs:
           grep -F '"settings_source": "config_entry_options"' custom_components/doems/sensor.py
           grep -F '"settings_snapshot_immutable": True' custom_components/doems/sensor.py
           grep -F '"startup_delay_runtime_gate_active": False' custom_components/doems/sensor.py
-          grep -F '"planner_logic_active": False' custom_components/doems/sensor.py
+          grep -F '"planner_logic_active": self.runtime is not None' custom_components/doems/sensor.py
           grep -F '"physical_execution_authority": False' custom_components/doems/sensor.py
           grep -F 'CONF_AWAY_SCHEDULE_ENABLED = "away_schedule_enabled"' custom_components/doems/const.py
           grep -F 'CONF_AWAY_START = "away_start"' custom_components/doems/const.py
           grep -F 'CONF_AWAY_END = "away_end"' custom_components/doems/const.py
           grep -F 'PRESENCE_STORAGE_KEY = f"{DOMAIN}.presence"' custom_components/doems/const.py
-          grep -F 'PLATFORMS = ["sensor", "select", "binary_sensor", "switch", "datetime"]' custom_components/doems/const.py
+          grep -F 'PLATFORMS = ["sensor", "select", "number", "binary_sensor", "switch", "datetime"]' custom_components/doems/const.py
           test -f custom_components/doems/presence.py
           test -f custom_components/doems/switch.py
           test -f custom_components/doems/datetime.py
@@ -130,7 +153,7 @@ jobs:
           ! grep -R -F 'doems_capture_alpha41_solar_freeze' custom_components/doems
           ! grep -R -F 'doems_alpha41_solar_freeze_captured' custom_components/doems
 
-  publish-alpha7-15:
+  publish-alpha8:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
@@ -140,7 +163,7 @@ jobs:
           fetch-depth: 0
       - name: Build release archive
         run: |
-          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.7.15.md
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.8.md
           sha256sum doems.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - name: Verify EMS settings, Presence and Prices runtime are packaged
@@ -149,6 +172,11 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_input_contract.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_live_input.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_alpha76_adapter.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_runtime.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_plan_store.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_scheduler.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_planner_bridge.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/number.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_alpha76/planner_72h.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/presence.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/switch.py'
@@ -164,12 +192,12 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/icon.png'
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
-      - name: Publish Alpha7.15 G6 Step 5A release
+      - name: Publish Alpha8 G6 Step 5A release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view 0.1.0-alpha.7.15 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.7.15 --title "DOEMS 0.1.0-alpha.7.15 - G6 Step 5A Consumer Wiring Part 1" --notes-file RELEASE_NOTES_0.1.0-alpha.7.15.md
+          if gh release view 0.1.0-alpha.8 >/dev/null 2>&1; then
+            gh release edit 0.1.0-alpha.8 --title "DOEMS 0.1.0-alpha.8 - EMS Plans Foundation" --notes-file RELEASE_NOTES_0.1.0-alpha.8.md --prerelease
           else
-            gh release create 0.1.0-alpha.7.15 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.7.15 - G6 Step 5A Consumer Wiring Part 1" --notes-file RELEASE_NOTES_0.1.0-alpha.7.15.md
+            gh release create 0.1.0-alpha.8 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.8 - EMS Plans Foundation" --notes-file RELEASE_NOTES_0.1.0-alpha.8.md
           fi
