@@ -115,7 +115,7 @@
       },
       "ems": {
         "title": "EMS battery settings",
-        "description": "Configure the static G6 EMS settings and select an optional read-only battery SOC source for shadow planning. Away and profile control are handled through Home Assistant entities.",
+        "description": "Configure the static G6 EMS settings and select an optional read-only battery SOC source for DOEMS planning. Away and profile control are handled through Home Assistant entities.",
         "data": {
           "battery_capacity_kwh": "Battery capacity",
           "technical_min_soc_percent": "Technical minimum SOC",
@@ -127,9 +127,7 @@
           "discharge_efficiency_percent": "Discharge efficiency",
           "minimum_trade_margin_eur_per_kwh": "Minimum trade margin",
           "startup_delay_seconds": "Startup delay",
-          "soc_entity": "Battery SOC sensor (read-only)",
-          "legacy_automatic_execution_entity": "Legacy Automatic Execution switch (read-only)",
-          "legacy_authority_entity": "Legacy authority diagnostics sensor (read-only)"
+          "soc_entity": "Battery SOC sensor (read-only)"
         }
       },
       "prices_gas": {
