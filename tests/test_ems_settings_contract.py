@@ -72,18 +72,18 @@ def test_step5a_runtime_binds_snapshot_only_when_ems_enabled() -> None:
     assert '"ems_settings": ems_settings' in text
 
 
-def test_step5a_live_diagnostics_are_read_only_and_non_actuating() -> None:
+def test_alpha8_live_diagnostics_are_read_only_and_non_actuating() -> None:
     sensor = (INTEGRATION / "sensor.py").read_text(encoding="utf-8")
     assert "class DOEMSEMSSettingsSensor" in sensor
     assert 'doems_ems_settings' in sensor
     assert '"settings_source": "config_entry_options"' in sensor
     assert '"settings_snapshot_immutable": True' in sensor
     assert '"startup_delay_runtime_gate_active": False' in sensor
-    assert '"planner_logic_active": False' in sensor
+    assert '"planner_logic_active": self.runtime is not None' in sensor
     assert '"physical_execution_authority": False' in sensor
 
 
-def test_step5a_does_not_activate_startup_gate_or_planner() -> None:
+def test_alpha8_keeps_startup_gate_inactive_while_planner_runtime_is_separate() -> None:
     settings = (INTEGRATION / "ems_settings.py").read_text(encoding="utf-8")
     assert "startup_delay_seconds" in settings
     assert ".services.async_call(" not in settings
