@@ -86,15 +86,13 @@ def test_alpha8_public_entities_use_definitive_names() -> None:
         "doems_ems",
         "doems_scheduler",
         "doems_plan_{slot}_status",
-        "doems_plan_{slot}_action",
-        "doems_plan_{slot}_execution_mode",
+        "doems_plan_{slot}_{field}",
         "doems_plan_{slot}_start_time",
-        "doems_plan_{slot}_power",
-        "doems_plan_{slot}_target_soc",
-        "doems_plan_{slot}_max_runtime",
-        "doems_plan_{slot}_max_start_delay",
+        "doems_plan_{slot}_{definition.object_suffix}",
     ):
         assert token in combined
+    for field in ("action", "execution_mode", "power_w", "target_soc", "max_runtime_h", "max_start_delay_min"):
+        assert field in combined
     assert "shadow_plan_" not in combined
     assert "legacy_" not in combined
 
@@ -111,6 +109,9 @@ def test_alpha8_complete_forecast_gate_and_rolling_price_window() -> None:
 
 def test_alpha8_runtime_sequence_is_deterministic() -> None:
     runtime = (INTEGRATION / "ems_runtime.py").read_text(encoding="utf-8")
+    start = runtime.index("async def _async_run_bridge_planstore_scheduler")
+    end = runtime.index("    def snapshot", start)
+    runtime = runtime[start:end]
     order = [
         "pre_cleanup_scheduler = self.scheduler.evaluate(",
         "async_release_expired_automatic_plans(expired_slots)",
@@ -128,3 +129,14 @@ def test_alpha8_runtime_sequence_is_deterministic() -> None:
 def test_alpha8_no_step5c_or_legacy_runtime_files() -> None:
     assert not (INTEGRATION / "ems_step5c.py").exists()
     assert not (INTEGRATION / "ems_shadow_runtime.py").exists()
+
+
+def test_alpha8_carries_quarter_roll_identity_continuity_into_definitive_bridge() -> None:
+    bridge = (INTEGRATION / "ems_planner_bridge.py").read_text(encoding="utf-8")
+    for token in (
+        "continuity",
+        "planner_identity",
+        "planner_signature",
+        "timedelta(minutes=15)",
+    ):
+        assert token in bridge
