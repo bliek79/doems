@@ -93,7 +93,7 @@ def test_step11_runtime_order_and_step12_boundary() -> None:
     assert '"physical_test_active": False' in chain
     assert '"execution_active": False' in chain
     assert ".services.async_call(" not in runtime
-    assert "ActionController" not in runtime
+    assert "DOEMSActionController" in runtime
     assert "ExecutionController" not in runtime
     assert '"physical_execution_authority": False' in runtime
 
@@ -107,7 +107,7 @@ def test_step11_runtime_exposes_diagnostics_without_execution_rights() -> None:
         '"safety_guard_invoked": bool(safety)',
         '"safety_handoff_status": safety.get("auto_safety_handoff_status")',
         '"safety_handoff_execution_permitted": safety.get(',
-        '"action_controller_invoked": False',
+        '"action_controller_invoked": bool(action_controller)',
         '"execution_controller_invoked": False',
         '"automatic_execution_armed": False',
         '"service_calls_performed": False',
