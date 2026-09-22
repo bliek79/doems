@@ -15,14 +15,21 @@ from homeassistant.core import Event, EventStateChangedData, HomeAssistant, call
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_SOC_ENTITY
+from .const import (
+    CONF_BATTERY_CHARGE_POWER_ENTITY,
+    CONF_BATTERY_DISCHARGE_POWER_ENTITY,
+    CONF_SOC_ENTITY,
+)
 from .ems_alpha76_adapter import run_ems_chain
 from .ems_plan_store import DOEMSPlanStore
+from .ems_prestart_validator import DOEMSPreStartValidator
+from .ems_safety_guard import DOEMSSafetyGuard
 from .ems_scheduler import DOEMSScheduler
 from .ems_planner_bridge import build_planner_action_bridge
 from .ems_live_input import build_live_ems_input
 from .ems_settings import EMSSettings
 from .ems_soc import UNAVAILABLE_SOC_STATES, parse_soc_percent
+from .energy_sources import normalize_power_w
 
 
 class DOEMSEMSRuntime:
@@ -56,11 +63,15 @@ class DOEMSEMSRuntime:
         self.soc_last_updated: str | None = None
         self.plan_store = DOEMSPlanStore(hass, entry.entry_id)
         self.scheduler = DOEMSScheduler(self.plan_store)
+        self.prestart_validator = DOEMSPreStartValidator()
+        self.safety_guard = DOEMSSafetyGuard()
         self.bridge_result: dict[str, Any] = {}
         self.scheduler_result: dict[str, Any] = {}
         self.plan_store_result: dict[str, Any] = {}
         self.handoff_result: dict[str, Any] = {}
         self.expired_release_result: dict[str, Any] = {}
+        self.prestart_result: dict[str, Any] = {}
+        self.safety_result: dict[str, Any] = {}
 
         self._listeners: list[Callable[[], None]] = []
         self._unsubs: list[Callable[[], None]] = []
@@ -157,6 +168,20 @@ class DOEMSEMSRuntime:
             return None, "invalid_value", updated
         return value, "ok", updated
 
+    def _read_optional_power(self, option_key: str) -> float | None:
+        """Read one already-configured battery power source without adding control."""
+        entity_id = self.entry.options.get(option_key)
+        if not entity_id:
+            return None
+        state = self.hass.states.get(str(entity_id))
+        if state is None:
+            return None
+        return normalize_power_w(
+            state.state,
+            state.attributes.get("unit_of_measurement"),
+            allow_negative=False,
+        )
+
     async def async_refresh(self, trigger: str) -> None:
         """Recalculate DOEMS planning state only; never actuate anything."""
         self.last_trigger = trigger
@@ -170,6 +195,8 @@ class DOEMSEMSRuntime:
         self.plan_store_result = {}
         self.handoff_result = {}
         self.expired_release_result = {}
+        self.prestart_result = {}
+        self.safety_result = {}
 
         # The definitive DOEMS Scheduler is independent from automatic planning.
         # Evaluate persisted/manual plans even when SOC or forecast inputs are not
@@ -363,6 +390,32 @@ class DOEMSEMSRuntime:
             "auto_bridge_observational_only": False,
         }
 
+        # Step 11 - exact automatic Prestart -> Safety Guard source copy.
+        # Controller / Execution remains absent. Therefore the existing source
+        # existing control-path prerequisite stays false and Safety can only
+        # diagnose/block; it cannot grant execution authority.
+        step11_data: dict[str, Any] = {
+            **plan72,
+            **self.bridge_result,
+            **self.scheduler_result,
+            "forecast_ready": True,
+            "soc": self.soc_percent,
+            "max_charge_power_w": self.settings.max_charge_power_w,
+            "max_discharge_power_w": self.settings.max_discharge_power_w,
+            "charge_power_w": self._read_optional_power(
+                CONF_BATTERY_CHARGE_POWER_ENTITY
+            ),
+            "discharge_power_w": self._read_optional_power(
+                CONF_BATTERY_DISCHARGE_POWER_ENTITY
+            ),
+            "control_path_configured": False,
+            "physical_test_active": False,
+            "execution_active": False,
+        }
+        self.prestart_result = self.prestart_validator.evaluate(step11_data)
+        step11_data.update(self.prestart_result)
+        self.safety_result = self.safety_guard.evaluate_automatic_handoff(step11_data)
+
     def snapshot(self) -> dict[str, Any]:
         """Return compact entity-safe diagnostics without publishing Plan72 arrays."""
         input_result = self.input_result or {}
@@ -373,6 +426,8 @@ class DOEMSEMSRuntime:
         time_contract = input_result.get("time_contract") or {}
         bridge = self.bridge_result or {}
         scheduler = self.scheduler_result or {}
+        prestart = self.prestart_result or {}
+        safety = self.safety_result or {}
         slots = scheduler.get("scheduler_slots") or {}
 
         def slot_snapshot(slot: int) -> dict[str, Any]:
@@ -442,8 +497,65 @@ class DOEMSEMSRuntime:
             "startup_delay_runtime_gate_active": False,
             "plan_store_active": True,
             "scheduler_invoked": bool(self.scheduler_result),
-            "prestart_validator_invoked": False,
-            "safety_guard_invoked": False,
+            "prestart_validator_invoked": bool(prestart),
+            "prestart_required": prestart.get("auto_prestart_required"),
+            "prestart_safe": prestart.get("auto_prestart_safe"),
+            "prestart_status": prestart.get("auto_prestart_status"),
+            "prestart_reason": prestart.get("auto_prestart_reason"),
+            "prestart_reasons": prestart.get("auto_prestart_reasons", []),
+            "prestart_warnings": prestart.get("auto_prestart_warnings", []),
+            "prestart_selected_slot": prestart.get("auto_prestart_selected_slot"),
+            "prestart_planner_identity": prestart.get("auto_prestart_planner_identity"),
+            "prestart_identity_match": prestart.get("auto_prestart_current_identity_match"),
+            "prestart_signature_match": prestart.get("auto_prestart_current_signature_match"),
+            "prestart_current_soc": prestart.get("auto_prestart_current_soc"),
+            "prestart_target_soc": prestart.get("auto_prestart_target_soc"),
+            "prestart_execution_reserve_soc": prestart.get(
+                "auto_prestart_execution_reserve_soc"
+            ),
+            "prestart_diagnostic_status": prestart.get(
+                "auto_prestart_diagnostic_status"
+            ),
+            "prestart_diagnostic_safe": prestart.get(
+                "auto_prestart_diagnostic_safe"
+            ),
+            "prestart_diagnostic_phase": prestart.get(
+                "auto_prestart_diagnostic_phase"
+            ),
+            "prestart_diagnostic_minutes_to_start": prestart.get(
+                "auto_prestart_diagnostic_minutes_to_start"
+            ),
+            "prestart_diagnostic_live_soc_enforced": prestart.get(
+                "auto_prestart_diagnostic_live_soc_enforced"
+            ),
+            "prestart_diagnostic_blockers": prestart.get(
+                "auto_prestart_diagnostic_blockers", []
+            ),
+            "prestart_diagnostic_warnings": prestart.get(
+                "auto_prestart_diagnostic_warnings", []
+            ),
+            "safety_guard_invoked": bool(safety),
+            "safety_handoff_required": safety.get("auto_safety_handoff_required"),
+            "safety_handoff_safe": safety.get("auto_safety_handoff_safe"),
+            "safety_handoff_status": safety.get("auto_safety_handoff_status"),
+            "safety_handoff_reason": safety.get("auto_safety_handoff_reason"),
+            "safety_handoff_reasons": safety.get("auto_safety_handoff_reasons", []),
+            "safety_handoff_warnings": safety.get("auto_safety_handoff_warnings", []),
+            "safety_handoff_selected_slot": safety.get(
+                "auto_safety_handoff_selected_slot"
+            ),
+            "safety_handoff_planner_identity": safety.get(
+                "auto_safety_handoff_planner_identity"
+            ),
+            "safety_handoff_control_path_configured": safety.get(
+                "auto_safety_handoff_control_path_configured", False
+            ),
+            "safety_handoff_execution_permitted": safety.get(
+                "auto_safety_handoff_execution_permitted", False
+            ),
+            "safety_handoff_physical_control": safety.get(
+                "auto_safety_handoff_physical_control", False
+            ),
             "action_controller_invoked": False,
             "execution_controller_invoked": False,
             "execution_mode": "validation",
