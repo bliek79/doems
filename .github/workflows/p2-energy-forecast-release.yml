@@ -202,7 +202,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view 0.1.0-alpha.9 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.9 --title "DOEMS 0.1.0-alpha.9 - Manual Plan Lifecycle Fix" --notes-file RELEASE_NOTES_0.1.0-alpha.9.md --prerelease
+            gh release edit 0.1.0-alpha.9 --title "DOEMS 0.1.0-alpha.9 - Safety / Prestart" --notes-file RELEASE_NOTES_0.1.0-alpha.9.md --prerelease
           else
-            gh release create 0.1.0-alpha.9 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.9 - Manual Plan Lifecycle Fix" --notes-file RELEASE_NOTES_0.1.0-alpha.9.md --prerelease
+            gh release create 0.1.0-alpha.9 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.9 - Safety / Prestart" --notes-file RELEASE_NOTES_0.1.0-alpha.9.md --prerelease
           fi
