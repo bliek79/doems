@@ -72,7 +72,8 @@ jobs:
           grep -F 'class DOEMSEMSPlan72Sensor' custom_components/doems/sensor.py
           grep -F 'attrs["plan"] = data.get("auto_plan_72h_plan", [])' custom_components/doems/sensor.py
           grep -F '_unrecorded_attributes = frozenset({"plan"})' custom_components/doems/sensor.py
-          grep -F 'doems_ems_plan72_hours' custom_components/doems/sensor.py
+          grep -F '("hours", "DOEMS EMS Plan72 Hours"' custom_components/doems/sensor.py
+          grep -F 'f"doems_ems_plan72_{suffix}"' custom_components/doems/sensor.py
           grep -F 'class DOEMSActionController' custom_components/doems/ems_action_controller.py
           grep -F 'class DOEMSExecutionHandoff' custom_components/doems/ems_execution_handoff.py
           grep -F '"controller_physical_control": False' custom_components/doems/ems_action_controller.py
