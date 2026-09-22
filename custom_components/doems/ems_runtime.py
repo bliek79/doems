@@ -12,15 +12,17 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_BATTERY_CHARGE_POWER_ENTITY,
     CONF_BATTERY_DISCHARGE_POWER_ENTITY,
     CONF_SOC_ENTITY,
+    CONTROL_PATH_OBSERVER_INTERVAL_SECONDS,
 )
 from .ems_alpha76_adapter import run_ems_chain
+from .ems_control_path import DOEMSControlPathObserver
 from .ems_plan_store import DOEMSPlanStore
 from .ems_prestart_validator import DOEMSPreStartValidator
 from .ems_safety_guard import DOEMSSafetyGuard
@@ -65,6 +67,7 @@ class DOEMSEMSRuntime:
         self.scheduler = DOEMSScheduler(self.plan_store)
         self.prestart_validator = DOEMSPreStartValidator()
         self.safety_guard = DOEMSSafetyGuard()
+        self.control_path = DOEMSControlPathObserver(hass, entry)
         self.bridge_result: dict[str, Any] = {}
         self.scheduler_result: dict[str, Any] = {}
         self.plan_store_result: dict[str, Any] = {}
@@ -72,11 +75,13 @@ class DOEMSEMSRuntime:
         self.expired_release_result: dict[str, Any] = {}
         self.prestart_result: dict[str, Any] = {}
         self.safety_result: dict[str, Any] = {}
+        self.control_path_result: dict[str, Any] = self.control_path.evaluate()
 
         self._listeners: list[Callable[[], None]] = []
         self._unsubs: list[Callable[[], None]] = []
         self._refresh_pending = False
         self._shutdown = False
+        self._control_path_timer_unsub: Callable[[], None] | None = None
 
     @property
     def soc_entity_id(self) -> str | None:
@@ -112,10 +117,28 @@ class DOEMSEMSRuntime:
                 )
             )
 
+        control_entities = [
+            entity_id
+            for entity_id in self.control_path.entity_ids.values()
+            if entity_id
+        ]
+        if control_entities:
+            self._unsubs.append(
+                async_track_state_change_event(
+                    self.hass,
+                    control_entities,
+                    self._control_path_state_changed,
+                )
+            )
+            self._schedule_control_path_tick()
+
         await self.async_refresh("startup")
 
     async def async_shutdown(self) -> None:
         self._shutdown = True
+        if self._control_path_timer_unsub is not None:
+            self._control_path_timer_unsub()
+            self._control_path_timer_unsub = None
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()
@@ -139,6 +162,30 @@ class DOEMSEMSRuntime:
     @callback
     def _soc_state_changed(self, _event: Event[EventStateChangedData]) -> None:
         self._request_refresh("soc_state_change")
+
+    @callback
+    def _control_path_state_changed(self, _event: Event[EventStateChangedData]) -> None:
+        self.control_path_result = self.control_path.evaluate()
+        self._request_refresh("control_path_state_change")
+
+    @callback
+    def _schedule_control_path_tick(self) -> None:
+        if self._shutdown or self._control_path_timer_unsub is not None:
+            return
+        self._control_path_timer_unsub = async_call_later(
+            self.hass,
+            CONTROL_PATH_OBSERVER_INTERVAL_SECONDS,
+            self._control_path_tick,
+        )
+
+    @callback
+    def _control_path_tick(self, _now: datetime) -> None:
+        self._control_path_timer_unsub = None
+        if self._shutdown:
+            return
+        self.control_path_result = self.control_path.evaluate()
+        self._notify()
+        self._schedule_control_path_tick()
 
     @callback
     def _request_refresh(self, trigger: str) -> None:
@@ -197,6 +244,7 @@ class DOEMSEMSRuntime:
         self.expired_release_result = {}
         self.prestart_result = {}
         self.safety_result = {}
+        self.control_path_result = self.control_path.evaluate()
 
         # The definitive DOEMS Scheduler is independent from automatic planning.
         # Evaluate persisted/manual plans even when SOC or forecast inputs are not
@@ -390,10 +438,11 @@ class DOEMSEMSRuntime:
             "auto_bridge_observational_only": False,
         }
 
-        # Step 11 - exact automatic Prestart -> Safety Guard source copy.
-        # Controller / Execution remains absent. Therefore the existing source
-        # existing control-path prerequisite stays false and Safety can only
-        # diagnose/block; it cannot grant execution authority.
+        # Step 11 consumes the Step 12.1 control-path contract read-only.
+        # A configured path may remove the former configuration blocker, but
+        # no controller, arm gate, service call or physical authority exists.
+        control_path = self.control_path_result or self.control_path.evaluate()
+        control_entities = control_path.get("entities") or {}
         step11_data: dict[str, Any] = {
             **plan72,
             **self.bridge_result,
@@ -408,7 +457,13 @@ class DOEMSEMSRuntime:
             "discharge_power_w": self._read_optional_power(
                 CONF_BATTERY_DISCHARGE_POWER_ENTITY
             ),
-            "control_path_configured": False,
+            "control_path_configured": bool(control_path.get("configured")),
+            "control_path_ready": control_path.get("ready"),
+            "control_path_pre_mode_ready": control_path.get("pre_mode_ready"),
+            "control_path_post_mode_ready": control_path.get("post_mode_ready"),
+            "operating_mode": control_entities.get("operating_mode", {}).get("state"),
+            "action_direction": control_entities.get("action_direction", {}).get("state"),
+            "power_setpoint_w": control_entities.get("power_setpoint", {}).get("state"),
             "physical_test_active": False,
             "execution_active": False,
         }
@@ -428,6 +483,8 @@ class DOEMSEMSRuntime:
         scheduler = self.scheduler_result or {}
         prestart = self.prestart_result or {}
         safety = self.safety_result or {}
+        control_path = self.control_path_result or {}
+        control_entities = control_path.get("entities") or {}
         slots = scheduler.get("scheduler_slots") or {}
 
         def slot_snapshot(slot: int) -> dict[str, Any]:
@@ -556,6 +613,54 @@ class DOEMSEMSRuntime:
             "safety_handoff_physical_control": safety.get(
                 "auto_safety_handoff_physical_control", False
             ),
+            "control_path_configured": bool(control_path.get("configured")),
+            "control_path_ready": bool(control_path.get("ready")),
+            "control_path_reason": control_path.get("reason"),
+            "control_path_stable_seconds": control_path.get("stable_seconds", 0),
+            "control_path_required_stable_seconds": control_path.get(
+                "required_stable_seconds", 60
+            ),
+            "control_path_pre_mode_ready": bool(control_path.get("pre_mode_ready")),
+            "control_path_pre_mode_reason": control_path.get("pre_mode_reason"),
+            "control_path_pre_mode_stable_seconds": control_path.get(
+                "pre_mode_stable_seconds", 0
+            ),
+            "control_path_post_mode_required": bool(
+                control_path.get("post_mode_required")
+            ),
+            "control_path_post_mode_ready": bool(control_path.get("post_mode_ready")),
+            "control_path_post_mode_reason": control_path.get("post_mode_reason"),
+            "control_path_post_mode_stable_seconds": control_path.get(
+                "post_mode_stable_seconds", 0
+            ),
+            "control_path_operating_mode_entity": control_entities.get(
+                "operating_mode", {}
+            ).get("entity_id"),
+            "control_path_operating_mode": control_entities.get(
+                "operating_mode", {}
+            ).get("state"),
+            "control_path_operating_mode_available": control_entities.get(
+                "operating_mode", {}
+            ).get("available", False),
+            "control_path_action_direction_entity": control_entities.get(
+                "action_direction", {}
+            ).get("entity_id"),
+            "control_path_action_direction": control_entities.get(
+                "action_direction", {}
+            ).get("state"),
+            "control_path_action_direction_available": control_entities.get(
+                "action_direction", {}
+            ).get("available", False),
+            "control_path_power_setpoint_entity": control_entities.get(
+                "power_setpoint", {}
+            ).get("entity_id"),
+            "control_path_power_setpoint": control_entities.get(
+                "power_setpoint", {}
+            ).get("state"),
+            "control_path_power_setpoint_available": control_entities.get(
+                "power_setpoint", {}
+            ).get("available", False),
+            "control_path_read_only": True,
             "action_controller_invoked": False,
             "execution_controller_invoked": False,
             "execution_mode": "validation",
