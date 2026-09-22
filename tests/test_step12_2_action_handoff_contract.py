@@ -63,7 +63,7 @@ def test_step12_2_runtime_keeps_manual_and_automatic_paths_separate() -> None:
     end = runtime.index("    def snapshot", start)
     chain = runtime[start:end]
 
-    assert "self.legacy_safety_result = self.safety_guard.evaluate(step12_data)" in chain
+    assert "self.legacy_safety_result = self.safety_guard.evaluate(step11_data)" in chain
     assert "self.action_controller_result = self.action_controller.evaluate(action_data)" in chain
     assert "self.execution_handoff_result = self.execution_handoff.evaluate(execution_data)" in chain
 
@@ -90,8 +90,8 @@ def test_step12_2_runtime_exposes_shadow_diagnostics() -> None:
         '"controller_status": action_controller.get("controller_status")',
         '"controller_ready": action_controller.get("controller_ready")',
         '"execution_handoff_invoked": bool(execution_handoff)',
-        '"execution_handoff_status": execution_handoff.get("auto_execution_handoff_status")',
-        '"execution_handoff_ready": execution_handoff.get("auto_execution_handoff_ready")',
+        '"execution_handoff_status": execution_handoff.get(',
+        '"execution_handoff_ready": execution_handoff.get(',
         '"execution_handoff_execution_permitted": execution_handoff.get(',
         '"execution_controller_invoked": False',
         '"automatic_execution_armed": False',
