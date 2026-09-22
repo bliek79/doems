@@ -22,7 +22,9 @@ from .const import (
     CONTROL_PATH_OBSERVER_INTERVAL_SECONDS,
 )
 from .ems_alpha76_adapter import run_ems_chain
+from .ems_action_controller import DOEMSActionController
 from .ems_control_path import DOEMSControlPathObserver
+from .ems_execution_handoff import DOEMSExecutionHandoff
 from .ems_plan_store import DOEMSPlanStore
 from .ems_prestart_validator import DOEMSPreStartValidator
 from .ems_safety_guard import DOEMSSafetyGuard
@@ -67,6 +69,8 @@ class DOEMSEMSRuntime:
         self.scheduler = DOEMSScheduler(self.plan_store)
         self.prestart_validator = DOEMSPreStartValidator()
         self.safety_guard = DOEMSSafetyGuard()
+        self.action_controller = DOEMSActionController()
+        self.execution_handoff = DOEMSExecutionHandoff()
         self.control_path = DOEMSControlPathObserver(hass, entry)
         self.bridge_result: dict[str, Any] = {}
         self.scheduler_result: dict[str, Any] = {}
@@ -75,6 +79,9 @@ class DOEMSEMSRuntime:
         self.expired_release_result: dict[str, Any] = {}
         self.prestart_result: dict[str, Any] = {}
         self.safety_result: dict[str, Any] = {}
+        self.execution_handoff_result: dict[str, Any] = {}
+        self.legacy_safety_result: dict[str, Any] = {}
+        self.action_controller_result: dict[str, Any] = {}
         self.control_path_result: dict[str, Any] = self.control_path.evaluate()
 
         self._listeners: list[Callable[[], None]] = []
@@ -244,6 +251,9 @@ class DOEMSEMSRuntime:
         self.expired_release_result = {}
         self.prestart_result = {}
         self.safety_result = {}
+        self.execution_handoff_result = {}
+        self.legacy_safety_result = {}
+        self.action_controller_result = {}
         self.control_path_result = self.control_path.evaluate()
 
         # The definitive DOEMS Scheduler is independent from automatic planning.
@@ -471,6 +481,25 @@ class DOEMSEMSRuntime:
         step11_data.update(self.prestart_result)
         self.safety_result = self.safety_guard.evaluate_automatic_handoff(step11_data)
 
+        # Step 12.2 automatic path: Safety -> Execution Handoff directly.
+        # It deliberately does not consume Action Controller output and stops
+        # before Final Revalidation, mode-switching or any physical service call.
+        execution_data: dict[str, Any] = {
+            **step11_data,
+            **self.safety_result,
+        }
+        self.execution_handoff_result = self.execution_handoff.evaluate(execution_data)
+
+        # Step 12.2 manual/legacy observer path. This mirrors the source's
+        # separate legacy Safety -> Action Controller evaluation and remains
+        # semantic/read-only. It is not part of automatic Plan72 execution.
+        self.legacy_safety_result = self.safety_guard.evaluate(step11_data)
+        action_data: dict[str, Any] = {
+            **step11_data,
+            **self.legacy_safety_result,
+        }
+        self.action_controller_result = self.action_controller.evaluate(action_data)
+
     def snapshot(self) -> dict[str, Any]:
         """Return compact entity-safe diagnostics without publishing Plan72 arrays."""
         input_result = self.input_result or {}
@@ -483,6 +512,9 @@ class DOEMSEMSRuntime:
         scheduler = self.scheduler_result or {}
         prestart = self.prestart_result or {}
         safety = self.safety_result or {}
+        execution_handoff = self.execution_handoff_result or {}
+        legacy_safety = self.legacy_safety_result or {}
+        action_controller = self.action_controller_result or {}
         control_path = self.control_path_result or {}
         control_entities = control_path.get("entities") or {}
         slots = scheduler.get("scheduler_slots") or {}
@@ -661,7 +693,86 @@ class DOEMSEMSRuntime:
                 "power_setpoint", {}
             ).get("available", False),
             "control_path_read_only": True,
-            "action_controller_invoked": False,
+            "execution_handoff_invoked": bool(execution_handoff),
+            "execution_handoff_required": execution_handoff.get(
+                "auto_execution_handoff_required"
+            ),
+            "execution_handoff_ready": execution_handoff.get(
+                "auto_execution_handoff_ready"
+            ),
+            "execution_handoff_status": execution_handoff.get(
+                "auto_execution_handoff_status"
+            ),
+            "execution_handoff_reason": execution_handoff.get(
+                "auto_execution_handoff_reason"
+            ),
+            "execution_handoff_reasons": execution_handoff.get(
+                "auto_execution_handoff_reasons", []
+            ),
+            "execution_handoff_warnings": execution_handoff.get(
+                "auto_execution_handoff_warnings", []
+            ),
+            "execution_handoff_selected_slot": execution_handoff.get(
+                "auto_execution_handoff_selected_slot"
+            ),
+            "execution_handoff_planner_identity": execution_handoff.get(
+                "auto_execution_handoff_planner_identity"
+            ),
+            "execution_handoff_action": execution_handoff.get(
+                "auto_execution_handoff_action"
+            ),
+            "execution_handoff_power_w": execution_handoff.get(
+                "auto_execution_handoff_power_w"
+            ),
+            "execution_handoff_target_soc": execution_handoff.get(
+                "auto_execution_handoff_target_soc"
+            ),
+            "execution_handoff_max_runtime_h": execution_handoff.get(
+                "auto_execution_handoff_max_runtime_h"
+            ),
+            "execution_handoff_control_path_configured": execution_handoff.get(
+                "auto_execution_handoff_control_path_configured", False
+            ),
+            "execution_handoff_final_revalidation_required": execution_handoff.get(
+                "auto_execution_handoff_final_revalidation_required", True
+            ),
+            "execution_handoff_execution_permitted": execution_handoff.get(
+                "auto_execution_handoff_execution_permitted", False
+            ),
+            "execution_handoff_physical_control": execution_handoff.get(
+                "auto_execution_handoff_physical_control", False
+            ),
+            "legacy_safety_status": legacy_safety.get("safety_status"),
+            "legacy_safety_safe": legacy_safety.get("safety_safe"),
+            "legacy_safety_reason": legacy_safety.get("safety_reason"),
+            "action_controller_invoked": bool(action_controller),
+            "controller_status": action_controller.get("controller_status"),
+            "controller_ready": action_controller.get("controller_ready"),
+            "controller_selected_slot": action_controller.get(
+                "controller_selected_slot"
+            ),
+            "controller_action": action_controller.get("controller_action"),
+            "controller_power_w": action_controller.get("controller_power_w"),
+            "controller_target_soc": action_controller.get("controller_target_soc"),
+            "controller_max_runtime_h": action_controller.get(
+                "controller_max_runtime_h"
+            ),
+            "controller_execution_mode": action_controller.get(
+                "controller_execution_mode"
+            ),
+            "controller_reason": action_controller.get("controller_reason"),
+            "controller_desired_mode": action_controller.get(
+                "controller_desired_mode"
+            ),
+            "controller_desired_direction": action_controller.get(
+                "controller_desired_direction"
+            ),
+            "controller_desired_power_w": action_controller.get(
+                "controller_desired_power_w"
+            ),
+            "controller_physical_control": action_controller.get(
+                "controller_physical_control", False
+            ),
             "execution_controller_invoked": False,
             "execution_mode": "validation",
             "automatic_execution_armed": False,
