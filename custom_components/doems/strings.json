@@ -115,7 +115,7 @@
       },
       "ems": {
         "title": "EMS battery settings",
-        "description": "Configure only the static G6 EMS settings. Away and profile control are handled through Home Assistant entities.",
+        "description": "Configure the static EMS settings plus the optional read-only Step 12.1 battery control-path mappings. No physical commands are sent.",
         "data": {
           "battery_capacity_kwh": "Battery capacity",
           "technical_min_soc_percent": "Technical minimum SOC",
@@ -126,7 +126,11 @@
           "charge_efficiency_percent": "Charge efficiency",
           "discharge_efficiency_percent": "Discharge efficiency",
           "minimum_trade_margin_eur_per_kwh": "Minimum trade margin",
-          "startup_delay_seconds": "Startup delay"
+          "startup_delay_seconds": "Startup delay",
+          "soc_entity": "Battery SOC sensor",
+          "operating_mode_entity": "Operating-mode select (read-only mapping)",
+          "action_direction_entity": "Charge/discharge direction select (read-only mapping)",
+          "power_setpoint_entity": "Power-setpoint number (read-only mapping)"
         }
       },
       "prices_gas": {
@@ -157,7 +161,8 @@
       "ems_below_minimum": "The value is below the allowed minimum.",
       "ems_above_maximum": "The value is above the allowed maximum.",
       "ems_invalid_step": "The value does not match the allowed step.",
-      "ems_soc_range_invalid": "Maximum SOC must be higher than technical minimum SOC."
+      "ems_soc_range_invalid": "Maximum SOC must be higher than technical minimum SOC.",
+      "control_path_incomplete": "Configure all three control-path entities together, or leave all three empty."
     },
     "abort": {
       "solar_foundation_invalid": "The Solar Foundation topology did not pass structural validation."
