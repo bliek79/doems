@@ -128,7 +128,7 @@
       },
       "ems": {
         "title": "EMS batterij-instellingen",
-        "description": "Configureer de statische EMS-instellingen en kies optioneel een alleen-lezen SOC-bron voor de zelfstandige DOEMS-planning. Afwezigheid en profielsturing lopen via Home Assistant-entiteiten.",
+        "description": "Configureer de statische EMS-instellingen plus optioneel de read-only Step 12.1 batterijbesturingsentiteiten. Er worden geen fysieke commando's verstuurd.",
         "data": {
           "battery_capacity_kwh": "Batterijcapaciteit",
           "technical_min_soc_percent": "Technische minimum-SOC",
@@ -140,7 +140,10 @@
           "discharge_efficiency_percent": "Ontlaadrendement",
           "minimum_trade_margin_eur_per_kwh": "Minimale handelsmarge",
           "startup_delay_seconds": "Opstartvertraging",
-          "soc_entity": "Batterij-SOC sensor (alleen lezen)"
+          "soc_entity": "Batterij-SOC sensor (alleen lezen)",
+          "operating_mode_entity": "Bedrijfsmodus-select (read-only koppeling)",
+          "action_direction_entity": "Laad/ontlaadrichting-select (read-only koppeling)",
+          "power_setpoint_entity": "Vermogenssetpoint-number (read-only koppeling)"
         }
       }
     },
@@ -160,7 +163,8 @@
       "ems_invalid_step": "De waarde past niet bij de toegestane stapgrootte.",
       "ems_soc_range_invalid": "Maximum-SOC moet hoger zijn dan de technische minimum-SOC.",
       "unsupported_soc_unit": "De SOC-sensor moet % als eenheid gebruiken.",
-      "invalid_soc_value": "De SOC-sensor moet een numerieke waarde van 0 tot 100 leveren."
+      "invalid_soc_value": "De SOC-sensor moet een numerieke waarde van 0 tot 100 leveren.",
+      "control_path_incomplete": "Configureer alle drie besturingsentiteiten samen, of laat ze alle drie leeg."
     },
     "abort": {
       "solar_foundation_invalid": "De Solar Foundation-topologie is niet door de structurele validatie gekomen."

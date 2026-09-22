@@ -31,6 +31,9 @@ from .const import (
     CONF_AWAY_END,
     CONF_EMS_ENABLED,
     CONF_SOC_ENTITY,
+    CONF_OPERATING_MODE_ENTITY,
+    CONF_ACTION_DIRECTION_ENTITY,
+    CONF_POWER_SETPOINT_ENTITY,
     CONF_ELECTRICITY_EXPORT_SUPPLIER,
     CONF_ELECTRICITY_EXPORT_TAX,
     CONF_ELECTRICITY_FIXED_SUPPLY_PER_DAY,
@@ -111,6 +114,10 @@ def _power_selector() -> selector.EntitySelector:
 
 def _sensor_selector() -> selector.EntitySelector:
     return selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor"))
+
+
+def _entity_selector(domain: str) -> selector.EntitySelector:
+    return selector.EntitySelector(selector.EntitySelectorConfig(domain=domain))
 
 
 def _energyzero_config_entry_selector() -> selector.ConfigEntrySelector:
@@ -533,6 +540,16 @@ class DOEMSOptionsFlow(OptionsFlow):
             soc_error = _validate_soc_entity(self.hass, user_input.get(CONF_SOC_ENTITY))
             if soc_error:
                 errors[CONF_SOC_ENTITY] = soc_error
+
+            control_keys = (
+                CONF_OPERATING_MODE_ENTITY,
+                CONF_ACTION_DIRECTION_ENTITY,
+                CONF_POWER_SETPOINT_ENTITY,
+            )
+            configured_control_keys = [key for key in control_keys if user_input.get(key)]
+            if configured_control_keys and len(configured_control_keys) != len(control_keys):
+                errors["base"] = "control_path_incomplete"
+
             if not errors:
                 normalized = dict(user_input)
                 errors.update(validate_ems_combination(normalized))
@@ -540,12 +557,27 @@ class DOEMSOptionsFlow(OptionsFlow):
                     self._pending.update(normalized)
                     if not normalized.get(CONF_SOC_ENTITY):
                         self._pending.pop(CONF_SOC_ENTITY, None)
+                    for key in control_keys:
+                        if not normalized.get(key):
+                            self._pending.pop(key, None)
                     return self._save()
 
         return self.async_show_form(
             step_id="ems",
             data_schema=vol.Schema({
                 _optional_entity(CONF_SOC_ENTITY, self._current(CONF_SOC_ENTITY)): _sensor_selector(),
+                _optional_entity(
+                    CONF_OPERATING_MODE_ENTITY,
+                    self._current(CONF_OPERATING_MODE_ENTITY),
+                ): _entity_selector("select"),
+                _optional_entity(
+                    CONF_ACTION_DIRECTION_ENTITY,
+                    self._current(CONF_ACTION_DIRECTION_ENTITY),
+                ): _entity_selector("select"),
+                _optional_entity(
+                    CONF_POWER_SETPOINT_ENTITY,
+                    self._current(CONF_POWER_SETPOINT_ENTITY),
+                ): _entity_selector("number"),
                 vol.Required(
                     CONF_BATTERY_CAPACITY_KWH,
                     default=float(self._current(CONF_BATTERY_CAPACITY_KWH, DEFAULT_BATTERY_CAPACITY_KWH)),

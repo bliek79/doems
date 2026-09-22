@@ -88,7 +88,8 @@ def test_step11_runtime_order_and_step12_boundary() -> None:
     ]
     assert positions == sorted(positions)
 
-    assert '"control_path_configured": False' in chain
+    assert '"control_path_configured": bool(control_path.get("configured"))' in chain
+    assert '"control_path_ready": control_path.get("ready")' in chain
     assert '"physical_test_active": False' in chain
     assert '"execution_active": False' in chain
     assert ".services.async_call(" not in runtime

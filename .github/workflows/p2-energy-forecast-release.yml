@@ -1,4 +1,4 @@
-name: DOEMS CI and Alpha9 Safety Prestart Release
+name: DOEMS CI and Alpha10 Step 12.1 Control Path Readiness Release
 
 on:
   pull_request:
@@ -29,9 +29,9 @@ jobs:
               json.loads(path.read_text(encoding='utf-8'))
               print(f'valid: {path}')
           PY
-      - name: Validate Alpha9 release contract
+      - name: Validate Alpha10 release contract
         run: |
-          test -f RELEASE_NOTES_0.1.0-alpha.9.md
+          test -f RELEASE_NOTES_0.1.0-alpha.10.md
           test -f examples/prices_p4_forecast_card.yaml
           test -f custom_components/doems/prices.py
           test -f custom_components/doems/prices_model.py
@@ -41,8 +41,8 @@ jobs:
           test ! -f scripts/build_brand_assets.py
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
-          grep -F 'VERSION = "0.1.0-alpha.9"' custom_components/doems/const.py
-          grep -F '"version": "0.1.0-alpha.9"' custom_components/doems/manifest.json
+          grep -F 'VERSION = "0.1.0-alpha.10"' custom_components/doems/const.py
+          grep -F '"version": "0.1.0-alpha.10"' custom_components/doems/manifest.json
           grep -F 'CONF_EMS_ENABLED = "ems_enabled"' custom_components/doems/const.py
           grep -F 'CONF_BATTERY_CAPACITY_KWH = "battery_capacity_kwh"' custom_components/doems/const.py
           grep -F 'CONF_TECHNICAL_MIN_SOC_PERCENT = "technical_min_soc_percent"' custom_components/doems/const.py
@@ -64,6 +64,17 @@ jobs:
           test -f custom_components/doems/ems_planner_bridge.py
           test -f custom_components/doems/ems_prestart_validator.py
           test -f custom_components/doems/ems_safety_guard.py
+          test -f custom_components/doems/ems_control_path.py
+          test -f tests/test_step12_1_control_path_contract.py
+          grep -F 'CONF_OPERATING_MODE_ENTITY = "operating_mode_entity"' custom_components/doems/const.py
+          grep -F 'CONF_ACTION_DIRECTION_ENTITY = "action_direction_entity"' custom_components/doems/const.py
+          grep -F 'CONF_POWER_SETPOINT_ENTITY = "power_setpoint_entity"' custom_components/doems/const.py
+          grep -F 'CONTROL_PATH_STABLE_SECONDS = 60' custom_components/doems/const.py
+          grep -F 'class DOEMSControlPathObserver' custom_components/doems/ems_control_path.py
+          grep -F '"read_only": True' custom_components/doems/ems_control_path.py
+          grep -F '"service_calls_performed": False' custom_components/doems/ems_control_path.py
+          grep -F '"physical_execution_authority": False' custom_components/doems/ems_control_path.py
+          ! grep -F '.services.async_call(' custom_components/doems/ems_control_path.py
           test -f tests/test_step11_safety_prestart_contract.py
           test -f custom_components/doems/ems_soc.py
           test -f custom_components/doems/number.py
@@ -156,7 +167,7 @@ jobs:
           ! grep -R -F 'doems_capture_alpha41_solar_freeze' custom_components/doems
           ! grep -R -F 'doems_alpha41_solar_freeze_captured' custom_components/doems
 
-  publish-alpha9:
+  publish-alpha10:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
@@ -166,7 +177,7 @@ jobs:
           fetch-depth: 0
       - name: Build release archive
         run: |
-          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.9.md
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.10.md
           sha256sum doems.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - name: Verify EMS settings, Presence and Prices runtime are packaged
@@ -181,6 +192,7 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_planner_bridge.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_prestart_validator.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_safety_guard.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_control_path.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/number.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_alpha76/planner_72h.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/presence.py'
@@ -197,12 +209,12 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/icon.png'
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
-      - name: Publish Alpha9 Safety Prestart release
+      - name: Publish Alpha10 Step 12.1 Control Path Readiness release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view 0.1.0-alpha.9 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.9 --title "DOEMS 0.1.0-alpha.9 - Safety / Prestart" --notes-file RELEASE_NOTES_0.1.0-alpha.9.md --prerelease
+          if gh release view 0.1.0-alpha.10 >/dev/null 2>&1; then
+            gh release edit 0.1.0-alpha.10 --title "DOEMS 0.1.0-alpha.10 - Step 12.1 Control-path Readiness" --notes-file RELEASE_NOTES_0.1.0-alpha.10.md --prerelease
           else
-            gh release create 0.1.0-alpha.9 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.9 - Safety / Prestart" --notes-file RELEASE_NOTES_0.1.0-alpha.9.md --prerelease
+            gh release create 0.1.0-alpha.10 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.10 - Step 12.1 Control-path Readiness" --notes-file RELEASE_NOTES_0.1.0-alpha.10.md --prerelease
           fi
