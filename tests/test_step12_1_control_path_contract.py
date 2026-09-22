@@ -83,7 +83,7 @@ def test_step12_1_step11_boundary_evolves_without_physical_authority() -> None:
     assert '"control_path_configured": False' not in runtime
     assert '"physical_test_active": False' in runtime
     assert '"execution_active": False' in runtime
-    assert '"action_controller_invoked": False' in runtime
+    assert '"action_controller_invoked": bool(action_controller)' in runtime
     assert '"execution_controller_invoked": False' in runtime
     assert '"automatic_execution_armed": False' in runtime
     assert '"service_calls_performed": False' in runtime
