@@ -391,8 +391,8 @@ class DOEMSEMSRuntime:
         }
 
         # Step 11 - exact automatic Prestart -> Safety Guard source copy.
-        # Controller / Execution remains absent. Therefore the existing anker_ems
-        # control-path prerequisite stays false and the Safety handoff can only
+        # Controller / Execution remains absent. Therefore the existing source
+        # existing control-path prerequisite stays false and Safety can only
         # diagnose/block; it cannot grant execution authority.
         step11_data: dict[str, Any] = {
             **plan72,
