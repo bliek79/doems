@@ -96,6 +96,7 @@ async def async_setup_entry(
         entities.extend(
             [
                 DOEMSEMSStatusSensor(entry, ems_runtime),
+                *build_plan72_sensors(entry, ems_runtime),
                 DOEMSSchedulerStatusSensor(entry, ems_runtime),
                 *(DOEMSPlanStatusSensor(entry, ems_runtime, slot) for slot in range(1, 4)),
             ]
@@ -627,6 +628,140 @@ class DOEMSEMSStatusSensor(_DOEMSEMSRuntimeSensor):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         return self.runtime.snapshot()
+
+
+
+def _plan72_summary_attrs(data: dict[str, Any]) -> dict[str, Any]:
+    """Source-parity public Plan72 summary attributes."""
+    return {
+        "valid": data.get("auto_plan_72h_valid", False),
+        "reason": data.get("auto_plan_72h_reason"),
+        "count": data.get("auto_plan_72h_count"),
+        "start": data.get("auto_plan_72h_start"),
+        "end": data.get("auto_plan_72h_end"),
+        "start_soc": data.get("auto_plan_72h_start_soc"),
+        "end_soc": data.get("auto_plan_72h_end_soc"),
+        "min_soc": data.get("auto_plan_72h_min_soc"),
+        "max_soc": data.get("auto_plan_72h_max_soc"),
+        "reserve_floor_soc": data.get("auto_plan_72h_reserve_floor_soc"),
+        "dynamic_reserve_min_soc": data.get("auto_plan_72h_dynamic_reserve_min_soc"),
+        "dynamic_reserve_max_soc": data.get("auto_plan_72h_dynamic_reserve_max_soc"),
+        "execution_buffer_percent": data.get("auto_plan_72h_execution_buffer_percent"),
+        "max_charge_power_w": data.get("auto_plan_72h_max_charge_power_w"),
+        "max_discharge_power_w": data.get("auto_plan_72h_max_discharge_power_w"),
+        "execution_reserve_floor_soc": data.get("auto_plan_72h_execution_reserve_floor_soc"),
+        "execution_reserve_min_soc": data.get("auto_plan_72h_execution_reserve_min_soc"),
+        "execution_reserve_max_soc": data.get("auto_plan_72h_execution_reserve_max_soc"),
+        "min_execution_headroom_soc": data.get("auto_plan_72h_min_execution_headroom_soc"),
+        "execution_buffer_breach_hours": data.get("auto_plan_72h_execution_buffer_breach_hours"),
+        "execution_buffer_safe": data.get("auto_plan_72h_execution_buffer_safe", False),
+        "solar_horizon_complete": data.get("auto_plan_72h_solar_horizon_complete"),
+        "solar_horizon_incomplete_hours": data.get("auto_plan_72h_solar_horizon_incomplete_hours"),
+        "solar_charge_kwh": data.get("auto_plan_72h_solar_charge_kwh"),
+        "grid_safety_charge_kwh": data.get("auto_plan_72h_grid_safety_charge_kwh"),
+        "grid_trade_charge_kwh": data.get("auto_plan_72h_grid_trade_charge_kwh"),
+        "home_discharge_kwh": data.get("auto_plan_72h_home_discharge_kwh"),
+        "grid_trade_discharge_kwh": data.get("auto_plan_72h_grid_trade_discharge_kwh"),
+        "grid_import_for_home_kwh": data.get("auto_plan_72h_grid_import_for_home_kwh"),
+        "solar_export_kwh": data.get("auto_plan_72h_solar_export_kwh"),
+        "charge_efficiency_percent": data.get("auto_plan_72h_charge_efficiency_percent"),
+        "discharge_efficiency_percent": data.get("auto_plan_72h_discharge_efficiency_percent"),
+        "observational_only": data.get("auto_plan_72h_observational_only", True),
+        "execution_enabled": data.get("auto_plan_72h_execution_enabled", False),
+        "note": data.get("auto_plan_72h_note"),
+    }
+
+
+class DOEMSEMSPlan72Sensor(_DOEMSEMSRuntimeSensor):
+    """Expose the existing Plan72 calculation with source-parity observability."""
+
+    _attr_icon = "mdi:chart-timeline-variant-shimmer"
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        runtime: DOEMSEMSRuntime,
+        *,
+        suffix: str,
+        name: str,
+        value_key: str | None = None,
+        unit: str | None = None,
+        include_plan: bool = False,
+        solar_horizon_status: bool = False,
+    ) -> None:
+        super().__init__(entry, runtime)
+        self._suffix = suffix
+        self._value_key = value_key
+        self._include_plan = include_plan
+        self._solar_horizon_status = solar_horizon_status
+        self._attr_name = name
+        self._attr_unique_id = f"doems_ems_plan72_{suffix}"
+        self._attr_suggested_object_id = f"doems_ems_plan72_{suffix}"
+        if unit is not None:
+            self._attr_native_unit_of_measurement = unit
+        if include_plan:
+            self._unrecorded_attributes = frozenset({"plan"})
+
+    def _data(self) -> dict[str, Any]:
+        planner = self.runtime.planner_result or {}
+        return dict(planner.get("plan72") or {})
+
+    @property
+    def native_value(self) -> Any:
+        data = self._data()
+        if self._solar_horizon_status:
+            return (
+                "volledig"
+                if data.get("auto_plan_72h_solar_horizon_complete")
+                else "onvolledig"
+            )
+        return data.get(self._value_key) if self._value_key else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        data = self._data()
+        attrs = _plan72_summary_attrs(data)
+        if self._include_plan:
+            attrs["plan"] = data.get("auto_plan_72h_plan", [])
+        return attrs
+
+
+def build_plan72_sensors(
+    entry: ConfigEntry,
+    runtime: DOEMSEMSRuntime,
+) -> list[SensorEntity]:
+    """Build the Plan72 public sensor set copied from the working source."""
+    specs = [
+        ("status", "DOEMS EMS Plan72 Status", "auto_plan_72h_status", None, False, False),
+        ("hours", "DOEMS EMS Plan72 Hours", "auto_plan_72h_count", "h", True, False),
+        ("end_soc", "DOEMS EMS Plan72 End SOC", "auto_plan_72h_end_soc", PERCENTAGE, False, False),
+        ("min_soc", "DOEMS EMS Plan72 Minimum SOC", "auto_plan_72h_min_soc", PERCENTAGE, False, False),
+        ("dynamic_reserve_now", "DOEMS EMS Plan72 Reserve", "auto_plan_72h_reserve_floor_soc", PERCENTAGE, False, False),
+        ("dynamic_reserve_max", "DOEMS EMS Plan72 Maximum Reserve", "auto_plan_72h_dynamic_reserve_max_soc", PERCENTAGE, False, False),
+        ("execution_reserve_now", "DOEMS EMS Plan72 Execution Reserve", "auto_plan_72h_execution_reserve_floor_soc", PERCENTAGE, False, False),
+        ("execution_headroom_min", "DOEMS EMS Plan72 Execution Margin", "auto_plan_72h_min_execution_headroom_soc", PERCENTAGE, False, False),
+        ("execution_buffer_breach_hours", "DOEMS EMS Plan72 Buffer Breach", "auto_plan_72h_execution_buffer_breach_hours", "h", False, False),
+        ("solar_horizon_status", "DOEMS EMS Plan72 Solar Horizon", None, None, False, True),
+        ("solar_horizon_incomplete_hours", "DOEMS EMS Plan72 Missing Solar Hours", "auto_plan_72h_solar_horizon_incomplete_hours", "h", False, False),
+        ("solar_charge", "DOEMS EMS Plan72 Solar Charge", "auto_plan_72h_solar_charge_kwh", UnitOfEnergy.KILO_WATT_HOUR, False, False),
+        ("grid_safety_charge", "DOEMS EMS Plan72 Safety Charge", "auto_plan_72h_grid_safety_charge_kwh", UnitOfEnergy.KILO_WATT_HOUR, False, False),
+        ("grid_trade_charge", "DOEMS EMS Plan72 Trade Charge", "auto_plan_72h_grid_trade_charge_kwh", UnitOfEnergy.KILO_WATT_HOUR, False, False),
+        ("home_discharge", "DOEMS EMS Plan72 Home Discharge", "auto_plan_72h_home_discharge_kwh", UnitOfEnergy.KILO_WATT_HOUR, False, False),
+        ("grid_trade_discharge", "DOEMS EMS Plan72 Grid Discharge", "auto_plan_72h_grid_trade_discharge_kwh", UnitOfEnergy.KILO_WATT_HOUR, False, False),
+    ]
+    return [
+        DOEMSEMSPlan72Sensor(
+            entry,
+            runtime,
+            suffix=suffix,
+            name=name,
+            value_key=value_key,
+            unit=unit,
+            include_plan=include_plan,
+            solar_horizon_status=solar_horizon_status,
+        )
+        for suffix, name, value_key, unit, include_plan, solar_horizon_status in specs
+    ]
 
 
 class DOEMSSchedulerStatusSensor(_DOEMSEMSRuntimeSensor):
