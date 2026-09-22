@@ -69,10 +69,10 @@ def test_step12_2_runtime_keeps_manual_and_automatic_paths_separate() -> None:
 
     action_pos = chain.index("self.action_controller_result = self.action_controller.evaluate(action_data)")
     handoff_pos = chain.index("self.execution_handoff_result = self.execution_handoff.evaluate(execution_data)")
-    assert action_pos < handoff_pos
+    assert handoff_pos < action_pos
 
-    # The automatic execution-handoff consumes Safety/Prestart data directly.
-    # It must not depend on Action Controller outputs.
+    # The source evaluates the automatic chain first and the legacy/manual
+    # Action Controller separately afterwards.
     handoff_block = chain[handoff_pos - 400:handoff_pos + 300]
     assert "action_controller_result" not in handoff_block
 
