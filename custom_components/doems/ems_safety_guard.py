@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from .const import (\n    DEFAULT_MAX_SOC_PERCENT as MAX_SOC_PERCENT,\n    DEFAULT_TECHNICAL_MIN_SOC_PERCENT as MIN_SOC_PERCENT,\n)
+from .const import (
+    DEFAULT_MAX_SOC_PERCENT as MAX_SOC_PERCENT,
+    DEFAULT_TECHNICAL_MIN_SOC_PERCENT as MIN_SOC_PERCENT,
+)
 
 
 class DOEMSSafetyGuard:
