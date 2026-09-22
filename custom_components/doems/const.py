@@ -4,7 +4,7 @@ from __future__ import annotations
 
 DOMAIN = "doems"
 NAME = "DOEMS"
-VERSION = "0.1.0-alpha.9"
+VERSION = "0.1.0-alpha.10"
 
 CONF_INSTANCE_NAME = "instance_name"
 DEFAULT_INSTANCE_NAME = NAME
@@ -33,6 +33,13 @@ CONF_CHARGE_EFFICIENCY_PERCENT = "charge_efficiency_percent"
 CONF_DISCHARGE_EFFICIENCY_PERCENT = "discharge_efficiency_percent"
 CONF_MINIMUM_TRADE_MARGIN_EUR_PER_KWH = "minimum_trade_margin_eur_per_kwh"
 CONF_STARTUP_DELAY_SECONDS = "startup_delay_seconds"
+
+# Step 12.1 read-only battery control-path mappings.
+CONF_OPERATING_MODE_ENTITY = "operating_mode_entity"
+CONF_ACTION_DIRECTION_ENTITY = "action_direction_entity"
+CONF_POWER_SETPOINT_ENTITY = "power_setpoint_entity"
+CONTROL_PATH_STABLE_SECONDS = 60
+CONTROL_PATH_OBSERVER_INTERVAL_SECONDS = 10
 
 # Legacy Alpha7.10-7.12 Away Options keys. Kept only for one-time migration into
 # the runtime PresenceStore; they are no longer exposed as Options.
