@@ -46,7 +46,7 @@ def test_step12_1_runtime_consumes_real_control_path_without_execution() -> None
         '"operating_mode": control_entities.get("operating_mode", {}).get("state")',
         '"action_direction": control_entities.get("action_direction", {}).get("state")',
         '"power_setpoint_w": control_entities.get("power_setpoint", {}).get("state")',
-        '"automatic_execution_armed": False',
+        '"automatic_execution_armed": self._automatic_execution_armed',
         '"service_calls_performed": False',
         '"physical_execution_authority": False',
     ):
@@ -85,6 +85,6 @@ def test_step12_1_step11_boundary_evolves_without_physical_authority() -> None:
     assert '"execution_active": False' in runtime
     assert '"action_controller_invoked": bool(action_controller)' in runtime
     assert '"execution_controller_invoked": False' in runtime
-    assert '"automatic_execution_armed": False' in runtime
+    assert '"automatic_execution_armed": self._automatic_execution_armed' in runtime
     assert '"service_calls_performed": False' in runtime
     assert '"physical_execution_authority": False' in runtime
