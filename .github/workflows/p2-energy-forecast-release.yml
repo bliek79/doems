@@ -1,4 +1,4 @@
-name: DOEMS CI and Alpha12 Plan72 Observability Parity Repair Release
+name: DOEMS CI and Alpha13 Plan72 Solar Horizon Semantics Fix Release
 
 on:
   pull_request:
@@ -29,9 +29,9 @@ jobs:
               json.loads(path.read_text(encoding='utf-8'))
               print(f'valid: {path}')
           PY
-      - name: Validate Alpha12 release contract
+      - name: Validate Alpha13 release contract
         run: |
-          test -f RELEASE_NOTES_0.1.0-alpha.12.md
+          test -f RELEASE_NOTES_0.1.0-alpha.13.md
           test -f examples/prices_p4_forecast_card.yaml
           test -f custom_components/doems/prices.py
           test -f custom_components/doems/prices_model.py
@@ -41,8 +41,8 @@ jobs:
           test ! -f scripts/build_brand_assets.py
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
-          grep -F 'VERSION = "0.1.0-alpha.12"' custom_components/doems/const.py
-          grep -F '"version": "0.1.0-alpha.12"' custom_components/doems/manifest.json
+          grep -F 'VERSION = "0.1.0-alpha.13"' custom_components/doems/const.py
+          grep -F '"version": "0.1.0-alpha.13"' custom_components/doems/manifest.json
           grep -F 'CONF_EMS_ENABLED = "ems_enabled"' custom_components/doems/const.py
           grep -F 'CONF_BATTERY_CAPACITY_KWH = "battery_capacity_kwh"' custom_components/doems/const.py
           grep -F 'CONF_TECHNICAL_MIN_SOC_PERCENT = "technical_min_soc_percent"' custom_components/doems/const.py
@@ -74,6 +74,12 @@ jobs:
           grep -F '_unrecorded_attributes = frozenset({"plan"})' custom_components/doems/sensor.py
           grep -F '("hours", "DOEMS EMS Plan72 Hours"' custom_components/doems/sensor.py
           grep -F 'f"doems_ems_plan72_{suffix}"' custom_components/doems/sensor.py
+          grep -F '"solar_valid": solar_valid' custom_components/doems/ems_input_contract.py
+          grep -F '"solar_forecast_valid": bool(raw.get("solar_valid"))' custom_components/doems/ems_alpha76_adapter.py
+          grep -F '"auto_plan_72h_solar_horizon_status": solar_horizon_status' custom_components/doems/ems_alpha76/planner_72h.py
+          grep -F '"forecast_coverage_hours"' custom_components/doems/sensor.py
+          grep -F '"hours_after_last_usable_solar"' custom_components/doems/sensor.py
+          grep -F '"lookahead_limited_by_plan_end"' custom_components/doems/sensor.py
           grep -F 'class DOEMSActionController' custom_components/doems/ems_action_controller.py
           grep -F 'class DOEMSExecutionHandoff' custom_components/doems/ems_execution_handoff.py
           grep -F '"controller_physical_control": False' custom_components/doems/ems_action_controller.py
@@ -191,7 +197,7 @@ jobs:
           ! grep -R -F 'doems_capture_alpha41_solar_freeze' custom_components/doems
           ! grep -R -F 'doems_alpha41_solar_freeze_captured' custom_components/doems
 
-  publish-alpha12:
+  publish-alpha13:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
@@ -201,7 +207,7 @@ jobs:
           fetch-depth: 0
       - name: Build release archive
         run: |
-          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.12.md
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.13.md
           sha256sum doems.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - name: Verify EMS settings, Presence and Prices runtime are packaged
@@ -235,12 +241,12 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/icon.png'
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
-      - name: Publish Alpha12 Plan72 Observability Parity Repair release
+      - name: Publish Alpha13 Plan72 Solar Horizon Semantics Fix release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view 0.1.0-alpha.12 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.12 --title "DOEMS 0.1.0-alpha.12 - Plan72 Observability Parity Repair" --notes-file RELEASE_NOTES_0.1.0-alpha.12.md --prerelease
+          if gh release view 0.1.0-alpha.13 >/dev/null 2>&1; then
+            gh release edit 0.1.0-alpha.13 --title "DOEMS 0.1.0-alpha.13 - Plan72 Solar Horizon Semantics Fix" --notes-file RELEASE_NOTES_0.1.0-alpha.13.md --prerelease
           else
-            gh release create 0.1.0-alpha.12 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.12 - Plan72 Observability Parity Repair" --notes-file RELEASE_NOTES_0.1.0-alpha.12.md --prerelease
+            gh release create 0.1.0-alpha.13 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.13 - Plan72 Solar Horizon Semantics Fix" --notes-file RELEASE_NOTES_0.1.0-alpha.13.md --prerelease
           fi
