@@ -233,16 +233,20 @@ class DOEMSExecutionControllerShadow:
                     blockers.append(blocker)
 
         identity = self._frozen.get("planner_identity")
-        slot = self._frozen.get("slot")
-        slots = data.get("scheduler_slots") or {}
-        current_detail = slots.get(slot) or slots.get(str(slot)) or {}
-        current_identity = current_detail.get("planner_identity")
+        current_gate_identity = data.get("auto_execution_gate_planner_identity")
+        identity_conflict = bool(
+            identity
+            and current_gate_identity
+            and str(current_gate_identity) != str(identity)
+        )
         add(
             "runtime_identity_stable",
-            bool(identity) and current_identity == identity,
-            f"frozen={identity}; current={current_identity}",
+            not identity_conflict,
+            f"frozen={identity}; current_gate={current_gate_identity}",
             "runtime_identity_changed",
         )
+        if identity and not current_gate_identity:
+            warnings.append("planner_identity_no_longer_selected_runtime_frozen")
 
         already_external = bool(self._frozen.get("already_external"))
         mode = data.get("operating_mode")
