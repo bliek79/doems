@@ -175,12 +175,17 @@ class DOEMSAutomaticExecutionGate:
                 "Control path configured",
                 "control_path_not_configured",
             )
+            stable_seconds = float(data.get("control_path_stable_seconds") or 0)
+            required_stable_seconds = float(
+                data.get("control_path_required_stable_seconds") or 60
+            )
             check(
                 "control_path_stable",
-                data.get("control_path_ready") is True,
+                data.get("control_path_ready") is True
+                and stable_seconds >= required_stable_seconds,
                 (
                     f"control_path_ready={data.get('control_path_ready')}; "
-                    f"stable_s={data.get('control_path_stable_seconds')}"
+                    f"stable_s={stable_seconds}; required_s={required_stable_seconds}"
                 ),
                 "control_path_not_stable",
             )
