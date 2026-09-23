@@ -25,6 +25,8 @@ from .ems_alpha76_adapter import run_ems_chain
 from .ems_action_controller import DOEMSActionController
 from .ems_control_path import DOEMSControlPathObserver
 from .ems_execution_handoff import DOEMSExecutionHandoff
+from .ems_final_revalidation import DOEMSFinalRevalidation
+from .ems_mode_switch_preview import DOEMSModeSwitchPreview
 from .ems_plan_store import DOEMSPlanStore
 from .ems_prestart_validator import DOEMSPreStartValidator
 from .ems_safety_guard import DOEMSSafetyGuard
@@ -71,6 +73,8 @@ class DOEMSEMSRuntime:
         self.safety_guard = DOEMSSafetyGuard()
         self.action_controller = DOEMSActionController()
         self.execution_handoff = DOEMSExecutionHandoff()
+        self.final_revalidation = DOEMSFinalRevalidation()
+        self.mode_switch_preview = DOEMSModeSwitchPreview()
         self.control_path = DOEMSControlPathObserver(hass, entry)
         self.bridge_result: dict[str, Any] = {}
         self.scheduler_result: dict[str, Any] = {}
@@ -80,6 +84,8 @@ class DOEMSEMSRuntime:
         self.prestart_result: dict[str, Any] = {}
         self.safety_result: dict[str, Any] = {}
         self.execution_handoff_result: dict[str, Any] = {}
+        self.final_revalidation_result: dict[str, Any] = {}
+        self.mode_switch_preview_result: dict[str, Any] = {}
         self.legacy_safety_result: dict[str, Any] = {}
         self.action_controller_result: dict[str, Any] = {}
         self.control_path_result: dict[str, Any] = self.control_path.evaluate()
@@ -252,6 +258,8 @@ class DOEMSEMSRuntime:
         self.prestart_result = {}
         self.safety_result = {}
         self.execution_handoff_result = {}
+        self.final_revalidation_result = {}
+        self.mode_switch_preview_result = {}
         self.legacy_safety_result = {}
         self.action_controller_result = {}
         self.control_path_result = self.control_path.evaluate()
@@ -461,6 +469,8 @@ class DOEMSEMSRuntime:
             "soc": self.soc_percent,
             "max_charge_power_w": self.settings.max_charge_power_w,
             "max_discharge_power_w": self.settings.max_discharge_power_w,
+            "technical_min_soc_percent": self.settings.technical_min_soc_percent,
+            "max_soc_percent": self.settings.max_soc_percent,
             "charge_power_w": self._read_optional_power(
                 CONF_BATTERY_CHARGE_POWER_ENTITY
             ),
@@ -471,6 +481,11 @@ class DOEMSEMSRuntime:
             "control_path_ready": control_path.get("ready"),
             "control_path_pre_mode_ready": control_path.get("pre_mode_ready"),
             "control_path_post_mode_ready": control_path.get("post_mode_ready"),
+            "control_path_required_stable_seconds": control_path.get("required_stable_seconds", 60),
+            "control_path_pre_mode_stable_seconds": control_path.get("pre_mode_stable_seconds", 0),
+            "control_path_post_mode_stable_seconds": control_path.get("post_mode_stable_seconds", 0),
+            "control_path_entities": control_entities,
+            "control_path_operating_mode_available": control_entities.get("operating_mode", {}).get("available", False),
             "operating_mode": control_entities.get("operating_mode", {}).get("state"),
             "action_direction": control_entities.get("action_direction", {}).get("state"),
             "power_setpoint_w": control_entities.get("power_setpoint", {}).get("state"),
@@ -489,6 +504,20 @@ class DOEMSEMSRuntime:
             **self.safety_result,
         }
         self.execution_handoff_result = self.execution_handoff.evaluate(execution_data)
+
+        # Step 12.3 remains strictly non-actuating: the latest automatic handoff
+        # is revalidated, then converted into a guarded mode-switch transaction
+        # preview. No Home Assistant control service is called here.
+        final_data: dict[str, Any] = {
+            **execution_data,
+            **self.execution_handoff_result,
+        }
+        self.final_revalidation_result = self.final_revalidation.evaluate(final_data)
+        preview_data: dict[str, Any] = {
+            **final_data,
+            **self.final_revalidation_result,
+        }
+        self.mode_switch_preview_result = self.mode_switch_preview.evaluate(preview_data)
 
         # Step 12.2 manual/legacy observer path. This mirrors the source's
         # separate legacy Safety -> Action Controller evaluation and remains
@@ -513,6 +542,8 @@ class DOEMSEMSRuntime:
         prestart = self.prestart_result or {}
         safety = self.safety_result or {}
         execution_handoff = self.execution_handoff_result or {}
+        final_revalidation = self.final_revalidation_result or {}
+        mode_switch_preview = self.mode_switch_preview_result or {}
         legacy_safety = self.legacy_safety_result or {}
         action_controller = self.action_controller_result or {}
         control_path = self.control_path_result or {}
@@ -742,6 +773,51 @@ class DOEMSEMSRuntime:
             "execution_handoff_physical_control": execution_handoff.get(
                 "auto_execution_handoff_physical_control", False
             ),
+            "final_revalidation_invoked": bool(final_revalidation),
+            "auto_final_revalidation_required": final_revalidation.get("auto_final_revalidation_required"),
+            "auto_final_revalidation_safe": final_revalidation.get("auto_final_revalidation_safe"),
+            "auto_final_revalidation_status": final_revalidation.get("auto_final_revalidation_status"),
+            "auto_final_revalidation_reason": final_revalidation.get("auto_final_revalidation_reason"),
+            "auto_final_revalidation_reasons": final_revalidation.get("auto_final_revalidation_reasons", []),
+            "auto_final_revalidation_warnings": final_revalidation.get("auto_final_revalidation_warnings", []),
+            "auto_final_revalidation_checks": final_revalidation.get("auto_final_revalidation_checks", []),
+            "auto_final_revalidation_selected_slot": final_revalidation.get("auto_final_revalidation_selected_slot"),
+            "auto_final_revalidation_planner_identity": final_revalidation.get("auto_final_revalidation_planner_identity"),
+            "auto_final_revalidation_planner_signature": final_revalidation.get("auto_final_revalidation_planner_signature"),
+            "auto_final_revalidation_checked_at": final_revalidation.get("auto_final_revalidation_checked_at"),
+            "auto_final_revalidation_action": final_revalidation.get("auto_final_revalidation_action"),
+            "auto_final_revalidation_power_w": final_revalidation.get("auto_final_revalidation_power_w"),
+            "auto_final_revalidation_target_soc": final_revalidation.get("auto_final_revalidation_target_soc"),
+            "auto_final_revalidation_current_soc": final_revalidation.get("auto_final_revalidation_current_soc"),
+            "auto_final_revalidation_execution_reserve_soc": final_revalidation.get("auto_final_revalidation_execution_reserve_soc"),
+            "auto_final_revalidation_mode_switch_required": final_revalidation.get("auto_final_revalidation_mode_switch_required"),
+            "auto_final_revalidation_execution_permitted": False,
+            "auto_final_revalidation_physical_control": False,
+            "mode_switch_preview_invoked": bool(mode_switch_preview),
+            "auto_mode_switch_preview_required": mode_switch_preview.get("auto_mode_switch_preview_required"),
+            "auto_mode_switch_preview_ready": mode_switch_preview.get("auto_mode_switch_preview_ready"),
+            "auto_mode_switch_preview_status": mode_switch_preview.get("auto_mode_switch_preview_status"),
+            "auto_mode_switch_preview_reason": mode_switch_preview.get("auto_mode_switch_preview_reason"),
+            "auto_mode_switch_preview_blockers": mode_switch_preview.get("auto_mode_switch_preview_blockers", []),
+            "auto_mode_switch_preview_current_mode": mode_switch_preview.get("auto_mode_switch_preview_current_mode"),
+            "auto_mode_switch_preview_target_mode": mode_switch_preview.get("auto_mode_switch_preview_target_mode"),
+            "auto_mode_switch_preview_switch_required": mode_switch_preview.get("auto_mode_switch_preview_switch_required"),
+            "auto_mode_switch_preview_already_external": mode_switch_preview.get("auto_mode_switch_preview_already_external"),
+            "auto_mode_switch_preview_action": mode_switch_preview.get("auto_mode_switch_preview_action"),
+            "auto_mode_switch_preview_direction": mode_switch_preview.get("auto_mode_switch_preview_direction"),
+            "auto_mode_switch_preview_requested_power_w": mode_switch_preview.get("auto_mode_switch_preview_requested_power_w"),
+            "auto_mode_switch_preview_zero_power_guard_required": mode_switch_preview.get("auto_mode_switch_preview_zero_power_guard_required"),
+            "auto_mode_switch_preview_post_mode_revalidation_required": mode_switch_preview.get("auto_mode_switch_preview_post_mode_revalidation_required"),
+            "auto_mode_switch_preview_safe_return_required": mode_switch_preview.get("auto_mode_switch_preview_safe_return_required"),
+            "auto_mode_switch_preview_transaction": mode_switch_preview.get("auto_mode_switch_preview_transaction", []),
+            "auto_mode_switch_preview_preview_only": True,
+            "auto_mode_switch_preview_transaction_started": False,
+            "auto_mode_switch_preview_mode_switch_performed": False,
+            "auto_mode_switch_preview_direction_written": False,
+            "auto_mode_switch_preview_power_setpoint_written": False,
+            "auto_mode_switch_preview_execution_controller_released": False,
+            "auto_mode_switch_preview_execution_permitted": False,
+            "auto_mode_switch_preview_physical_control": False,
             "legacy_safety_status": legacy_safety.get("safety_status"),
             "legacy_safety_safe": legacy_safety.get("safety_safe"),
             "legacy_safety_reason": legacy_safety.get("safety_reason"),
