@@ -544,6 +544,9 @@ class DOEMSEMSRuntime:
             **self.mode_switch_preview_result,
             "control_path_ready": control_path.get("ready"),
             "control_path_stable_seconds": control_path.get("stable_seconds", 0),
+            "control_path_required_stable_seconds": control_path.get(
+                "required_stable_seconds", 60
+            ),
             "execution_origin": None,
         }
         self.automatic_execution_gate_result = self.automatic_execution_gate.evaluate(
