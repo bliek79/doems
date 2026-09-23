@@ -317,6 +317,16 @@ class DOEMSExecutionControllerShadow:
         if soc is not None:
             add("soc_valid", 0 <= soc <= 100, f"soc={soc}", "invalid_soc")
 
+        if "device_status" in data:
+            add(
+                "device_status_available",
+                data.get("device_status") is not None,
+                f"device_status={data.get('device_status')}",
+                "device_status_unavailable",
+            )
+        else:
+            warnings.append("device_status_source_not_configured")
+
         return checks, list(dict.fromkeys(blockers)), list(dict.fromkeys(warnings))
 
     def _normal_completion_reason(self, data: dict[str, Any], now: datetime) -> str | None:
