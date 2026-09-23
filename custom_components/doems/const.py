@@ -4,7 +4,7 @@ from __future__ import annotations
 
 DOMAIN = "doems"
 NAME = "DOEMS"
-VERSION = "0.1.0-alpha.17"
+VERSION = "0.1.0-alpha.18"
 
 CONF_INSTANCE_NAME = "instance_name"
 DEFAULT_INSTANCE_NAME = NAME
@@ -158,7 +158,7 @@ MIN_VALID_COVERAGE = 0.90
 STORAGE_VERSION = 1
 STORAGE_KEY = f"{DOMAIN}.energy_forecast"
 ENERGY_STORE_SCHEMA_VERSION = 1
-PLATFORMS = ["sensor", "select", "number", "binary_sensor", "switch", "datetime"]
+PLATFORMS = ["sensor", "select", "number", "binary_sensor", "switch", "datetime", "button"]
 DEVICE_IDENTIFIER = "main"
 FOUNDATION_PHASE = "solar_p3_0_foundation"
 CANONICAL_HOME_POWER_ENTITY = "sensor.doems_source_home_power"
