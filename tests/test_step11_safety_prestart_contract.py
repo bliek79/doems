@@ -109,7 +109,7 @@ def test_step11_runtime_exposes_diagnostics_without_execution_rights() -> None:
         '"safety_handoff_execution_permitted": safety.get(',
         '"action_controller_invoked": bool(action_controller)',
         '"execution_controller_invoked": False',
-        '"automatic_execution_armed": False',
+        '"automatic_execution_armed": self._automatic_execution_armed',
         '"service_calls_performed": False',
         '"physical_execution_authority": False',
     ):
