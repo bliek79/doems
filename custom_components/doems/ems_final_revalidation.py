@@ -5,7 +5,7 @@ physical execution authority.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 _EXTERNAL_MODE = "third_party_control"
@@ -131,7 +131,7 @@ class DOEMSFinalRevalidation:
         start = _aware(detail.get("start_time"))
         delay_min = _number(detail.get("max_start_delay_min"))
         delay_min = 0.0 if delay_min is None else max(0.0, delay_min)
-        within_window = bool(start is not None and start <= checked_at <= start.replace() + __import__("datetime").timedelta(minutes=delay_min))
+        within_window = bool(start is not None and start <= checked_at <= start + timedelta(minutes=delay_min))
         check("start_window_valid", within_window, f"Start={detail.get('start_time')}; delay={delay_min} min", "start_window_invalid")
 
         check("action_valid", action in {"laden", "ontladen"}, f"Action: {action}", "invalid_action")
