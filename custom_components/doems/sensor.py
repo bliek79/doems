@@ -710,16 +710,52 @@ class DOEMSEMSPlan72Sensor(_DOEMSEMSRuntimeSensor):
     def native_value(self) -> Any:
         data = self._data()
         if self._solar_horizon_status:
-            return (
-                "volledig"
-                if data.get("auto_plan_72h_solar_horizon_complete")
-                else "onvolledig"
-            )
+            return data.get("auto_plan_72h_solar_horizon_status") or "no_data"
         return data.get(self._value_key) if self._value_key else None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         data = self._data()
+        if self._solar_horizon_status:
+            return {
+                "forecast_coverage_hours": data.get(
+                    "auto_plan_72h_solar_forecast_coverage_hours"
+                ),
+                "forecast_missing_hours": data.get(
+                    "auto_plan_72h_solar_forecast_missing_hours"
+                ),
+                "forecast_coverage_percent": data.get(
+                    "auto_plan_72h_solar_forecast_coverage_percent"
+                ),
+                "forecast_complete": data.get(
+                    "auto_plan_72h_solar_forecast_complete", False
+                ),
+                "next_usable_solar_available": data.get(
+                    "auto_plan_72h_next_usable_solar_available", False
+                ),
+                "next_usable_solar": data.get(
+                    "auto_plan_72h_next_usable_solar"
+                ),
+                "hours_until_next_usable_solar": data.get(
+                    "auto_plan_72h_hours_until_next_usable_solar"
+                ),
+                "last_usable_solar": data.get(
+                    "auto_plan_72h_last_usable_solar"
+                ),
+                "plan_start": data.get("auto_plan_72h_start"),
+                "plan_end": data.get("auto_plan_72h_end"),
+                "hours_after_last_usable_solar": data.get(
+                    "auto_plan_72h_hours_after_last_usable_solar"
+                ),
+                "lookahead_limited_by_plan_end": data.get(
+                    "auto_plan_72h_lookahead_limited_by_plan_end", False
+                ),
+                "reason": data.get("auto_plan_72h_solar_horizon_reason"),
+                "observational_only": data.get(
+                    "auto_plan_72h_observational_only", True
+                ),
+            }
+
         attrs = _plan72_summary_attrs(data)
         if self._include_plan:
             attrs["plan"] = data.get("auto_plan_72h_plan", [])

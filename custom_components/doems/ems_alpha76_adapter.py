@@ -63,6 +63,7 @@ def forecast_from_input(input_result: dict[str, Any]) -> list[dict[str, Any]]:
             "time": start.isoformat(),
             "home_consumption_kwh": raw.get("home_kwh"),
             "solar_kwh": raw.get("solar_kwh"),
+            "solar_forecast_valid": bool(raw.get("solar_valid")),
             "price": raw.get("import_price"),
             "import_price": raw.get("import_price"),
             "export_price": raw.get("export_price"),

@@ -68,3 +68,49 @@ def test_plan72_observability_does_not_change_physical_boundary() -> None:
     assert '"automatic_execution_armed": False' in runtime
     assert '"service_calls_performed": False' in runtime
     assert '"physical_execution_authority": False' in runtime
+
+
+def test_plan72_solar_horizon_uses_clear_single_sensor_contract() -> None:
+    sensor = (INTEGRATION / "sensor.py").read_text(encoding="utf-8")
+    planner = (INTEGRATION / "ems_alpha76" / "planner_72h.py").read_text(encoding="utf-8")
+    adapter = (INTEGRATION / "ems_alpha76_adapter.py").read_text(encoding="utf-8")
+    input_contract = (INTEGRATION / "ems_input_contract.py").read_text(encoding="utf-8")
+
+    # No extra public horizon sensors are introduced: the existing sensor gets
+    # clearer state semantics and compact diagnostics as attributes.
+    assert '("solar_horizon_status", "DOEMS EMS Plan72 Solar Horizon"' in sensor
+    assert '"auto_plan_72h_solar_horizon_status") or "no_data"' in sensor
+    for token in (
+        '"forecast_coverage_hours"',
+        '"forecast_missing_hours"',
+        '"forecast_coverage_percent"',
+        '"forecast_complete"',
+        '"next_usable_solar_available"',
+        '"next_usable_solar"',
+        '"hours_until_next_usable_solar"',
+        '"last_usable_solar"',
+        '"plan_start"',
+        '"plan_end"',
+        '"hours_after_last_usable_solar"',
+        '"lookahead_limited_by_plan_end"',
+        '"reason"',
+    ):
+        assert token in sensor
+
+    assert '"solar_valid": solar_valid' in input_contract
+    assert '"solar_forecast_valid": bool(raw.get("solar_valid"))' in adapter
+    assert '"auto_plan_72h_solar_horizon_status": solar_horizon_status' in planner
+    assert '"auto_plan_72h_solar_forecast_coverage_hours"' in planner
+    assert '"auto_plan_72h_next_usable_solar"' in planner
+    assert '"auto_plan_72h_hours_after_last_usable_solar"' in planner
+    assert '"auto_plan_72h_lookahead_limited_by_plan_end"' in planner
+    assert 'solar_horizon_status = "ready"' in planner
+    assert 'solar_horizon_status = "limited"' in planner
+    assert 'solar_horizon_status = "no_data"' in planner
+
+
+def test_plan72_solar_horizon_keeps_physical_scope_unchanged() -> None:
+    planner = (INTEGRATION / "ems_alpha76" / "planner_72h.py").read_text(encoding="utf-8")
+    sensor = (INTEGRATION / "sensor.py").read_text(encoding="utf-8")
+    assert ".services.async_call(" not in planner
+    assert ".services.async_call(" not in sensor

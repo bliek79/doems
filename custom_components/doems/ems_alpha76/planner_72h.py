@@ -89,6 +89,10 @@ def build_72h_plan_preview(
         hour = _parse_time(raw.get("time"))
         if hour is None or hour < current_hour:
             continue
+        solar_forecast_value = _as_float(raw.get("solar_kwh"))
+        solar_forecast_valid = raw.get("solar_forecast_valid")
+        if solar_forecast_valid is None:
+            solar_forecast_valid = solar_forecast_value is not None
         rows.append(
             {
                 "time": hour,
@@ -98,7 +102,8 @@ def build_72h_plan_preview(
                 "price_source": raw.get("price_source"),
                 "import_price_source": raw.get("import_price_source") or raw.get("price_source"),
                 "export_price_source": raw.get("export_price_source") or raw.get("price_source"),
-                "solar_kwh": max(0.0, _as_float(raw.get("solar_kwh")) or 0.0),
+                "solar_forecast_valid": bool(solar_forecast_valid),
+                "solar_kwh": max(0.0, solar_forecast_value or 0.0),
                 "home_kwh": max(0.0, _as_float(raw.get("home_consumption_kwh")) or 0.0),
             }
         )
@@ -641,6 +646,73 @@ def build_72h_plan_preview(
 
     end_soc = plan[-1]["soc_end"] if plan else start_soc
 
+    # Solar-horizon observability is deliberately split into three concepts:
+    # forecast coverage, the next usable solar block from Plan72 start, and the
+    # natural end of the 72-hour look-ahead window. A valid night-time zero is
+    # forecast coverage; it is not missing solar data.
+    solar_forecast_coverage_hours = sum(
+        1 for row in rows if row.get("solar_forecast_valid")
+    )
+    solar_forecast_missing_hours = max(0, 72 - solar_forecast_coverage_hours)
+    solar_forecast_coverage_percent = round(
+        solar_forecast_coverage_hours / 72 * 100.0,
+        1,
+    )
+    solar_forecast_complete = solar_forecast_coverage_hours == 72
+
+    next_usable_solar = plan[0].get("next_usable_solar") if plan else None
+    next_usable_solar_dt = _parse_time(next_usable_solar)
+    hours_until_next_usable_solar = (
+        round(
+            max(
+                0.0,
+                (next_usable_solar_dt - rows[0]["time"]).total_seconds() / 3600.0,
+            ),
+            2,
+        )
+        if next_usable_solar_dt is not None and rows
+        else None
+    )
+    last_usable_solar = next(
+        (
+            item.get("next_usable_solar")
+            for item in reversed(plan)
+            if item.get("next_usable_solar") is not None
+        ),
+        None,
+    )
+    hours_after_last_usable_solar = sum(
+        1 for item in plan if not item.get("solar_horizon_complete", False)
+    )
+    lookahead_limited_by_plan_end = bool(
+        plan
+        and solar_forecast_complete
+        and hours_after_last_usable_solar > 0
+    )
+    next_usable_solar_available = next_usable_solar is not None
+
+    if solar_forecast_coverage_hours == 0 or not plan:
+        solar_horizon_status = "no_data"
+        solar_horizon_reason = "Geen bruikbare solarforecast beschikbaar voor Plan72."
+    elif not solar_forecast_complete:
+        solar_horizon_status = "limited"
+        solar_horizon_reason = (
+            f"Solarforecast dekt {solar_forecast_coverage_hours}/72 uur; "
+            f"{solar_forecast_missing_hours} uur ontbreekt."
+        )
+    elif not next_usable_solar_available:
+        solar_horizon_status = "limited"
+        solar_horizon_reason = (
+            "Solarforecast dekt 72 uur, maar vanaf Plan72-start is binnen "
+            "de huidige horizon geen bruikbaar zonneblok gevonden."
+        )
+    else:
+        solar_horizon_status = "ready"
+        solar_horizon_reason = (
+            "Solarforecast dekt 72 uur en het volgende bruikbare zonneblok "
+            "is vanaf Plan72-start beschikbaar."
+        )
+
     return {
         "auto_plan_72h_status": "ready",
         "auto_plan_72h_valid": True,
@@ -672,12 +744,25 @@ def build_72h_plan_preview(
         "auto_plan_72h_min_execution_headroom_soc": round(minimum_execution_headroom_soc, 1),
         "auto_plan_72h_execution_buffer_breach_hours": execution_buffer_breach_hours,
         "auto_plan_72h_execution_buffer_safe": execution_buffer_breach_hours == 0,
+        # Legacy source-parity fields remain available for compatibility.
         "auto_plan_72h_solar_horizon_complete": all(
             item.get("solar_horizon_complete", False) for item in plan
         ),
-        "auto_plan_72h_solar_horizon_incomplete_hours": sum(
-            1 for item in plan if not item.get("solar_horizon_complete", False)
-        ),
+        "auto_plan_72h_solar_horizon_incomplete_hours": hours_after_last_usable_solar,
+        # Clear solar-horizon diagnostics. These separate forecast coverage from
+        # usable-solar look-ahead and from the finite end of Plan72.
+        "auto_plan_72h_solar_horizon_status": solar_horizon_status,
+        "auto_plan_72h_solar_horizon_reason": solar_horizon_reason,
+        "auto_plan_72h_solar_forecast_coverage_hours": solar_forecast_coverage_hours,
+        "auto_plan_72h_solar_forecast_missing_hours": solar_forecast_missing_hours,
+        "auto_plan_72h_solar_forecast_coverage_percent": solar_forecast_coverage_percent,
+        "auto_plan_72h_solar_forecast_complete": solar_forecast_complete,
+        "auto_plan_72h_next_usable_solar_available": next_usable_solar_available,
+        "auto_plan_72h_next_usable_solar": next_usable_solar,
+        "auto_plan_72h_hours_until_next_usable_solar": hours_until_next_usable_solar,
+        "auto_plan_72h_last_usable_solar": last_usable_solar,
+        "auto_plan_72h_hours_after_last_usable_solar": hours_after_last_usable_solar,
+        "auto_plan_72h_lookahead_limited_by_plan_end": lookahead_limited_by_plan_end,
         "auto_plan_72h_solar_charge_kwh": round(total_solar_charge, 3),
         "auto_plan_72h_grid_safety_charge_kwh": round(total_grid_safety_charge, 3),
         "auto_plan_72h_grid_trade_charge_kwh": round(total_grid_trade_charge, 3),

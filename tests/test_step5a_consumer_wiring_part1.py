@@ -88,3 +88,29 @@ def test_all_static_settings_are_consumed_by_frozen_decision_functions():
         assert f"settings.{field}" in adapter
     assert "settings.startup_delay_seconds" not in adapter
     assert '"startup_delay_runtime_gate_active": False' in adapter
+
+
+def test_solar_coverage_is_tracked_independently_from_other_inputs():
+    start=datetime(2026,9,23,3,30,tzinfo=timezone.utc)
+    energy,solar,prices=_slots(start)
+
+    # Missing a price quarter must not make an otherwise complete solar hour
+    # look like missing solar forecast coverage.
+    prices.pop(1)
+    result=_load_input_contract().build_alpha41_transport_input(
+        window_start=start,energy_slots=energy,solar_slots=solar,price_slots=prices
+    )
+    assert result["rows"][0]["fully_valid"] is False
+    assert result["rows"][0]["solar_valid"] is True
+    assert result["rows"][0]["solar_kwh"]==0.2
+
+
+def test_missing_solar_quarter_marks_only_solar_coverage_missing():
+    start=datetime(2026,9,23,3,30,tzinfo=timezone.utc)
+    energy,solar,prices=_slots(start)
+    solar.pop(1)
+    result=_load_input_contract().build_alpha41_transport_input(
+        window_start=start,energy_slots=energy,solar_slots=solar,price_slots=prices
+    )
+    assert result["rows"][0]["solar_valid"] is False
+    assert result["rows"][0]["solar_kwh"] is None

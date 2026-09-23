@@ -78,6 +78,7 @@ def build_alpha41_transport_input(
     for row_index in range(ROW_COUNT):
         group = slots[row_index*4:(row_index+1)*4]
         fully_valid = all(item["valid"] for item in group)
+        solar_valid = all(item["solar_kwh"] is not None for item in group)
         kinds = {item["price_kind"] for item in group if item["price_kind"]}
         source = "known" if kinds and all(str(k).startswith("known") for k in kinds) else ("forecast" if kinds else None)
         rows.append({
@@ -85,7 +86,8 @@ def build_alpha41_transport_input(
             "start": group[0]["start"],
             "end": group[-1]["end"],
             "home_kwh": round(sum(float(x["home_kwh"]) for x in group), 6) if fully_valid else None,
-            "solar_kwh": round(sum(float(x["solar_kwh"]) for x in group), 6) if fully_valid else None,
+            "solar_kwh": round(sum(float(x["solar_kwh"]) for x in group), 6) if solar_valid else None,
+            "solar_valid": solar_valid,
             "import_price": round(sum(float(x["import_price"]) for x in group)/4.0, 6) if fully_valid else None,
             "export_price": round(sum(float(x["export_price"]) for x in group)/4.0, 6) if fully_valid else None,
             "price_source": source,
