@@ -26,6 +26,7 @@ from .ems_action_controller import DOEMSActionController
 from .ems_automatic_execution_gate import DOEMSAutomaticExecutionGate
 from .ems_control_path import DOEMSControlPathObserver
 from .ems_execution_handoff import DOEMSExecutionHandoff
+from .ems_execution_shadow import DOEMSExecutionControllerShadow
 from .ems_final_revalidation import DOEMSFinalRevalidation
 from .ems_mode_switch_preview import DOEMSModeSwitchPreview
 from .ems_plan_store import DOEMSPlanStore
@@ -75,6 +76,7 @@ class DOEMSEMSRuntime:
         self.action_controller = DOEMSActionController()
         self.automatic_execution_gate = DOEMSAutomaticExecutionGate()
         self.execution_handoff = DOEMSExecutionHandoff()
+        self.execution_shadow = DOEMSExecutionControllerShadow()
         self.final_revalidation = DOEMSFinalRevalidation()
         self.mode_switch_preview = DOEMSModeSwitchPreview()
         self.control_path = DOEMSControlPathObserver(hass, entry)
@@ -89,6 +91,7 @@ class DOEMSEMSRuntime:
         self.final_revalidation_result: dict[str, Any] = {}
         self.mode_switch_preview_result: dict[str, Any] = {}
         self.automatic_execution_gate_result: dict[str, Any] = {}
+        self.execution_shadow_result: dict[str, Any] = {}
         self.legacy_safety_result: dict[str, Any] = {}
         self.action_controller_result: dict[str, Any] = {}
         self.control_path_result: dict[str, Any] = self.control_path.evaluate()
@@ -102,6 +105,7 @@ class DOEMSEMSRuntime:
         # explicit new user arm and can never silently permit physical execution.
         self._automatic_execution_armed = False
         self._control_path_timer_unsub: Callable[[], None] | None = None
+        self._execution_shadow_timer_unsub: Callable[[], None] | None = None
 
     @property
     def automatic_execution_armed(self) -> bool:
@@ -162,12 +166,16 @@ class DOEMSEMSRuntime:
             self._schedule_control_path_tick()
 
         await self.async_refresh("startup")
+        self._schedule_execution_shadow_tick()
 
     async def async_shutdown(self) -> None:
         self._shutdown = True
         if self._control_path_timer_unsub is not None:
             self._control_path_timer_unsub()
             self._control_path_timer_unsub = None
+        if self._execution_shadow_timer_unsub is not None:
+            self._execution_shadow_timer_unsub()
+            self._execution_shadow_timer_unsub = None
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()
@@ -215,6 +223,24 @@ class DOEMSEMSRuntime:
         self.control_path_result = self.control_path.evaluate()
         self._notify()
         self._schedule_control_path_tick()
+
+    @callback
+    def _schedule_execution_shadow_tick(self) -> None:
+        if self._shutdown or self._execution_shadow_timer_unsub is not None:
+            return
+        self._execution_shadow_timer_unsub = async_call_later(
+            self.hass,
+            5,
+            self._execution_shadow_tick,
+        )
+
+    @callback
+    def _execution_shadow_tick(self, _now: datetime) -> None:
+        self._execution_shadow_timer_unsub = None
+        if self._shutdown:
+            return
+        self._request_refresh("execution_shadow_monitor")
+        self._schedule_execution_shadow_tick()
 
     @callback
     def _request_refresh(self, trigger: str) -> None:
@@ -277,6 +303,7 @@ class DOEMSEMSRuntime:
         self.final_revalidation_result = {}
         self.mode_switch_preview_result = {}
         self.automatic_execution_gate_result = {}
+        self.execution_shadow_result = {}
         self.legacy_safety_result = {}
         self.action_controller_result = {}
         self.control_path_result = self.control_path.evaluate()
@@ -554,6 +581,25 @@ class DOEMSEMSRuntime:
             armed=self._automatic_execution_armed,
         )
 
+        # Step 12.5 remains non-actuating. It freezes the Step 12.4 execution
+        # identity, follows runtime safety from live read-only sources and
+        # previews safe-return/audit without any Home Assistant control call.
+        shadow_data: dict[str, Any] = {
+            **gate_data,
+            **self.automatic_execution_gate_result,
+            "scheduler_slots": self.scheduler_result.get("scheduler_slots", {}),
+            "soc": self.soc_percent,
+            "charge_power_w": step11_data.get("charge_power_w"),
+            "discharge_power_w": step11_data.get("discharge_power_w"),
+            "operating_mode": step11_data.get("operating_mode"),
+            "action_direction": step11_data.get("action_direction"),
+            "power_setpoint_w": step11_data.get("power_setpoint_w"),
+        }
+        self.execution_shadow_result = self.execution_shadow.evaluate(
+            shadow_data,
+            now=self.last_refresh,
+        )
+
         # Step 12.2 manual/legacy observer path. This mirrors the source's
         # separate legacy Safety -> Action Controller evaluation and remains
         # semantic/read-only. It is not part of automatic Plan72 execution.
@@ -580,6 +626,7 @@ class DOEMSEMSRuntime:
         final_revalidation = self.final_revalidation_result or {}
         mode_switch_preview = self.mode_switch_preview_result or {}
         automatic_execution_gate = self.automatic_execution_gate_result or {}
+        execution_shadow = self.execution_shadow_result or {}
         legacy_safety = self.legacy_safety_result or {}
         action_controller = self.action_controller_result or {}
         control_path = self.control_path_result or {}
@@ -874,6 +921,7 @@ class DOEMSEMSRuntime:
             "auto_execution_gate_blockers": automatic_execution_gate.get("auto_execution_gate_blockers", []),
             "auto_execution_gate_warnings": automatic_execution_gate.get("auto_execution_gate_warnings", []),
             "auto_execution_gate_checks": automatic_execution_gate.get("auto_execution_gate_checks", []),
+            **execution_shadow,
             "legacy_safety_status": legacy_safety.get("safety_status"),
             "legacy_safety_safe": legacy_safety.get("safety_safe"),
             "legacy_safety_reason": legacy_safety.get("safety_reason"),

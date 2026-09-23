@@ -616,6 +616,16 @@ class _DOEMSEMSRuntimeSensor(SensorEntity):
 class DOEMSEMSStatusSensor(_DOEMSEMSRuntimeSensor):
     """Central non-actuating DOEMS EMS status."""
 
+    _unrecorded_attributes = frozenset({
+        "auto_final_revalidation_checks",
+        "auto_mode_switch_preview_transaction",
+        "auto_execution_gate_checks",
+        "execution_shadow_transaction",
+        "runtime_safety_checks",
+        "safe_return_steps",
+        "execution_shadow_trace",
+        "execution_shadow_run_history",
+    })
     _attr_name = "DOEMS EMS"
     _attr_unique_id = "doems_ems"
     _attr_suggested_object_id = "doems_ems"
