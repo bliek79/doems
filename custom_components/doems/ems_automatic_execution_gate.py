@@ -40,6 +40,18 @@ class DOEMSAutomaticExecutionGate:
         blockers: list[str] = []
         warnings: list[str] = []
         checks: list[dict[str, Any]] = []
+        manual_override = bool(
+            (
+                slot is not None
+                and data.get("scheduler_ready") is True
+                and origin != "automatic_72h_planner"
+            )
+            or (
+                data.get("execution_active")
+                and str(data.get("execution_origin") or "manual")
+                != "automatic_72h_planner"
+            )
+        )
 
         def check(
             name: str,
@@ -71,6 +83,13 @@ class DOEMSAutomaticExecutionGate:
             f"slot={slot}; origin={origin}",
             "no_automatic_action_selected",
         )
+        if manual_override:
+            check(
+                "manual_override_clear",
+                False,
+                "Manual/legacy execution has priority",
+                "manual_override_active",
+            )
 
         if automatic_selected:
             check(
@@ -178,25 +197,6 @@ class DOEMSAutomaticExecutionGate:
                 "execution_already_active",
             )
 
-            manual_override = bool(
-                (
-                    slot is not None
-                    and data.get("scheduler_ready") is True
-                    and origin != "automatic_72h_planner"
-                )
-                or (
-                    data.get("execution_active")
-                    and str(data.get("execution_origin") or "manual")
-                    != "automatic_72h_planner"
-                )
-            )
-            check(
-                "manual_override_clear",
-                not manual_override,
-                f"manual_override_active={manual_override}",
-                "manual_override_active",
-            )
-
             all_prices_known = bool(detail.get("all_prices_known"))
             is_trade = purpose in _TRADE_PURPOSES
             check(
@@ -213,11 +213,6 @@ class DOEMSAutomaticExecutionGate:
             recovery = False
             buffer_safe = data.get("auto_plan_72h_execution_buffer_safe") is True
             all_prices_known = bool(detail.get("all_prices_known"))
-            manual_override = bool(
-                slot is not None
-                and data.get("scheduler_ready") is True
-                and origin != "automatic_72h_planner"
-            )
 
         blockers = list(dict.fromkeys(blockers))
         warnings = list(dict.fromkeys(warnings))
@@ -225,7 +220,7 @@ class DOEMSAutomaticExecutionGate:
         technical_ready = bool(automatic_selected and not blockers)
         execution_permitted = bool(technical_ready and armed)
 
-        if not automatic_selected:
+        if not automatic_selected and not manual_override:
             status = "idle"
         elif not technical_ready:
             status = "blocked"
