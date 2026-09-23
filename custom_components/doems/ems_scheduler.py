@@ -123,6 +123,8 @@ class DOEMSScheduler:
                 "planner_generated_at": plan.get("planner_generated_at"),
                 "planner_identity": plan.get("planner_identity"),
                 "planner_signature": plan.get("planner_signature"),
+                "price_sources": list(plan.get("price_sources") or []),
+                "all_prices_known": bool(plan.get("all_prices_known")),
                 "selected": False,
                 "physical_control": False,
             }

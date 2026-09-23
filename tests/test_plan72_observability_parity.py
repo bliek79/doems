@@ -65,7 +65,7 @@ def test_plan72_observability_does_not_change_physical_boundary() -> None:
     sensor = (INTEGRATION / "sensor.py").read_text(encoding="utf-8")
     runtime = (INTEGRATION / "ems_runtime.py").read_text(encoding="utf-8")
     assert ".services.async_call(" not in sensor
-    assert '"automatic_execution_armed": False' in runtime
+    assert '"automatic_execution_armed": self._automatic_execution_armed' in runtime
     assert '"service_calls_performed": False' in runtime
     assert '"physical_execution_authority": False' in runtime
 

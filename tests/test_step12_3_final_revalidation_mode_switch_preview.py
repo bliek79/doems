@@ -54,10 +54,10 @@ def test_step12_3_source_parity_safety_stages_are_previewed() -> None:
         assert token in preview
 
 
-def test_step12_3_runtime_does_not_open_step12_4() -> None:
+def test_step12_3_runtime_stays_non_actuating_when_step12_4_is_present() -> None:
     runtime = _read("ems_runtime.py")
     assert '"execution_controller_invoked": False' in runtime
-    assert '"automatic_execution_armed": False' in runtime
+    assert '"automatic_execution_armed": self._automatic_execution_armed' in runtime
     assert '"service_calls_performed": False' in runtime
     assert '"physical_execution_authority": False' in runtime
 
