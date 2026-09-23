@@ -101,11 +101,10 @@ def test_step12_2_runtime_exposes_shadow_diagnostics() -> None:
         assert token in runtime
 
 
-def test_step12_2_does_not_implement_step12_3() -> None:
+def test_step12_2_handoff_still_does_not_arm_execution() -> None:
     integration_text = "\n".join(
         path.read_text(encoding="utf-8")
         for path in INTEGRATION.glob("ems_*.py")
     )
-    assert "class DOEMSFinalRevalidation" not in integration_text
-    assert "class DOEMSModeSwitch" not in integration_text
     assert "automatic_execution_armed = True" not in integration_text
+    assert '"physical_execution_authority": True' not in integration_text
