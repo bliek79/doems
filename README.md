@@ -4,7 +4,7 @@ DOEMS is a Home Assistant Energy Management System integration built component b
 
 ## Current stage
 
-`0.1.0-alpha.9` adds **Step 11 Safety / Prestart** to the standalone DOEMS EMS chain. The current working Prestart Validator and automatic Safety Guard behavior are copied into DOEMS after the definitive Scheduler. The layer remains non-actuating: Controller / Execution is not included, `control_path_configured=false` remains explicit until Step 12, and physical execution authority stays disabled.
+`0.1.0-alpha.17` adds **Step 12.6 Restart / Recovery + public observability** to the standalone DOEMS EMS chain. The Step 12.5 Execution Controller Shadow now persists its bounded audit/history and handled identities in a component-owned Home Assistant Store. An interrupted shadow run is never resumed after restart; it is finalized as `restart_recovery`. DOEMS remains non-actuating and `anker_ems` remains the physical battery authority.
 
 The current integration provides:
 
@@ -19,7 +19,9 @@ The current integration provides:
 - the existing approved Dummy OS `brand/icon.png`, reused byte-for-byte from the other working integrations;
 - definitive DOEMS Plan Store and Scheduler with manual plan lifecycle services;
 - Step 11 Prestart diagnostics and automatic Safety Guard handoff copied from the working EMS source;
-- no Controller / Execution and no EMS physical execution authority.
+- Step 12 read-only control path, execution handoff, final revalidation, mode-switch preview and fail-safe Automatic Execution Gate;
+- Step 12.5/12.6 non-actuating Execution Controller Shadow with runtime safety, safe-return preview, persistent audit and restart recovery;
+- no physical DOEMS execution authority; `anker_ems` remains authoritative.
 
 ## Installation and upgrade
 
@@ -76,7 +78,7 @@ When gas is enabled, `sensor.doems_prices_gas_vs_electricity` exposes the gas al
 
 All public DOEMS object IDs start with `doems_`. Active integration code lives under `custom_components/doems`, domain `doems`, and component-owned storage uses `doems.*` namespaces.
 
-Forecast modules are data/configuration layers. The EMS planning chain through Step 11 is also non-actuating: `physical_execution_authority` remains false, automatic execution is not armed, and Step 11 performs no battery mode, direction or power writes. The only existing Home Assistant data-action call remains the read-only `energyzero.get_gas_prices` request when that gas source is enabled.
+Forecast modules are data/configuration layers. The EMS planning/execution-shadow chain through Step 12.6 remains non-actuating: `physical_execution_authority` is false, the automatic arm is fail-safe OFF after setup/reload, and restart recovery performs no battery mode, direction or power writes. The only existing Home Assistant data-action call remains the read-only `energyzero.get_gas_prices` request when that gas source is enabled.
 
 ## License
 
