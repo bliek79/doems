@@ -94,7 +94,8 @@ def test_step11_runtime_order_and_step12_boundary() -> None:
     assert '"execution_active": False' in chain
     assert ".services.async_call(" not in runtime
     assert "DOEMSActionController" in runtime
-    assert "ExecutionController" not in runtime
+    assert "DOEMSExecutionControllerShadow" in runtime
+    assert "async_execute_selected_plan" not in runtime
     assert '"physical_execution_authority": False' in runtime
 
 
