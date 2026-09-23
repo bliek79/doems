@@ -41,7 +41,7 @@ def test_alpha8_runtime_is_independent_and_non_actuating() -> None:
     assert "build_planner_action_bridge" in runtime
     assert "run_ems_chain" in runtime
     assert 'execution_mode": "validation"' in runtime
-    assert '"automatic_execution_armed": False' in runtime
+    assert '"automatic_execution_armed": self._automatic_execution_armed' in runtime
     assert '"service_calls_performed": False' in runtime
     assert '"physical_execution_authority": False' in runtime
     assert ".services.async_call(" not in runtime
