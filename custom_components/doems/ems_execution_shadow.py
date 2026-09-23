@@ -38,6 +38,17 @@ def _parse_time(value: Any) -> datetime | None:
     return parsed
 
 
+def _nonnegative_int(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _mapping(value: Any) -> dict[str, Any]:
+    return dict(value) if isinstance(value, dict) else {}
+
+
 class DOEMSExecutionControllerShadow:
     """Stateful shadow of the future automatic Execution Controller."""
 
@@ -125,12 +136,15 @@ class DOEMSExecutionControllerShadow:
         self._history = list(history)[-_RUN_HISTORY_LIMIT:] if isinstance(history, list) else []
         self._handled_identities = list(handled)[-50:] if isinstance(handled, list) else []
         self._trace = list(trace)[-_TRACE_LIMIT:] if isinstance(trace, list) else []
-        self._last_summary = dict(payload.get("last_summary") or {})
-        self._run_count = max(0, int(payload.get("run_count") or 0))
-        self._success_count = max(0, int(payload.get("success_count") or 0))
-        self._failure_count = max(0, int(payload.get("failure_count") or 0))
-        self._safe_return = dict(
-            payload.get("safe_return") or self._safe_return_preview(False, None)
+        self._last_summary = _mapping(payload.get("last_summary"))
+        self._run_count = _nonnegative_int(payload.get("run_count"))
+        self._success_count = _nonnegative_int(payload.get("success_count"))
+        self._failure_count = _nonnegative_int(payload.get("failure_count"))
+        persisted_safe_return = _mapping(payload.get("safe_return"))
+        self._safe_return = (
+            persisted_safe_return
+            if persisted_safe_return
+            else self._safe_return_preview(False, None)
         )
         self._recovery_status = str(payload.get("recovery_status") or "not_required")
         self._recovery_reason = payload.get("recovery_reason")
@@ -138,11 +152,11 @@ class DOEMSExecutionControllerShadow:
         self._recovery_identity = payload.get("recovery_identity")
         self._recovery_slot = payload.get("recovery_slot")
 
-        self._frozen = dict(payload.get("frozen") or {})
+        self._frozen = _mapping(payload.get("frozen"))
         self._started_at = _parse_time(payload.get("started_at"))
         self._last_sample_at = _parse_time(payload.get("last_sample_at"))
         self._previous_actual_power_w = _number(payload.get("previous_actual_power_w"))
-        self._sample_count = max(0, int(payload.get("sample_count") or 0))
+        self._sample_count = _nonnegative_int(payload.get("sample_count"))
         self._power_sum_w = max(0.0, _number(payload.get("power_sum_w")) or 0.0)
         self._actual_energy_wh = max(0.0, _number(payload.get("actual_energy_wh")) or 0.0)
         self._persistence_revision = 0
