@@ -32,6 +32,8 @@ from .const import (
 )
 from .ems_settings import EMSSettings
 from .ems_runtime import DOEMSEMSRuntime
+from .ems_g5_live_parity_runtime import get_g5_live_parity_runtime
+from .ems_g5_live_parity_sensor import DOEMSG5LiveParitySensor
 from .energy_coordinator import DOEMSEnergyCoordinator
 from .energy_forecast import EnergyBaselineForecast, ceil_quarter
 from .prices import DOEMSPricesManager
@@ -99,6 +101,10 @@ async def async_setup_entry(
                 *build_plan72_sensors(entry, ems_runtime),
                 DOEMSSchedulerStatusSensor(entry, ems_runtime),
                 *(DOEMSPlanStatusSensor(entry, ems_runtime, slot) for slot in range(1, 4)),
+                DOEMSG5LiveParitySensor(
+                    entry,
+                    get_g5_live_parity_runtime(ems_runtime),
+                ),
             ]
         )
 
