@@ -14,6 +14,7 @@ _RUN_HISTORY_LIMIT = 20
 _TRACE_LIMIT = 40
 _EXTERNAL_MODE = "third_party_control"
 _SELF_MODE = "self_consumption"
+_PERSISTENCE_SCHEMA_VERSION = 1
 
 
 def _number(value: Any) -> float | None:
@@ -59,10 +60,144 @@ class DOEMSExecutionControllerShadow:
         self._failure_count = 0
         self._last_summary: dict[str, Any] = {}
         self._safe_return: dict[str, Any] = self._safe_return_preview(False, None)
+        self._recovery_pending = False
+        self._recovery_status = "not_required"
+        self._recovery_reason: str | None = None
+        self._recovery_interrupted_run = False
+        self._recovery_identity: str | None = None
+        self._recovery_slot: int | str | None = None
+        self._persistence_revision = 0
 
     @property
     def active(self) -> bool:
         return self._active
+
+    @property
+    def persistence_revision(self) -> int:
+        """Monotonic revision for persisted shadow lifecycle state."""
+        return self._persistence_revision
+
+    def _mark_persistence_changed(self) -> None:
+        self._persistence_revision += 1
+
+    def export_persistence(self) -> dict[str, Any]:
+        """Return the compact restart-safe Step 12.6 persistence payload."""
+        return {
+            "schema_version": _PERSISTENCE_SCHEMA_VERSION,
+            "active": self._active,
+            "status": self._status,
+            "reason": self._reason,
+            "frozen": dict(self._frozen),
+            "started_at": self._started_at.isoformat() if self._started_at else None,
+            "last_sample_at": self._last_sample_at.isoformat() if self._last_sample_at else None,
+            "previous_actual_power_w": self._previous_actual_power_w,
+            "sample_count": self._sample_count,
+            "power_sum_w": self._power_sum_w,
+            "actual_energy_wh": self._actual_energy_wh,
+            "trace": list(self._trace[-_TRACE_LIMIT:]),
+            "history": list(self._history[-_RUN_HISTORY_LIMIT:]),
+            "handled_identities": list(self._handled_identities[-50:]),
+            "run_count": self._run_count,
+            "success_count": self._success_count,
+            "failure_count": self._failure_count,
+            "last_summary": dict(self._last_summary),
+            "safe_return": dict(self._safe_return),
+            "recovery_status": self._recovery_status,
+            "recovery_reason": self._recovery_reason,
+            "recovery_interrupted_run": self._recovery_interrupted_run,
+            "recovery_identity": self._recovery_identity,
+            "recovery_slot": self._recovery_slot,
+        }
+
+    def restore_persistence(self, payload: Any) -> str:
+        """Load persistent audit state without ever restoring an active run."""
+        self._recovery_pending = False
+        if payload is None:
+            return "empty"
+        if not isinstance(payload, dict):
+            return "invalid_payload"
+        if payload.get("schema_version") != _PERSISTENCE_SCHEMA_VERSION:
+            return "invalid_schema"
+
+        history = payload.get("history")
+        handled = payload.get("handled_identities")
+        trace = payload.get("trace")
+        self._history = list(history)[-_RUN_HISTORY_LIMIT:] if isinstance(history, list) else []
+        self._handled_identities = list(handled)[-50:] if isinstance(handled, list) else []
+        self._trace = list(trace)[-_TRACE_LIMIT:] if isinstance(trace, list) else []
+        self._last_summary = dict(payload.get("last_summary") or {})
+        self._run_count = max(0, int(payload.get("run_count") or 0))
+        self._success_count = max(0, int(payload.get("success_count") or 0))
+        self._failure_count = max(0, int(payload.get("failure_count") or 0))
+        self._safe_return = dict(
+            payload.get("safe_return") or self._safe_return_preview(False, None)
+        )
+        self._recovery_status = str(payload.get("recovery_status") or "not_required")
+        self._recovery_reason = payload.get("recovery_reason")
+        self._recovery_interrupted_run = bool(payload.get("recovery_interrupted_run"))
+        self._recovery_identity = payload.get("recovery_identity")
+        self._recovery_slot = payload.get("recovery_slot")
+
+        self._frozen = dict(payload.get("frozen") or {})
+        self._started_at = _parse_time(payload.get("started_at"))
+        self._last_sample_at = _parse_time(payload.get("last_sample_at"))
+        self._previous_actual_power_w = _number(payload.get("previous_actual_power_w"))
+        self._sample_count = max(0, int(payload.get("sample_count") or 0))
+        self._power_sum_w = max(0.0, _number(payload.get("power_sum_w")) or 0.0)
+        self._actual_energy_wh = max(0.0, _number(payload.get("actual_energy_wh")) or 0.0)
+        self._persistence_revision = 0
+
+        if payload.get("active") is True:
+            self._active = False
+            self._status = "restart_recovery_pending"
+            self._reason = "Persisted active shadow-run requires fail-safe restart recovery"
+            self._recovery_pending = True
+            self._recovery_status = "pending"
+            self._recovery_reason = "restart_recovery"
+            self._recovery_interrupted_run = True
+            self._recovery_identity = self._frozen.get("planner_identity")
+            self._recovery_slot = self._frozen.get("slot")
+            self._safe_return = self._safe_return_preview(True, "restart_recovery")
+        else:
+            self._active = False
+            persisted_status = str(payload.get("status") or "idle")
+            if persisted_status in {
+                "idle",
+                "blocked",
+                "completed_shadow",
+                "emergency_stopped_shadow",
+                "recovered_interrupted_shadow",
+            }:
+                self._status = persisted_status
+                self._reason = str(payload.get("reason") or self._reason)
+            else:
+                self._status = "idle"
+                self._reason = "Persisted inactive shadow state normalized to idle"
+        return "loaded"
+
+    def _finish_restart_recovery(
+        self, data: dict[str, Any], now: datetime
+    ) -> None:
+        """Fail-safe one persisted active shadow-run without physical recovery writes."""
+        self._recovery_pending = False
+        # Reuse the normal audit finalizer with the persisted frozen/sample state.
+        # The temporary active flag is internal only; no public physical authority exists.
+        self._active = True
+        self._finish(data, now, "restart_recovery", emergency=True)
+        self._status = "recovered_interrupted_shadow"
+        self._reason = "restart_recovery"
+        self._recovery_status = "recovered_interrupted"
+        self._recovery_reason = "restart_recovery"
+        self._recovery_interrupted_run = True
+        self._recovery_identity = self._frozen.get("planner_identity")
+        self._recovery_slot = self._frozen.get("slot")
+        if self._last_summary:
+            self._last_summary["result"] = "recovered_interrupted_shadow"
+            self._last_summary["reason"] = "restart_recovery"
+            if self._history:
+                self._history[-1] = dict(self._last_summary)
+        self._safe_return = self._safe_return_preview(True, "restart_recovery")
+        self._mark_persistence_changed()
 
     def _trace_event(self, now: datetime, stage: str, detail: str | None = None) -> None:
         item: dict[str, Any] = {"time": now.isoformat(), "stage": stage}
@@ -200,6 +335,7 @@ class DOEMSExecutionControllerShadow:
             "running_shadow",
             f"action={action}; requested={self._frozen.get('requested_power_w')}W",
         )
+        self._mark_persistence_changed()
 
     def _sample_energy(self, data: dict[str, Any], now: datetime) -> float | None:
         action = self._frozen.get("action")
@@ -452,12 +588,16 @@ class DOEMSExecutionControllerShadow:
             self._failure_count += 1
         else:
             self._success_count += 1
+        self._mark_persistence_changed()
 
     def evaluate(self, data: dict[str, Any], *, now: datetime | None = None) -> dict[str, Any]:
         """Advance one read-only execution-shadow iteration."""
         current = now or datetime.now(timezone.utc)
         if current.tzinfo is None:
             current = current.replace(tzinfo=timezone.utc)
+
+        if self._recovery_pending:
+            self._finish_restart_recovery(data, current)
 
         gate_permitted = data.get("auto_execution_gate_execution_permitted") is True
         gate_status = data.get("auto_execution_gate_status")
@@ -497,7 +637,11 @@ class DOEMSExecutionControllerShadow:
             elif gate_status == "blocked":
                 self._status = "blocked"
                 self._reason = "Step 12.4 gate is blocked"
-            elif self._status not in {"completed_shadow", "emergency_stopped_shadow"}:
+            elif self._status not in {
+                "completed_shadow",
+                "emergency_stopped_shadow",
+                "recovered_interrupted_shadow",
+            }:
                 self._status = "idle"
                 self._reason = "Geen nieuwe armed_ready execution identity"
 
@@ -520,6 +664,12 @@ class DOEMSExecutionControllerShadow:
             "execution_shadow_status": self._status,
             "execution_shadow_active": self._active,
             "execution_shadow_reason": self._reason,
+            "execution_shadow_persistence_schema_version": _PERSISTENCE_SCHEMA_VERSION,
+            "execution_shadow_recovery_status": self._recovery_status,
+            "execution_shadow_recovery_reason": self._recovery_reason,
+            "execution_shadow_recovery_interrupted_run": self._recovery_interrupted_run,
+            "execution_shadow_recovery_identity": self._recovery_identity,
+            "execution_shadow_recovery_slot": self._recovery_slot,
             "execution_shadow_identity": frozen.get("planner_identity"),
             "execution_shadow_slot": frozen.get("slot"),
             "execution_shadow_action": frozen.get("action"),
