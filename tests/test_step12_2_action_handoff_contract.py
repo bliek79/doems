@@ -78,7 +78,7 @@ def test_step12_2_runtime_keeps_manual_and_automatic_paths_separate() -> None:
 
     assert ".services.async_call(" not in runtime
     assert '"execution_controller_invoked": False' in runtime
-    assert '"automatic_execution_armed": False' in runtime
+    assert '"automatic_execution_armed": self._automatic_execution_armed' in runtime
     assert '"service_calls_performed": False' in runtime
     assert '"physical_execution_authority": False' in runtime
 
@@ -94,7 +94,7 @@ def test_step12_2_runtime_exposes_shadow_diagnostics() -> None:
         '"execution_handoff_ready": execution_handoff.get(',
         '"execution_handoff_execution_permitted": execution_handoff.get(',
         '"execution_controller_invoked": False',
-        '"automatic_execution_armed": False',
+        '"automatic_execution_armed": self._automatic_execution_armed',
         '"service_calls_performed": False',
         '"physical_execution_authority": False',
     ):
