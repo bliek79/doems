@@ -90,6 +90,9 @@ def build_72h_plan_preview(
         if hour is None or hour < current_hour:
             continue
         solar_forecast_value = _as_float(raw.get("solar_kwh"))
+        solar_forecast_valid = raw.get("solar_forecast_valid")
+        if solar_forecast_valid is None:
+            solar_forecast_valid = solar_forecast_value is not None
         rows.append(
             {
                 "time": hour,
@@ -99,7 +102,7 @@ def build_72h_plan_preview(
                 "price_source": raw.get("price_source"),
                 "import_price_source": raw.get("import_price_source") or raw.get("price_source"),
                 "export_price_source": raw.get("export_price_source") or raw.get("price_source"),
-                "solar_forecast_valid": solar_forecast_value is not None,
+                "solar_forecast_valid": bool(solar_forecast_valid),
                 "solar_kwh": max(0.0, solar_forecast_value or 0.0),
                 "home_kwh": max(0.0, _as_float(raw.get("home_consumption_kwh")) or 0.0),
             }
