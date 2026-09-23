@@ -23,6 +23,7 @@ from .const import (
 )
 from .ems_alpha76_adapter import run_ems_chain
 from .ems_action_controller import DOEMSActionController
+from .ems_automatic_execution_gate import DOEMSAutomaticExecutionGate
 from .ems_control_path import DOEMSControlPathObserver
 from .ems_execution_handoff import DOEMSExecutionHandoff
 from .ems_final_revalidation import DOEMSFinalRevalidation
@@ -72,6 +73,7 @@ class DOEMSEMSRuntime:
         self.prestart_validator = DOEMSPreStartValidator()
         self.safety_guard = DOEMSSafetyGuard()
         self.action_controller = DOEMSActionController()
+        self.automatic_execution_gate = DOEMSAutomaticExecutionGate()
         self.execution_handoff = DOEMSExecutionHandoff()
         self.final_revalidation = DOEMSFinalRevalidation()
         self.mode_switch_preview = DOEMSModeSwitchPreview()
@@ -86,6 +88,7 @@ class DOEMSEMSRuntime:
         self.execution_handoff_result: dict[str, Any] = {}
         self.final_revalidation_result: dict[str, Any] = {}
         self.mode_switch_preview_result: dict[str, Any] = {}
+        self.automatic_execution_gate_result: dict[str, Any] = {}
         self.legacy_safety_result: dict[str, Any] = {}
         self.action_controller_result: dict[str, Any] = {}
         self.control_path_result: dict[str, Any] = self.control_path.evaluate()
@@ -94,7 +97,20 @@ class DOEMSEMSRuntime:
         self._unsubs: list[Callable[[], None]] = []
         self._refresh_pending = False
         self._shutdown = False
+        # Step 12.4 fail-safe arm: always starts OFF after integration setup/reload.
+        # No restore-state path exists in this phase, so a restart requires an
+        # explicit new user arm and can never silently permit physical execution.
+        self._automatic_execution_armed = False
         self._control_path_timer_unsub: Callable[[], None] | None = None
+
+    @property
+    def automatic_execution_armed(self) -> bool:
+        return self._automatic_execution_armed
+
+    async def async_set_automatic_execution_armed(self, armed: bool) -> None:
+        """Set the explicit Step 12.4 user arm without actuating anything."""
+        self._automatic_execution_armed = bool(armed)
+        await self.async_refresh("automatic_execution_arm_change")
 
     @property
     def soc_entity_id(self) -> str | None:
@@ -260,6 +276,7 @@ class DOEMSEMSRuntime:
         self.execution_handoff_result = {}
         self.final_revalidation_result = {}
         self.mode_switch_preview_result = {}
+        self.automatic_execution_gate_result = {}
         self.legacy_safety_result = {}
         self.action_controller_result = {}
         self.control_path_result = self.control_path.evaluate()
@@ -519,6 +536,21 @@ class DOEMSEMSRuntime:
         }
         self.mode_switch_preview_result = self.mode_switch_preview.evaluate(preview_data)
 
+        # Step 12.4: collapse the complete automatic safety chain into one
+        # explicit permission gate. Even when armed_ready, this phase never
+        # invokes the Execution Controller and never calls Home Assistant services.
+        gate_data: dict[str, Any] = {
+            **preview_data,
+            **self.mode_switch_preview_result,
+            "control_path_ready": control_path.get("ready"),
+            "control_path_stable_seconds": control_path.get("stable_seconds", 0),
+            "execution_origin": None,
+        }
+        self.automatic_execution_gate_result = self.automatic_execution_gate.evaluate(
+            gate_data,
+            armed=self._automatic_execution_armed,
+        )
+
         # Step 12.2 manual/legacy observer path. This mirrors the source's
         # separate legacy Safety -> Action Controller evaluation and remains
         # semantic/read-only. It is not part of automatic Plan72 execution.
@@ -544,6 +576,7 @@ class DOEMSEMSRuntime:
         execution_handoff = self.execution_handoff_result or {}
         final_revalidation = self.final_revalidation_result or {}
         mode_switch_preview = self.mode_switch_preview_result or {}
+        automatic_execution_gate = self.automatic_execution_gate_result or {}
         legacy_safety = self.legacy_safety_result or {}
         action_controller = self.action_controller_result or {}
         control_path = self.control_path_result or {}
@@ -818,6 +851,26 @@ class DOEMSEMSRuntime:
             "auto_mode_switch_preview_execution_controller_released": False,
             "auto_mode_switch_preview_execution_permitted": False,
             "auto_mode_switch_preview_physical_control": False,
+            "auto_execution_gate_enabled": automatic_execution_gate.get("auto_execution_gate_enabled", True),
+            "auto_execution_gate_status": automatic_execution_gate.get("auto_execution_gate_status", "idle"),
+            "auto_execution_gate_technical_ready": automatic_execution_gate.get("auto_execution_gate_technical_ready", False),
+            "auto_execution_gate_armed": automatic_execution_gate.get("auto_execution_gate_armed", self._automatic_execution_armed),
+            "auto_execution_gate_execution_permitted": automatic_execution_gate.get("auto_execution_gate_execution_permitted", False),
+            "auto_execution_gate_selected_slot": automatic_execution_gate.get("auto_execution_gate_selected_slot"),
+            "auto_execution_gate_planner_identity": automatic_execution_gate.get("auto_execution_gate_planner_identity"),
+            "auto_execution_gate_action": automatic_execution_gate.get("auto_execution_gate_action"),
+            "auto_execution_gate_purpose": automatic_execution_gate.get("auto_execution_gate_purpose"),
+            "auto_execution_gate_power_w": automatic_execution_gate.get("auto_execution_gate_power_w"),
+            "auto_execution_gate_target_soc": automatic_execution_gate.get("auto_execution_gate_target_soc"),
+            "auto_execution_gate_max_runtime_h": automatic_execution_gate.get("auto_execution_gate_max_runtime_h"),
+            "auto_execution_gate_price_sources": automatic_execution_gate.get("auto_execution_gate_price_sources", []),
+            "auto_execution_gate_all_prices_known": automatic_execution_gate.get("auto_execution_gate_all_prices_known", False),
+            "auto_execution_gate_safety_recovery_exception": automatic_execution_gate.get("auto_execution_gate_safety_recovery_exception", False),
+            "auto_execution_gate_execution_buffer_safe": automatic_execution_gate.get("auto_execution_gate_execution_buffer_safe", False),
+            "auto_execution_gate_manual_override_active": automatic_execution_gate.get("auto_execution_gate_manual_override_active", False),
+            "auto_execution_gate_blockers": automatic_execution_gate.get("auto_execution_gate_blockers", []),
+            "auto_execution_gate_warnings": automatic_execution_gate.get("auto_execution_gate_warnings", []),
+            "auto_execution_gate_checks": automatic_execution_gate.get("auto_execution_gate_checks", []),
             "legacy_safety_status": legacy_safety.get("safety_status"),
             "legacy_safety_safe": legacy_safety.get("safety_safe"),
             "legacy_safety_reason": legacy_safety.get("safety_reason"),
@@ -851,7 +904,7 @@ class DOEMSEMSRuntime:
             ),
             "execution_controller_invoked": False,
             "execution_mode": "validation",
-            "automatic_execution_armed": False,
+            "automatic_execution_armed": self._automatic_execution_armed,
             "service_calls_performed": False,
             "physical_execution_authority": False,
         }
