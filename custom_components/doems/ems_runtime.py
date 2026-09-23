@@ -13,6 +13,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event
+from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -20,6 +21,7 @@ from .const import (
     CONF_BATTERY_DISCHARGE_POWER_ENTITY,
     CONF_SOC_ENTITY,
     CONTROL_PATH_OBSERVER_INTERVAL_SECONDS,
+    DOMAIN,
 )
 from .ems_alpha76_adapter import run_ems_chain
 from .ems_action_controller import DOEMSActionController
@@ -77,6 +79,15 @@ class DOEMSEMSRuntime:
         self.automatic_execution_gate = DOEMSAutomaticExecutionGate()
         self.execution_handoff = DOEMSExecutionHandoff()
         self.execution_shadow = DOEMSExecutionControllerShadow()
+        self._execution_shadow_store: Store[dict[str, Any]] = Store(
+            hass,
+            1,
+            f"{DOMAIN}.{entry.entry_id}.execution_shadow",
+        )
+        self.execution_shadow_store_status = "not_loaded"
+        self.execution_shadow_store_error: str | None = None
+        self.execution_shadow_store_last_saved_at: str | None = None
+        self._execution_shadow_saved_revision = 0
         self.final_revalidation = DOEMSFinalRevalidation()
         self.mode_switch_preview = DOEMSModeSwitchPreview()
         self.control_path = DOEMSControlPathObserver(hass, entry)
@@ -122,7 +133,8 @@ class DOEMSEMSRuntime:
         return str(value) if value else None
 
     async def async_setup(self) -> None:
-        """Load DOEMS plans, attach listeners and perform first refresh."""
+        """Load DOEMS plans, shadow audit state, listeners and first refresh."""
+        await self._async_load_execution_shadow()
         await self.plan_store.async_load()
         self._unsubs.append(
             self.plan_store.add_listener(
@@ -169,6 +181,7 @@ class DOEMSEMSRuntime:
         self._schedule_execution_shadow_tick()
 
     async def async_shutdown(self) -> None:
+        await self._async_persist_execution_shadow_if_changed()
         self._shutdown = True
         if self._control_path_timer_unsub is not None:
             self._control_path_timer_unsub()
@@ -180,6 +193,41 @@ class DOEMSEMSRuntime:
             unsub()
         self._unsubs.clear()
         self._listeners.clear()
+
+    async def _async_load_execution_shadow(self) -> None:
+        """Load Step 12.6 shadow audit/recovery state without restoring authority."""
+        try:
+            stored = await self._execution_shadow_store.async_load()
+            self.execution_shadow_store_status = self.execution_shadow.restore_persistence(
+                stored
+            )
+            self.execution_shadow_store_error = None
+            self._execution_shadow_saved_revision = (
+                self.execution_shadow.persistence_revision
+            )
+        except Exception as err:
+            self.execution_shadow_store_status = "load_error"
+            self.execution_shadow_store_error = f"{type(err).__name__}: {err}"
+            self._execution_shadow_saved_revision = (
+                self.execution_shadow.persistence_revision
+            )
+
+    async def _async_persist_execution_shadow_if_changed(self) -> None:
+        """Persist lifecycle/audit transitions, never physical execution state."""
+        revision = self.execution_shadow.persistence_revision
+        if revision == self._execution_shadow_saved_revision:
+            return
+        try:
+            await self._execution_shadow_store.async_save(
+                self.execution_shadow.export_persistence()
+            )
+            self._execution_shadow_saved_revision = revision
+            self.execution_shadow_store_status = "saved"
+            self.execution_shadow_store_error = None
+            self.execution_shadow_store_last_saved_at = dt_util.utcnow().isoformat()
+        except Exception as err:
+            self.execution_shadow_store_status = "save_error"
+            self.execution_shadow_store_error = f"{type(err).__name__}: {err}"
 
     def async_add_listener(self, listener: Callable[[], None]) -> Callable[[], None]:
         self._listeners.append(listener)
@@ -599,6 +647,7 @@ class DOEMSEMSRuntime:
             shadow_data,
             now=self.last_refresh,
         )
+        await self._async_persist_execution_shadow_if_changed()
 
         # Step 12.2 manual/legacy observer path. This mirrors the source's
         # separate legacy Safety -> Action Controller evaluation and remains
@@ -922,6 +971,11 @@ class DOEMSEMSRuntime:
             "auto_execution_gate_warnings": automatic_execution_gate.get("auto_execution_gate_warnings", []),
             "auto_execution_gate_checks": automatic_execution_gate.get("auto_execution_gate_checks", []),
             **execution_shadow,
+            "execution_shadow_store_status": self.execution_shadow_store_status,
+            "execution_shadow_store_error": self.execution_shadow_store_error,
+            "execution_shadow_store_last_saved_at": self.execution_shadow_store_last_saved_at,
+            "execution_shadow_store_key": f"{DOMAIN}.{self.entry.entry_id}.execution_shadow",
+            "execution_shadow_store_restart_policy": "fail_safe_off_no_resume",
             "legacy_safety_status": legacy_safety.get("safety_status"),
             "legacy_safety_safe": legacy_safety.get("safety_safe"),
             "legacy_safety_reason": legacy_safety.get("safety_reason"),
