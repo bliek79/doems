@@ -17,7 +17,7 @@ def test_doems_status_option_count_is_safe_for_unhashable_values() -> None:
 def test_alpha5_2_status_fix_is_carried_forward() -> None:
     const_text = (INTEGRATION / "const.py").read_text(encoding="utf-8")
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    assert 'VERSION = "0.1.0-alpha.19"' in const_text
-    assert manifest["version"] == "0.1.0-alpha.19"
+    assert 'VERSION = "0.1.0-alpha.18"' in const_text
+    assert manifest["version"] == "0.1.0-alpha.18"
     sensor = (INTEGRATION / "sensor.py").read_text(encoding="utf-8")
     assert 'value not in {None, ""}' not in sensor
