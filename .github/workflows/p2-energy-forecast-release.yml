@@ -283,6 +283,10 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_input_contract.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_live_input.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_alpha76_adapter.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_policy_adapter.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_policy_v2/energy_need.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_policy_v2/planner_preview.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_policy_v2/planner_72h.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_runtime.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_plan_store.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_scheduler.py'
@@ -323,5 +327,5 @@ jobs:
           if gh release view 0.1.0-alpha.19 >/dev/null 2>&1; then
             gh release edit 0.1.0-alpha.19 --title "DOEMS 0.1.0-alpha.19 - Physical Self-Consumption Planner" --notes-file RELEASE_NOTES_0.1.0-alpha.19.md --prerelease
           else
-            gh release create 0.1.0-alpha.19 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.19 - Step 13 G5 Frozen Live Parity" --notes-file RELEASE_NOTES_0.1.0-alpha.19.md --prerelease
+            gh release create 0.1.0-alpha.19 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.19 - Physical Self-Consumption Planner" --notes-file RELEASE_NOTES_0.1.0-alpha.19.md --prerelease
           fi
