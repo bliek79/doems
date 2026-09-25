@@ -1,4 +1,4 @@
-name: DOEMS CI and Alpha18 Step 13 G5 Frozen Live Parity Release
+name: DOEMS CI and Alpha19 Physical Self-Consumption Planner Release
 
 on:
   pull_request:
@@ -29,9 +29,9 @@ jobs:
               json.loads(path.read_text(encoding='utf-8'))
               print(f'valid: {path}')
           PY
-      - name: Validate Alpha18 release contract
+      - name: Validate Alpha19 release contract
         run: |
-          test -f RELEASE_NOTES_0.1.0-alpha.18.md
+          test -f RELEASE_NOTES_0.1.0-alpha.19.md
           test -f examples/prices_p4_forecast_card.yaml
           test -f custom_components/doems/prices.py
           test -f custom_components/doems/prices_model.py
@@ -41,8 +41,8 @@ jobs:
           test ! -f scripts/build_brand_assets.py
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
-          grep -F 'VERSION = "0.1.0-alpha.18"' custom_components/doems/const.py
-          grep -F '"version": "0.1.0-alpha.18"' custom_components/doems/manifest.json
+          grep -F 'VERSION = "0.1.0-alpha.19"' custom_components/doems/const.py
+          grep -F '"version": "0.1.0-alpha.19"' custom_components/doems/manifest.json
           grep -F 'CONF_EMS_ENABLED = "ems_enabled"' custom_components/doems/const.py
           grep -F 'CONF_BATTERY_CAPACITY_KWH = "battery_capacity_kwh"' custom_components/doems/const.py
           grep -F 'CONF_TECHNICAL_MIN_SOC_PERCENT = "technical_min_soc_percent"' custom_components/doems/const.py
@@ -75,6 +75,17 @@ jobs:
           test -f tests/test_step12_5_execution_controller_shadow.py
           test -f tests/test_step12_6_restart_recovery_observability.py
           test -f tests/test_step13_g5_frozen_live_parity.py
+          test -f tests/test_alpha19_self_consumption_policy.py
+          test -f custom_components/doems/ems_policy_adapter.py
+          test -f custom_components/doems/ems_policy_v2/__init__.py
+          test -f custom_components/doems/ems_policy_v2/const.py
+          test -f custom_components/doems/ems_policy_v2/energy_need.py
+          test -f custom_components/doems/ems_policy_v2/planner_preview.py
+          test -f custom_components/doems/ems_policy_v2/planner_72h.py
+          grep -F 'from .ems_policy_adapter import run_ems_chain' custom_components/doems/ems_runtime.py
+          grep -F 'POLICY_VERSION = "self_consumption_physical_v2"' custom_components/doems/ems_policy_v2/__init__.py
+          grep -F 'charge_from_grid_support_kwh' custom_components/doems/ems_policy_v2/planner_72h.py
+          grep -F 'zelfconsumptie_bijladen' custom_components/doems/ems_planner_bridge.py
           test -f custom_components/doems/ems_g5_live_parity.py
           test -f custom_components/doems/ems_g5_live_parity_runtime.py
           test -f custom_components/doems/ems_g5_live_parity_sensor.py
@@ -253,7 +264,7 @@ jobs:
           ! grep -R -F 'doems_capture_alpha41_solar_freeze' custom_components/doems
           ! grep -R -F 'doems_alpha41_solar_freeze_captured' custom_components/doems
 
-  publish-alpha18:
+  publish-alpha19:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
@@ -263,7 +274,7 @@ jobs:
           fetch-depth: 0
       - name: Build release archive
         run: |
-          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.18.md
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.19.md
           sha256sum doems.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - name: Verify EMS settings, Presence and Prices runtime are packaged
@@ -272,6 +283,10 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_input_contract.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_live_input.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_alpha76_adapter.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_policy_adapter.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_policy_v2/energy_need.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_policy_v2/planner_preview.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_policy_v2/planner_72h.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_runtime.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_plan_store.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_scheduler.py'
@@ -305,12 +320,12 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/icon.png'
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
-      - name: Publish Alpha18 Step 13 G5 Frozen Live Parity release
+      - name: Publish Alpha19 Physical Self-Consumption Planner release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view 0.1.0-alpha.18 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.18 --title "DOEMS 0.1.0-alpha.18 - Step 13 G5 Frozen Live Parity" --notes-file RELEASE_NOTES_0.1.0-alpha.18.md --prerelease
+          if gh release view 0.1.0-alpha.19 >/dev/null 2>&1; then
+            gh release edit 0.1.0-alpha.19 --title "DOEMS 0.1.0-alpha.19 - Physical Self-Consumption Planner" --notes-file RELEASE_NOTES_0.1.0-alpha.19.md --prerelease
           else
-            gh release create 0.1.0-alpha.18 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.18 - Step 13 G5 Frozen Live Parity" --notes-file RELEASE_NOTES_0.1.0-alpha.18.md --prerelease
+            gh release create 0.1.0-alpha.19 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.19 - Physical Self-Consumption Planner" --notes-file RELEASE_NOTES_0.1.0-alpha.19.md --prerelease
           fi
