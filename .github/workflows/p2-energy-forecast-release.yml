@@ -317,7 +317,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view 0.1.0-alpha.20 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.20 --title "DOEMS 0.1.0-alpha.20 - Step 13 G5 Frozen Live Parity" --notes-file RELEASE_NOTES_0.1.0-alpha.20.md --prerelease
+            gh release edit 0.1.0-alpha.20 --title "DOEMS 0.1.0-alpha.20 - Cheapest Energy Safety Planner" --notes-file RELEASE_NOTES_0.1.0-alpha.20.md --prerelease
           else
-            gh release create 0.1.0-alpha.20 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.20 - Step 13 G5 Frozen Live Parity" --notes-file RELEASE_NOTES_0.1.0-alpha.20.md --prerelease
+            gh release create 0.1.0-alpha.20 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.20 - Cheapest Energy Safety Planner" --notes-file RELEASE_NOTES_0.1.0-alpha.20.md --prerelease
           fi
