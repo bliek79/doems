@@ -23,7 +23,7 @@ from .const import (
     CONTROL_PATH_OBSERVER_INTERVAL_SECONDS,
     DOMAIN,
 )
-from .ems_alpha76_adapter import run_ems_chain
+from .ems_policy_alpha20 import run_ems_chain
 from .ems_action_controller import DOEMSActionController
 from .ems_automatic_execution_gate import DOEMSAutomaticExecutionGate
 from .ems_control_path import DOEMSControlPathObserver
