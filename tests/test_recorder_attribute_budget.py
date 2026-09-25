@@ -50,12 +50,8 @@ def _class_unrecorded_attributes(path: str, class_name: str) -> frozenset[str]:
         node for node in tree.body
         if isinstance(node, ast.ClassDef) and node.name == class_name
     )
-    for node in cls.body:
-        if not isinstance(node, ast.Assign):
-            continue
-        if not any(isinstance(target, ast.Name) and target.id == "_unrecorded_attributes" for target in node.targets):
-            continue
-        value = node.value
+
+    def _literal_frozenset(value: ast.expr) -> frozenset[str] | None:
         if (
             isinstance(value, ast.Call)
             and isinstance(value.func, ast.Name)
@@ -63,7 +59,41 @@ def _class_unrecorded_attributes(path: str, class_name: str) -> frozenset[str]:
             and value.args
         ):
             return frozenset(ast.literal_eval(value.args[0]))
-        return frozenset(ast.literal_eval(value))
+        try:
+            return frozenset(ast.literal_eval(value))
+        except (ValueError, TypeError):
+            return None
+
+    # Normal class-level declaration.
+    for node in cls.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if not any(
+            isinstance(target, ast.Name) and target.id == "_unrecorded_attributes"
+            for target in node.targets
+        ):
+            continue
+        parsed = _literal_frozenset(node.value)
+        if parsed is not None:
+            return parsed
+
+    # Some entity classes set this dynamically in __init__ depending on their
+    # public contract (Plan72 does this only for the hours sensor).
+    for node in ast.walk(cls):
+        if not isinstance(node, ast.Assign):
+            continue
+        if not any(
+            isinstance(target, ast.Attribute)
+            and isinstance(target.value, ast.Name)
+            and target.value.id == "self"
+            and target.attr == "_unrecorded_attributes"
+            for target in node.targets
+        ):
+            continue
+        parsed = _literal_frozenset(node.value)
+        if parsed is not None:
+            return parsed
+
     return frozenset()
 
 
