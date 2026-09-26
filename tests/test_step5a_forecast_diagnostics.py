@@ -24,7 +24,7 @@ def test_288_fail_closed_gate_is_unchanged() -> None:
     assert 'input_result.get("native_valid_slot_count") != 288' in runtime
     assert 'self.status = "waiting_for_complete_forecast"' in runtime
     gate=runtime.index('input_result.get("native_valid_slot_count") != 288')
-    planner=runtime.index('self.planner_result = run_ems_chain(')
+    planner=runtime.index('planner_result = await self.hass.async_add_executor_job(worker)')
     assert gate < planner
 
 
