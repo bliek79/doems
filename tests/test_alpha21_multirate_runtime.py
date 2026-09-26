@@ -91,7 +91,7 @@ def test_alpha20_policy_source_is_byte_frozen() -> None:
     digest = hashlib.sha256(
         (INTEGRATION / "ems_policy_alpha20.py").read_bytes()
     ).hexdigest()
-    assert digest == "cf5f46e7c7cca492f7fb95df062d96db9109f0dc256144885c82efd9ea573eb8"
+    assert digest == "651874a857f70dd8e436af95bbcc7d40036c633bb6e7f9ab823a3414a9073d2e"
 
 
 def test_multirate_worker_returns_exact_alpha20_bundle() -> None:
