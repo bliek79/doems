@@ -52,7 +52,7 @@ gate, executor/single-flight source checks and generation-fence checks.
 
 The Alpha20 policy source SHA-256 remains:
 
-`cf5f46e7c7cca492f7fb95df062d96db9109f0dc256144885c82efd9ea573eb8`
+`651874a857f70dd8e436af95bbcc7d40036c633bb6e7f9ab823a3414a9073d2e`
 
 ## Scope
 
