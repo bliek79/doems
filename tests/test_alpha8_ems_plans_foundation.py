@@ -39,7 +39,8 @@ def test_alpha8_runtime_is_independent_and_non_actuating() -> None:
     assert "DOEMSPlanStore" in runtime
     assert "DOEMSScheduler" in runtime
     assert "build_planner_action_bridge" in runtime
-    assert "run_ems_chain" in runtime
+    assert "run_planner_worker" in runtime
+    assert "ems_multirate" in runtime
     assert 'execution_mode": "validation"' in runtime
     assert '"automatic_execution_armed": self._automatic_execution_armed' in runtime
     assert '"service_calls_performed": False' in runtime
