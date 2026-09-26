@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timedelta
+from functools import partial
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -23,7 +24,13 @@ from .const import (
     CONTROL_PATH_OBSERVER_INTERVAL_SECONDS,
     DOMAIN,
 )
-from .ems_policy_alpha20 import run_ems_chain
+from .ems_multirate import (
+    MULTIRATE_RUNTIME_VERSION,
+    is_planner_trigger,
+    planner_cycle_id,
+    planner_input_signature,
+    run_planner_worker,
+)
 from .ems_action_controller import DOEMSActionController
 from .ems_automatic_execution_gate import DOEMSAutomaticExecutionGate
 from .ems_control_path import DOEMSControlPathObserver
@@ -109,14 +116,28 @@ class DOEMSEMSRuntime:
 
         self._listeners: list[Callable[[], None]] = []
         self._unsubs: list[Callable[[], None]] = []
-        self._refresh_pending = False
+        self._fast_refresh_pending = False
         self._shutdown = False
+        self._planner_task: asyncio.Task[None] | None = None
+        self._planner_pending_triggers: set[str] = set()
+        self._planner_generation = 0
+        self._planner_published_generation = 0
+        self._planner_compute_count = 0
+        self._planner_stale_discard_count = 0
+        self._planner_same_signature_skip_count = 0
+        self._planner_last_input_signature: str | None = None
+        self._planner_last_cycle_id: str | None = None
+        self._planner_last_refresh: datetime | None = None
+        self._planner_debounce_seconds = 2.0
+        self._planner_publish_active = False
+        self._deferred_fast_trigger: str | None = None
         # Step 12.4 fail-safe arm: always starts OFF after integration setup/reload.
         # No restore-state path exists in this phase, so a restart requires an
         # explicit new user arm and can never silently permit physical execution.
         self._automatic_execution_armed = False
         self._control_path_timer_unsub: Callable[[], None] | None = None
         self._execution_shadow_timer_unsub: Callable[[], None] | None = None
+        self._planner_quarter_timer_unsub: Callable[[], None] | None = None
 
     @property
     def automatic_execution_armed(self) -> bool:
@@ -125,7 +146,7 @@ class DOEMSEMSRuntime:
     async def async_set_automatic_execution_armed(self, armed: bool) -> None:
         """Set the explicit Step 12.4 user arm without actuating anything."""
         self._automatic_execution_armed = bool(armed)
-        await self.async_refresh("automatic_execution_arm_change")
+        await self._async_fast_execution_refresh("automatic_execution_arm_change")
 
     @property
     def soc_entity_id(self) -> str | None:
@@ -138,7 +159,7 @@ class DOEMSEMSRuntime:
         await self.plan_store.async_load()
         self._unsubs.append(
             self.plan_store.add_listener(
-                lambda: self._request_refresh("plan_store_change")
+                lambda: self._request_fast_refresh("plan_store_change")
             )
         )
         for source, trigger in (
@@ -149,7 +170,7 @@ class DOEMSEMSRuntime:
             if source is not None and hasattr(source, "async_add_listener"):
                 self._unsubs.append(
                     source.async_add_listener(
-                        lambda trigger=trigger: self._request_refresh(trigger)
+                        lambda trigger=trigger: self._request_planner_refresh(trigger)
                     )
                 )
 
@@ -178,6 +199,7 @@ class DOEMSEMSRuntime:
             self._schedule_control_path_tick()
 
         await self.async_refresh("startup")
+        self._schedule_planner_quarter_tick()
         self._schedule_execution_shadow_tick()
 
     async def async_shutdown(self) -> None:
@@ -189,6 +211,12 @@ class DOEMSEMSRuntime:
         if self._execution_shadow_timer_unsub is not None:
             self._execution_shadow_timer_unsub()
             self._execution_shadow_timer_unsub = None
+        if self._planner_quarter_timer_unsub is not None:
+            self._planner_quarter_timer_unsub()
+            self._planner_quarter_timer_unsub = None
+        if self._planner_task is not None:
+            self._planner_task.cancel()
+            self._planner_task = None
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()
@@ -245,13 +273,21 @@ class DOEMSEMSRuntime:
             listener()
 
     @callback
-    def _soc_state_changed(self, _event: Event[EventStateChangedData]) -> None:
-        self._request_refresh("soc_state_change")
+    def _soc_state_changed(self, event: Event[EventStateChangedData]) -> None:
+        new_state = event.data.get("new_state")
+        recovered = False
+        if self.soc_percent is None and new_state is not None:
+            state_value = getattr(new_state, "state", None)
+            if state_value not in UNAVAILABLE_SOC_STATES:
+                recovered = parse_soc_percent(state_value) is not None
+        self._request_fast_refresh("soc_state_change")
+        if recovered:
+            self._request_planner_refresh("soc_recovered")
 
     @callback
     def _control_path_state_changed(self, _event: Event[EventStateChangedData]) -> None:
         self.control_path_result = self.control_path.evaluate()
-        self._request_refresh("control_path_state_change")
+        self._request_fast_refresh("control_path_state_change")
 
     @callback
     def _schedule_control_path_tick(self) -> None:
@@ -287,21 +323,99 @@ class DOEMSEMSRuntime:
         self._execution_shadow_timer_unsub = None
         if self._shutdown:
             return
-        self._request_refresh("execution_shadow_monitor")
+        self._request_fast_refresh("execution_shadow_monitor")
         self._schedule_execution_shadow_tick()
 
     @callback
-    def _request_refresh(self, trigger: str) -> None:
-        if self._shutdown or self._refresh_pending:
+    def _schedule_planner_quarter_tick(self) -> None:
+        if self._shutdown or self._planner_quarter_timer_unsub is not None:
             return
-        self._refresh_pending = True
-        self.hass.async_create_task(self._async_requested_refresh(trigger))
+        now = dt_util.utcnow()
+        minute = (now.minute // 15 + 1) * 15
+        if minute >= 60:
+            next_quarter = (now + timedelta(hours=1)).replace(
+                minute=0,
+                second=3,
+                microsecond=0,
+            )
+        else:
+            next_quarter = now.replace(
+                minute=minute,
+                second=3,
+                microsecond=0,
+            )
+        delay = max(0.1, (next_quarter - now).total_seconds())
+        self._planner_quarter_timer_unsub = async_call_later(
+            self.hass,
+            delay,
+            self._planner_quarter_tick,
+        )
 
-    async def _async_requested_refresh(self, trigger: str) -> None:
-        await asyncio.sleep(0)
-        self._refresh_pending = False
-        if not self._shutdown:
-            await self.async_refresh(trigger)
+    @callback
+    def _planner_quarter_tick(self, _now: datetime) -> None:
+        self._planner_quarter_timer_unsub = None
+        if self._shutdown:
+            return
+        self._request_planner_refresh("quarter_boundary")
+        self._schedule_planner_quarter_tick()
+
+    @callback
+    def _request_fast_refresh(self, trigger: str) -> None:
+        if self._shutdown:
+            return
+        if self._planner_publish_active:
+            self._deferred_fast_trigger = trigger
+            return
+        if self._fast_refresh_pending:
+            return
+        self._fast_refresh_pending = True
+        self.hass.async_create_task(self._async_requested_fast_refresh(trigger))
+
+    async def _async_requested_fast_refresh(self, trigger: str) -> None:
+        try:
+            await asyncio.sleep(0)
+            if not self._shutdown:
+                await self._async_fast_execution_refresh(trigger)
+        finally:
+            self._fast_refresh_pending = False
+
+    @callback
+    def _request_planner_refresh(self, trigger: str) -> None:
+        if self._shutdown:
+            return
+        self._planner_generation += 1
+        self._planner_pending_triggers.add(trigger)
+        if self._planner_task is None or self._planner_task.done():
+            self._planner_task = self.hass.async_create_task(
+                self._async_planner_loop()
+            )
+
+    @callback
+    def _request_refresh(self, trigger: str) -> None:
+        """Compatibility dispatcher for existing internal callers."""
+        if is_planner_trigger(trigger):
+            self._request_planner_refresh(trigger)
+        else:
+            self._request_fast_refresh(trigger)
+
+    async def _async_planner_loop(self) -> None:
+        try:
+            first_iteration = True
+            while self._planner_pending_triggers and not self._shutdown:
+                immediate = first_iteration and "startup" in self._planner_pending_triggers
+                if not immediate:
+                    await asyncio.sleep(self._planner_debounce_seconds)
+                generation = self._planner_generation
+                triggers = sorted(self._planner_pending_triggers)
+                self._planner_pending_triggers.clear()
+                await self._async_run_planner_generation(generation, triggers)
+                first_iteration = False
+        finally:
+            self._planner_task = None
+            if self._planner_pending_triggers and not self._shutdown:
+                self._planner_task = self.hass.async_create_task(
+                    self._async_planner_loop()
+                )
 
     def _read_soc(self) -> tuple[float | None, str, str | None]:
         entity_id = self.soc_entity_id
@@ -333,39 +447,34 @@ class DOEMSEMSRuntime:
         )
 
     async def async_refresh(self, trigger: str) -> None:
-        """Recalculate DOEMS planning state only; never actuate anything."""
+        """Refresh planner only for planner triggers; otherwise run the fast path."""
+        if is_planner_trigger(trigger):
+            self._planner_generation += 1
+            self._planner_pending_triggers.add(trigger)
+            if self._planner_task is None or self._planner_task.done():
+                self._planner_task = self.hass.async_create_task(
+                    self._async_planner_loop()
+                )
+            task = self._planner_task
+            if task is not None:
+                await task
+            return
+        await self._async_fast_execution_refresh(trigger)
+
+    async def _async_run_planner_generation(
+        self,
+        generation: int,
+        triggers: list[str],
+    ) -> None:
+        """Build one planner generation off-loop and publish only if still current."""
+        trigger = "+".join(triggers) if triggers else "planner_refresh"
+        reference = dt_util.utcnow()
         self.last_trigger = trigger
-        self.last_refresh = dt_util.utcnow()
+        self.last_refresh = reference
+        self._planner_last_refresh = reference
         self.refresh_count += 1
         self.last_error = None
-        self.input_result = None
-        self.planner_result = None
-        self.bridge_result = {}
-        self.scheduler_result = {}
-        self.plan_store_result = {}
-        self.handoff_result = {}
-        self.expired_release_result = {}
-        self.prestart_result = {}
-        self.safety_result = {}
-        self.execution_handoff_result = {}
-        self.final_revalidation_result = {}
-        self.mode_switch_preview_result = {}
-        self.automatic_execution_gate_result = {}
-        self.execution_shadow_result = {}
-        self.legacy_safety_result = {}
-        self.action_controller_result = {}
         self.control_path_result = self.control_path.evaluate()
-
-        # The definitive DOEMS Scheduler is independent from automatic planning.
-        # Evaluate persisted/manual plans even when SOC or forecast inputs are not
-        # available yet. Automatic Plan72 writes remain gated below.
-        self.scheduler_result = self.scheduler.evaluate(
-            self.settings.max_charge_power_w,
-            self.settings.max_discharge_power_w,
-            now=self.last_refresh,
-            technical_min_soc_percent=self.settings.technical_min_soc_percent,
-            max_soc_percent=self.settings.max_soc_percent,
-        )
 
         soc, soc_status, soc_updated = self._read_soc()
         self.soc_percent = soc
@@ -390,25 +499,66 @@ class DOEMSEMSRuntime:
                 coordinator=self.coordinator,
                 solar_forecast=self.solar_forecast,
                 prices=self.prices,
-                reference=self.last_refresh,
+                reference=reference,
             )
-            self.input_result = input_result
             if (
                 input_result.get("status") != "ready"
                 or input_result.get("native_valid_slot_count") != 288
                 or len(input_result.get("rows") or []) != 72
             ):
+                self.input_result = input_result
                 self.status = "waiting_for_complete_forecast"
                 self._notify()
                 return
 
-            self.planner_result = run_ems_chain(
+            signature = planner_input_signature(
                 input_result=input_result,
                 settings=self.settings,
                 soc_percent=soc,
-                now=self.last_refresh,
+                reference=reference,
             )
-            await self._async_run_bridge_planstore_scheduler()
+            cycle_id = planner_cycle_id(reference)
+            if (
+                signature == self._planner_last_input_signature
+                and self.planner_result is not None
+            ):
+                self.input_result = input_result
+                self._planner_same_signature_skip_count += 1
+                self._planner_last_cycle_id = cycle_id
+                self.status = "ready"
+                await self._async_fast_execution_refresh(
+                    "planner_same_signature_fast_path"
+                )
+                return
+
+            worker = partial(
+                run_planner_worker,
+                input_result=input_result,
+                settings=self.settings,
+                soc_percent=soc,
+                reference=reference,
+            )
+            planner_result = await self.hass.async_add_executor_job(worker)
+            self._planner_compute_count += 1
+
+            if generation != self._planner_generation:
+                self._planner_stale_discard_count += 1
+                return
+
+            self.input_result = input_result
+            self.planner_result = planner_result
+            self._planner_last_input_signature = signature
+            self._planner_last_cycle_id = cycle_id
+            self._planner_published_generation = generation
+            self._planner_publish_active = True
+            try:
+                await self._async_run_bridge_planstore_scheduler()
+            finally:
+                self._planner_publish_active = False
+                deferred_trigger = self._deferred_fast_trigger
+                self._deferred_fast_trigger = None
+                if deferred_trigger:
+                    self._request_fast_refresh(deferred_trigger)
             self.status = "ready"
         except Exception as err:
             self.status = "error"
@@ -659,6 +809,144 @@ class DOEMSEMSRuntime:
         }
         self.action_controller_result = self.action_controller.evaluate(action_data)
 
+    async def _async_fast_execution_refresh(self, trigger: str) -> None:
+        """Run Scheduler/Safety/Execution against the cached plan only."""
+        if self._shutdown:
+            return
+        self.last_trigger = trigger
+        self.last_refresh = dt_util.utcnow()
+        self.refresh_count += 1
+        self.last_error = None
+        self.control_path_result = self.control_path.evaluate()
+
+        soc, soc_status, soc_updated = self._read_soc()
+        self.soc_percent = soc
+        self.soc_source_status = soc_status
+        self.soc_last_updated = soc_updated
+
+        self.scheduler_result = self.scheduler.evaluate(
+            self.settings.max_charge_power_w,
+            self.settings.max_discharge_power_w,
+            now=self.last_refresh,
+            technical_min_soc_percent=self.settings.technical_min_soc_percent,
+            max_soc_percent=self.settings.max_soc_percent,
+        )
+        planner = self.planner_result or {}
+        plan72 = dict(planner.get("plan72") or {})
+
+        # Step 11 consumes the Step 12.1 control-path contract read-only.
+        # A configured path may remove the former configuration blocker, but
+        # no controller, arm gate, service call or physical authority exists.
+        control_path = self.control_path_result or self.control_path.evaluate()
+        control_entities = control_path.get("entities") or {}
+        step11_data: dict[str, Any] = {
+            **plan72,
+            **self.bridge_result,
+            **self.scheduler_result,
+            "forecast_ready": (self.input_result or {}).get("status") == "ready",
+            "soc": self.soc_percent,
+            "max_charge_power_w": self.settings.max_charge_power_w,
+            "max_discharge_power_w": self.settings.max_discharge_power_w,
+            "technical_min_soc_percent": self.settings.technical_min_soc_percent,
+            "max_soc_percent": self.settings.max_soc_percent,
+            "charge_power_w": self._read_optional_power(
+                CONF_BATTERY_CHARGE_POWER_ENTITY
+            ),
+            "discharge_power_w": self._read_optional_power(
+                CONF_BATTERY_DISCHARGE_POWER_ENTITY
+            ),
+            "control_path_configured": bool(control_path.get("configured")),
+            "control_path_ready": control_path.get("ready"),
+            "control_path_pre_mode_ready": control_path.get("pre_mode_ready"),
+            "control_path_post_mode_ready": control_path.get("post_mode_ready"),
+            "control_path_required_stable_seconds": control_path.get("required_stable_seconds", 60),
+            "control_path_pre_mode_stable_seconds": control_path.get("pre_mode_stable_seconds", 0),
+            "control_path_post_mode_stable_seconds": control_path.get("post_mode_stable_seconds", 0),
+            "control_path_entities": control_entities,
+            "control_path_operating_mode_available": control_entities.get("operating_mode", {}).get("available", False),
+            "operating_mode": control_entities.get("operating_mode", {}).get("state"),
+            "action_direction": control_entities.get("action_direction", {}).get("state"),
+            "power_setpoint_w": control_entities.get("power_setpoint", {}).get("state"),
+            "physical_test_active": False,
+            "execution_active": False,
+        }
+        self.prestart_result = self.prestart_validator.evaluate(step11_data)
+        step11_data.update(self.prestart_result)
+        self.safety_result = self.safety_guard.evaluate_automatic_handoff(step11_data)
+
+        # Step 12.2 automatic path: Safety -> Execution Handoff directly.
+        # It deliberately does not consume Action Controller output and stops
+        # before Final Revalidation, mode-switching or any physical service call.
+        execution_data: dict[str, Any] = {
+            **step11_data,
+            **self.safety_result,
+        }
+        self.execution_handoff_result = self.execution_handoff.evaluate(execution_data)
+
+        # Step 12.3 remains strictly non-actuating: the latest automatic handoff
+        # is revalidated, then converted into a guarded mode-switch transaction
+        # preview. No Home Assistant control service is called here.
+        final_data: dict[str, Any] = {
+            **execution_data,
+            **self.execution_handoff_result,
+        }
+        self.final_revalidation_result = self.final_revalidation.evaluate(final_data)
+        preview_data: dict[str, Any] = {
+            **final_data,
+            **self.final_revalidation_result,
+        }
+        self.mode_switch_preview_result = self.mode_switch_preview.evaluate(preview_data)
+
+        # Step 12.4: collapse the complete automatic safety chain into one
+        # explicit permission gate. Even when armed_ready, this phase never
+        # invokes the Execution Controller and never calls Home Assistant services.
+        gate_data: dict[str, Any] = {
+            **preview_data,
+            **self.mode_switch_preview_result,
+            "control_path_ready": control_path.get("ready"),
+            "control_path_stable_seconds": control_path.get("stable_seconds", 0),
+            "control_path_required_stable_seconds": control_path.get(
+                "required_stable_seconds", 60
+            ),
+            "execution_origin": None,
+        }
+        self.automatic_execution_gate_result = self.automatic_execution_gate.evaluate(
+            gate_data,
+            armed=self._automatic_execution_armed,
+        )
+
+        # Step 12.5 remains non-actuating. It freezes the Step 12.4 execution
+        # identity, follows runtime safety from live read-only sources and
+        # previews safe-return/audit without any Home Assistant control call.
+        shadow_data: dict[str, Any] = {
+            **gate_data,
+            **self.automatic_execution_gate_result,
+            "scheduler_slots": self.scheduler_result.get("scheduler_slots", {}),
+            "soc": self.soc_percent,
+            "charge_power_w": step11_data.get("charge_power_w"),
+            "discharge_power_w": step11_data.get("discharge_power_w"),
+            "operating_mode": step11_data.get("operating_mode"),
+            "action_direction": step11_data.get("action_direction"),
+            "power_setpoint_w": step11_data.get("power_setpoint_w"),
+        }
+        self.execution_shadow_result = self.execution_shadow.evaluate(
+            shadow_data,
+            now=self.last_refresh,
+        )
+        await self._async_persist_execution_shadow_if_changed()
+
+        # Step 12.2 manual/legacy observer path. This mirrors the source's
+        # separate legacy Safety -> Action Controller evaluation and remains
+        # semantic/read-only. It is not part of automatic Plan72 execution.
+        self.legacy_safety_result = self.safety_guard.evaluate(step11_data)
+        action_data: dict[str, Any] = {
+            **step11_data,
+            **self.legacy_safety_result,
+        }
+        self.action_controller_result = self.action_controller.evaluate(action_data)
+
+        self._notify()
+
     def snapshot(self) -> dict[str, Any]:
         """Return compact entity-safe diagnostics without publishing Plan72 arrays."""
         input_result = self.input_result or {}
@@ -707,6 +995,29 @@ class DOEMSEMSRuntime:
             "last_trigger": self.last_trigger,
             "refresh_count": self.refresh_count,
             "last_error": self.last_error,
+            "multirate_runtime_version": "alpha21_multirate_runtime_v1",
+            "planner_generation": getattr(self, "_planner_generation", 0),
+            "planner_published_generation": getattr(
+                self, "_planner_published_generation", 0
+            ),
+            "planner_compute_count": getattr(self, "_planner_compute_count", 0),
+            "planner_stale_discard_count": getattr(
+                self, "_planner_stale_discard_count", 0
+            ),
+            "planner_same_signature_skip_count": getattr(
+                self, "_planner_same_signature_skip_count", 0
+            ),
+            "planner_last_input_signature": getattr(
+                self, "_planner_last_input_signature", None
+            ),
+            "planner_last_cycle_id": getattr(
+                self, "_planner_last_cycle_id", None
+            ),
+            "planner_last_refresh": (
+                getattr(self, "_planner_last_refresh", None).isoformat()
+                if getattr(self, "_planner_last_refresh", None)
+                else None
+            ),
             "input_source": input_result.get("input_source", "existing_doems_forecast"),
             "input_contract_status": input_result.get("status"),
             "native_expected_slot_count": input_result.get("native_expected_slot_count", 288),
