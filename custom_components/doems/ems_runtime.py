@@ -129,6 +129,8 @@ class DOEMSEMSRuntime:
         self._planner_last_cycle_id: str | None = None
         self._planner_last_refresh: datetime | None = None
         self._planner_debounce_seconds = 2.0
+        self._planner_publish_active = False
+        self._deferred_fast_trigger: str | None = None
         # Step 12.4 fail-safe arm: always starts OFF after integration setup/reload.
         # No restore-state path exists in this phase, so a restart requires an
         # explicit new user arm and can never silently permit physical execution.
@@ -359,7 +361,12 @@ class DOEMSEMSRuntime:
 
     @callback
     def _request_fast_refresh(self, trigger: str) -> None:
-        if self._shutdown or self._fast_refresh_pending:
+        if self._shutdown:
+            return
+        if self._planner_publish_active:
+            self._deferred_fast_trigger = trigger
+            return
+        if self._fast_refresh_pending:
             return
         self._fast_refresh_pending = True
         self.hass.async_create_task(self._async_requested_fast_refresh(trigger))
@@ -543,7 +550,15 @@ class DOEMSEMSRuntime:
             self._planner_last_input_signature = signature
             self._planner_last_cycle_id = cycle_id
             self._planner_published_generation = generation
-            await self._async_run_bridge_planstore_scheduler()
+            self._planner_publish_active = True
+            try:
+                await self._async_run_bridge_planstore_scheduler()
+            finally:
+                self._planner_publish_active = False
+                deferred_trigger = self._deferred_fast_trigger
+                self._deferred_fast_trigger = None
+                if deferred_trigger:
+                    self._request_fast_refresh(deferred_trigger)
             self.status = "ready"
         except Exception as err:
             self.status = "error"
@@ -828,7 +843,7 @@ class DOEMSEMSRuntime:
             **plan72,
             **self.bridge_result,
             **self.scheduler_result,
-            "forecast_ready": True,
+            "forecast_ready": (self.input_result or {}).get("status") == "ready",
             "soc": self.soc_percent,
             "max_charge_power_w": self.settings.max_charge_power_w,
             "max_discharge_power_w": self.settings.max_discharge_power_w,
