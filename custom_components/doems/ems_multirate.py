@@ -13,6 +13,7 @@ from typing import Any
 
 from homeassistant.util import dt as dt_util
 
+from .ems_alpha76_adapter import planner_reference
 from .ems_policy_alpha20 import POLICY_VERSION, run_ems_chain
 
 MULTIRATE_RUNTIME_VERSION = "alpha21_multirate_runtime_v1"
@@ -76,13 +77,17 @@ def planner_input_signature(
         field: getattr(settings, field, None)
         for field in _SETTINGS_FIELDS
     }
+    policy_reference = planner_reference(input_result, reference)
     payload = {
         "runtime": MULTIRATE_RUNTIME_VERSION,
         "policy": POLICY_VERSION,
-        "cycle": planner_cycle_id(reference),
+        "cycle": planner_cycle_id(policy_reference),
         "soc_percent": float(soc_percent),
         "settings": settings_payload,
-        "input_result": input_result,
+        "rows": input_result.get("rows") or [],
+        "time_contract": input_result.get("time_contract") or {},
+        "planner_start": input_result.get("planner_start"),
+        "window_start": input_result.get("window_start"),
     }
     encoded = json.dumps(
         payload,
