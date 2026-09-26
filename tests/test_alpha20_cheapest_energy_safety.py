@@ -165,7 +165,8 @@ def test_alpha20_keeps_public_contract_compact_and_g5_frozen() -> None:
     g5 = (INTEGRATION / "ems_g5_live_parity.py").read_text(encoding="utf-8")
     policy = (INTEGRATION / "ems_policy_alpha20.py").read_text(encoding="utf-8")
 
-    assert "from .ems_policy_alpha20 import run_ems_chain" in runtime
+    assert "from .ems_multirate import (" in runtime
+    assert "run_planner_worker" in runtime
     assert 'POLICY_VERSION = "alpha76_baseline_v1"' in g5
     assert "ems_alpha76_adapter" in g5
     assert "grid_support_charge" not in sensor
