@@ -182,4 +182,5 @@ def test_step12_5_source_and_runtime_have_no_physical_execution() -> None:
     assert '"physical_execution_authority": False' in shadow_text
     assert '"execution_controller_invoked": False' in shadow_text
     assert "self.execution_shadow.evaluate(" in runtime_text
-    assert "self._request_refresh(\"execution_shadow_monitor\")" in runtime_text
+    assert "self._request_fast_refresh(\"execution_shadow_monitor\")" in runtime_text
+    assert "self._request_refresh(\"execution_shadow_monitor\")" not in runtime_text
