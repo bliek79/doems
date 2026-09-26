@@ -995,17 +995,27 @@ class DOEMSEMSRuntime:
             "last_trigger": self.last_trigger,
             "refresh_count": self.refresh_count,
             "last_error": self.last_error,
-            "multirate_runtime_version": MULTIRATE_RUNTIME_VERSION,
-            "planner_generation": self._planner_generation,
-            "planner_published_generation": self._planner_published_generation,
-            "planner_compute_count": self._planner_compute_count,
-            "planner_stale_discard_count": self._planner_stale_discard_count,
-            "planner_same_signature_skip_count": self._planner_same_signature_skip_count,
-            "planner_last_input_signature": self._planner_last_input_signature,
-            "planner_last_cycle_id": self._planner_last_cycle_id,
+            "multirate_runtime_version": "alpha21_multirate_runtime_v1",
+            "planner_generation": getattr(self, "_planner_generation", 0),
+            "planner_published_generation": getattr(
+                self, "_planner_published_generation", 0
+            ),
+            "planner_compute_count": getattr(self, "_planner_compute_count", 0),
+            "planner_stale_discard_count": getattr(
+                self, "_planner_stale_discard_count", 0
+            ),
+            "planner_same_signature_skip_count": getattr(
+                self, "_planner_same_signature_skip_count", 0
+            ),
+            "planner_last_input_signature": getattr(
+                self, "_planner_last_input_signature", None
+            ),
+            "planner_last_cycle_id": getattr(
+                self, "_planner_last_cycle_id", None
+            ),
             "planner_last_refresh": (
-                self._planner_last_refresh.isoformat()
-                if self._planner_last_refresh
+                getattr(self, "_planner_last_refresh", None).isoformat()
+                if getattr(self, "_planner_last_refresh", None)
                 else None
             ),
             "input_source": input_result.get("input_source", "existing_doems_forecast"),
