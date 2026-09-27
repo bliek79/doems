@@ -57,7 +57,8 @@ def test_sensor_platform_wires_p31_without_regressing_alpha52_status_fix() -> No
     assert "from .solar_forecast import SolarForecastManager" in text
     assert "from .solar_sensor import build_solar_sensors" in text
     assert 'get("solar_forecast")' in text
-    assert "entities.extend(build_solar_sensors(entry, solar_forecast))" in text
+    assert "build_solar_sensors(" in text
+    assert 'get("solar_actual")' in text
     assert "and value is not None" in text
     assert 'and value != ""' in text
     assert 'value not in {None, ""}' not in text
