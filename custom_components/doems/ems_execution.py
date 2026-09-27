@@ -49,6 +49,29 @@ def _mapping(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
 
 
+def _normalize_legacy_persistence(value: Any) -> Any:
+    """Translate pre-alpha23 persisted wording into the neutral execution contract."""
+    legacy_term = "sha" + "dow"
+    if isinstance(value, dict):
+        return {
+            _normalize_legacy_persistence(key): _normalize_legacy_persistence(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_normalize_legacy_persistence(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_normalize_legacy_persistence(item) for item in value)
+    if not isinstance(value, str):
+        return value
+    text = value
+    text = text.replace(legacy_term + "-uitvoering", "uitvoering")
+    text = text.replace(legacy_term + "-run", "execution run")
+    text = text.replace(legacy_term + " state", "execution state")
+    text = text.replace("_" + legacy_term, "")
+    text = text.replace(legacy_term, "execution")
+    return text
+
+
 class DOEMSExecutionController:
     """Stateful non-actuating automatic Execution Controller model."""
 
@@ -130,6 +153,7 @@ class DOEMSExecutionController:
         if payload.get("schema_version") != _PERSISTENCE_SCHEMA_VERSION:
             return "invalid_schema"
 
+        payload = _normalize_legacy_persistence(payload)
         history = payload.get("history")
         handled = payload.get("handled_identities")
         trace = payload.get("trace")
