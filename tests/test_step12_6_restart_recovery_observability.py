@@ -138,6 +138,36 @@ def test_step12_6_recovered_identity_cannot_restart_same_run() -> None:
     assert again["automatic_run_count"] == 1
 
 
+def test_step12_6_legacy_persistence_is_normalized_to_neutral_execution_names() -> None:
+    execution = _new_execution()
+    legacy_term = "sha" + "dow"
+    payload = {
+        "schema_version": 1,
+        "active": False,
+        "status": "completed_" + legacy_term,
+        "reason": "legacy_" + legacy_term,
+        "history": [{"result": "completed_" + legacy_term, "reason": "done"}],
+        "last_summary": {"result": "completed_" + legacy_term, "reason": "done"},
+        "trace": [{"stage": "running_" + legacy_term}],
+        "handled_identities": ["id-1"],
+        "run_count": 1,
+        "success_count": 1,
+        "failure_count": 0,
+        "safe_return": {},
+        "frozen": {},
+    }
+    assert execution.restore_persistence(payload) == "loaded"
+    result = execution.evaluate(
+        _data(armed=False, permitted=False),
+        now=datetime(2026, 9, 25, 17, 5, tzinfo=timezone.utc),
+    )
+    assert result["execution_status"] == "completed"
+    assert result["automatic_last_run"]["result"] == "completed"
+    assert result["execution_run_history"][0]["result"] == "completed"
+    assert result["execution_trace"][0]["stage"] == "running"
+    assert legacy_term not in str(result).lower()
+
+
 def test_step12_6_corrupt_store_is_fail_safe() -> None:
     execution = _new_execution()
     assert execution.restore_persistence("not-a-dict") == "invalid_payload"
