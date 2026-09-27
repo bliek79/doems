@@ -1,6 +1,6 @@
 """Step 12.4 Automatic Execution Gate.
 
-This module turns the fully validated Step 12.3 shadow chain into a single
+This module turns the fully validated Step 12.3 non-actuating chain into a single
 fail-safe, non-actuating permission decision. It never calls Home Assistant
 services, never starts the Execution Controller and never grants physical
 execution authority.
