@@ -83,7 +83,7 @@ def test_step12_2_runtime_keeps_manual_and_automatic_paths_separate() -> None:
     assert '"physical_execution_authority": False' in runtime
 
 
-def test_step12_2_runtime_exposes_shadow_diagnostics() -> None:
+def test_step12_2_runtime_exposes_execution_diagnostics() -> None:
     runtime = _read("ems_runtime.py")
     for token in (
         '"action_controller_invoked": bool(action_controller)',
