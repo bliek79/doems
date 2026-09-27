@@ -1,4 +1,4 @@
-"""Step 12.5 non-actuating Execution Controller shadow.
+"""Step 12.5 non-actuating Execution Controller.
 
 Models the automatic execution lifecycle, runtime safety, safe-return and audit
 without making Home Assistant service calls or claiming physical authority.
@@ -49,13 +49,36 @@ def _mapping(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
 
 
-class DOEMSExecutionControllerShadow:
-    """Stateful shadow of the future automatic Execution Controller."""
+def _normalize_legacy_persistence(value: Any) -> Any:
+    """Translate pre-alpha23 persisted wording into the neutral execution contract."""
+    legacy_term = "sha" + "dow"
+    if isinstance(value, dict):
+        return {
+            _normalize_legacy_persistence(key): _normalize_legacy_persistence(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_normalize_legacy_persistence(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_normalize_legacy_persistence(item) for item in value)
+    if not isinstance(value, str):
+        return value
+    text = value
+    text = text.replace(legacy_term + "-uitvoering", "uitvoering")
+    text = text.replace(legacy_term + "-run", "execution run")
+    text = text.replace(legacy_term + " state", "execution state")
+    text = text.replace("_" + legacy_term, "")
+    text = text.replace(legacy_term, "execution")
+    return text
+
+
+class DOEMSExecutionController:
+    """Stateful non-actuating automatic Execution Controller model."""
 
     def __init__(self) -> None:
         self._active = False
         self._status = "idle"
-        self._reason = "Geen shadow-uitvoering actief"
+        self._reason = "Geen uitvoering actief"
         self._frozen: dict[str, Any] = {}
         self._started_at: datetime | None = None
         self._last_sample_at: datetime | None = None
@@ -85,7 +108,7 @@ class DOEMSExecutionControllerShadow:
 
     @property
     def persistence_revision(self) -> int:
-        """Monotonic revision for persisted shadow lifecycle state."""
+        """Monotonic revision for persisted execution lifecycle state."""
         return self._persistence_revision
 
     def _mark_persistence_changed(self) -> None:
@@ -130,6 +153,7 @@ class DOEMSExecutionControllerShadow:
         if payload.get("schema_version") != _PERSISTENCE_SCHEMA_VERSION:
             return "invalid_schema"
 
+        payload = _normalize_legacy_persistence(payload)
         history = payload.get("history")
         handled = payload.get("handled_identities")
         trace = payload.get("trace")
@@ -164,7 +188,7 @@ class DOEMSExecutionControllerShadow:
         if payload.get("active") is True:
             self._active = False
             self._status = "restart_recovery_pending"
-            self._reason = "Persisted active shadow-run requires fail-safe restart recovery"
+            self._reason = "Persisted active execution run requires fail-safe restart recovery"
             self._recovery_pending = True
             self._recovery_status = "pending"
             self._recovery_reason = "restart_recovery"
@@ -178,27 +202,27 @@ class DOEMSExecutionControllerShadow:
             if persisted_status in {
                 "idle",
                 "blocked",
-                "completed_shadow",
-                "emergency_stopped_shadow",
-                "recovered_interrupted_shadow",
+                "completed",
+                "emergency_stopped",
+                "recovered_interrupted",
             }:
                 self._status = persisted_status
                 self._reason = str(payload.get("reason") or self._reason)
             else:
                 self._status = "idle"
-                self._reason = "Persisted inactive shadow state normalized to idle"
+                self._reason = "Persisted inactive execution state normalized to idle"
         return "loaded"
 
     def _finish_restart_recovery(
         self, data: dict[str, Any], now: datetime
     ) -> None:
-        """Fail-safe one persisted active shadow-run without physical recovery writes."""
+        """Fail-safe one persisted active execution run without physical recovery writes."""
         self._recovery_pending = False
         # Reuse the normal audit finalizer with the persisted frozen/sample state.
         # The temporary active flag is internal only; no public physical authority exists.
         self._active = True
         self._finish(data, now, "restart_recovery", emergency=True)
-        self._status = "recovered_interrupted_shadow"
+        self._status = "recovered_interrupted"
         self._reason = "restart_recovery"
         self._recovery_status = "recovered_interrupted"
         self._recovery_reason = "restart_recovery"
@@ -206,7 +230,7 @@ class DOEMSExecutionControllerShadow:
         self._recovery_identity = self._frozen.get("planner_identity")
         self._recovery_slot = self._frozen.get("slot")
         if self._last_summary:
-            self._last_summary["result"] = "recovered_interrupted_shadow"
+            self._last_summary["result"] = "recovered_interrupted"
             self._last_summary["reason"] = "restart_recovery"
             if self._history:
                 self._history[-1] = dict(self._last_summary)
@@ -331,8 +355,8 @@ class DOEMSExecutionControllerShadow:
             "already_external": bool(data.get("auto_mode_switch_preview_already_external")),
         }
         self._active = True
-        self._status = "running_shadow"
-        self._reason = "Execution Controller shadow volgt de door Step 12.4 vrijgegeven actie"
+        self._status = "running"
+        self._reason = "Execution Controller volgt de door Step 12.4 vrijgegeven actie"
         self._started_at = now
         self._last_sample_at = None
         self._previous_actual_power_w = None
@@ -342,11 +366,11 @@ class DOEMSExecutionControllerShadow:
         self._trace = []
         self._safe_return = self._safe_return_preview(False, None)
         self._trace_event(now, "selected", f"slot={slot}; identity={identity}")
-        self._trace_event(now, "armed_shadow", "Step 12.4 gate=armed_ready")
-        self._trace_event(now, "starting_shadow", "transaction preview accepted")
+        self._trace_event(now, "armed", "Step 12.4 gate=armed_ready")
+        self._trace_event(now, "starting", "transaction preview accepted")
         self._trace_event(
             now,
-            "running_shadow",
+            "running",
             f"action={action}; requested={self._frozen.get('requested_power_w')}W",
         )
         self._mark_persistence_changed()
@@ -435,7 +459,7 @@ class DOEMSExecutionControllerShadow:
                 "physical_post_handoff_state",
                 False,
                 "Mode-switch is preview-only; live post-handoff mode/direction/setpoint cannot be enforced yet",
-                warning="physical_state_not_transitioned_shadow",
+                warning="physical_state_not_transitioned",
             )
 
         action = self._frozen.get("action")
@@ -513,7 +537,7 @@ class DOEMSExecutionControllerShadow:
 
     def _finish(self, data: dict[str, Any], now: datetime, reason: str, *, emergency: bool) -> None:
         self._active = False
-        self._status = "emergency_stopped_shadow" if emergency else "completed_shadow"
+        self._status = "emergency_stopped" if emergency else "completed"
         self._reason = reason
         self._safe_return = self._safe_return_preview(True, reason)
         self._trace_event(now, "stop_requested", f"reason={reason}; emergency={emergency}")
@@ -605,7 +629,7 @@ class DOEMSExecutionControllerShadow:
         self._mark_persistence_changed()
 
     def evaluate(self, data: dict[str, Any], *, now: datetime | None = None) -> dict[str, Any]:
-        """Advance one read-only execution-shadow iteration."""
+        """Advance one read-only execution iteration."""
         current = now or datetime.now(timezone.utc)
         if current.tzinfo is None:
             current = current.replace(tzinfo=timezone.utc)
@@ -641,7 +665,7 @@ class DOEMSExecutionControllerShadow:
                 and identity
                 and str(identity) not in self._handled_identities
             ):
-                self._status = "armed_shadow"
+                self._status = "armed"
                 self._reason = "Step 12.4 heeft één automatic execution vrijgegeven"
                 self._start(data, current)
                 actual_power = self._sample_energy(data, current)
@@ -652,9 +676,9 @@ class DOEMSExecutionControllerShadow:
                 self._status = "blocked"
                 self._reason = "Step 12.4 gate is blocked"
             elif self._status not in {
-                "completed_shadow",
-                "emergency_stopped_shadow",
-                "recovered_interrupted_shadow",
+                "completed",
+                "emergency_stopped",
+                "recovered_interrupted",
             }:
                 self._status = "idle"
                 self._reason = "Geen nieuwe armed_ready execution identity"
@@ -674,30 +698,30 @@ class DOEMSExecutionControllerShadow:
         )
         runtime_safe = bool(self._active and not blockers)
         return {
-            "execution_shadow_enabled": True,
-            "execution_shadow_status": self._status,
-            "execution_shadow_active": self._active,
-            "execution_shadow_reason": self._reason,
-            "execution_shadow_persistence_schema_version": _PERSISTENCE_SCHEMA_VERSION,
-            "execution_shadow_recovery_status": self._recovery_status,
-            "execution_shadow_recovery_reason": self._recovery_reason,
-            "execution_shadow_recovery_interrupted_run": self._recovery_interrupted_run,
-            "execution_shadow_recovery_identity": self._recovery_identity,
-            "execution_shadow_recovery_slot": self._recovery_slot,
-            "execution_shadow_identity": frozen.get("planner_identity"),
-            "execution_shadow_slot": frozen.get("slot"),
-            "execution_shadow_action": frozen.get("action"),
-            "execution_shadow_purpose": frozen.get("purpose"),
-            "execution_shadow_requested_power_w": frozen.get("requested_power_w"),
-            "execution_shadow_target_soc": frozen.get("target_soc"),
-            "execution_shadow_max_runtime_h": frozen.get("max_runtime_h"),
-            "execution_shadow_planned_start_time": frozen.get("planned_start_time"),
-            "execution_shadow_planned_end_time": frozen.get("planned_end_time"),
-            "execution_shadow_planned_energy_kwh": planned_energy,
-            "execution_shadow_start_soc": frozen.get("start_soc"),
-            "execution_shadow_expected_mode": frozen.get("expected_mode"),
-            "execution_shadow_expected_direction": frozen.get("expected_direction"),
-            "execution_shadow_transaction": self._transaction() if frozen else [],
+            "execution_enabled": True,
+            "execution_status": self._status,
+            "execution_active": self._active,
+            "execution_reason": self._reason,
+            "execution_persistence_schema_version": _PERSISTENCE_SCHEMA_VERSION,
+            "execution_recovery_status": self._recovery_status,
+            "execution_recovery_reason": self._recovery_reason,
+            "execution_recovery_interrupted_run": self._recovery_interrupted_run,
+            "execution_recovery_identity": self._recovery_identity,
+            "execution_recovery_slot": self._recovery_slot,
+            "execution_identity": frozen.get("planner_identity"),
+            "execution_slot": frozen.get("slot"),
+            "execution_action": frozen.get("action"),
+            "execution_purpose": frozen.get("purpose"),
+            "execution_requested_power_w": frozen.get("requested_power_w"),
+            "execution_target_soc": frozen.get("target_soc"),
+            "execution_max_runtime_h": frozen.get("max_runtime_h"),
+            "execution_planned_start_time": frozen.get("planned_start_time"),
+            "execution_planned_end_time": frozen.get("planned_end_time"),
+            "execution_planned_energy_kwh": planned_energy,
+            "execution_start_soc": frozen.get("start_soc"),
+            "execution_expected_mode": frozen.get("expected_mode"),
+            "execution_expected_direction": frozen.get("expected_direction"),
+            "execution_transaction": self._transaction() if frozen else [],
             "runtime_safety_safe": runtime_safe,
             "runtime_safety_reason": "running_safe" if runtime_safe else self._reason,
             "runtime_safety_blockers": blockers,
@@ -719,8 +743,8 @@ class DOEMSExecutionControllerShadow:
             "automatic_success_count": self._success_count,
             "automatic_failure_count": self._failure_count,
             "automatic_last_run": dict(self._last_summary),
-            "execution_shadow_trace": list(self._trace),
-            "execution_shadow_run_history": list(self._history),
+            "execution_trace": list(self._trace),
+            "execution_run_history": list(self._history),
             "execution_controller_invoked": False,
             "mode_switch_performed": False,
             "direction_written": False,

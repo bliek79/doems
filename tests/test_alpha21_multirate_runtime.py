@@ -147,10 +147,10 @@ def test_planner_input_signature_is_stable_within_same_native_quarter() -> None:
 
 def test_180_fast_ticks_cannot_enter_heavy_planner_path() -> None:
     runtime = (INTEGRATION / "ems_runtime.py").read_text(encoding="utf-8")
-    tick_start = runtime.index("    def _execution_shadow_tick")
+    tick_start = runtime.index("    def _execution_tick")
     tick_end = runtime.index("    @callback\n    def _schedule_planner_quarter_tick", tick_start)
     tick_block = runtime[tick_start:tick_end]
-    assert 'self._request_fast_refresh("execution_shadow_monitor")' in tick_block
+    assert 'self._request_fast_refresh("execution_monitor")' in tick_block
     assert "_request_planner_refresh" not in tick_block
     assert "_request_refresh" not in tick_block
 
@@ -165,7 +165,7 @@ def test_180_fast_ticks_cannot_enter_heavy_planner_path() -> None:
     _install_stubs()
     multirate = importlib.import_module("custom_components.doems.ems_multirate")
     assert all(
-        not multirate.is_planner_trigger("execution_shadow_monitor")
+        not multirate.is_planner_trigger("execution_monitor")
         for _ in range(180)
     )
 
@@ -197,7 +197,7 @@ def test_native_quarter_and_meaningful_events_are_planner_triggers() -> None:
         assert multirate.is_planner_trigger(trigger)
 
     for trigger in (
-        "execution_shadow_monitor",
+        "execution_monitor",
         "soc_state_change",
         "control_path_state_change",
         "plan_store_change",

@@ -53,7 +53,7 @@ def test_step12_1_runtime_consumes_real_control_path_without_execution() -> None
         assert token in runtime
 
     assert ".services.async_call(" not in runtime
-    assert "DOEMSExecutionControllerShadow" in runtime
+    assert "DOEMSExecutionController" in runtime
     assert "async_execute_selected_plan" not in runtime
 
 

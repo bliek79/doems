@@ -236,11 +236,11 @@ class _SyntheticRuntime:
         self.final_revalidation_result = _SyntheticMap()
         self.mode_switch_preview_result = _SyntheticMap()
         self.automatic_execution_gate_result = _SyntheticMap()
-        self.execution_shadow_result = {
-            "execution_shadow_status": "running_shadow",
-            "execution_shadow_active": True,
-            "execution_shadow_identity": "identity-" + "x" * 64,
-            "execution_shadow_transaction": [
+        self.execution_result = {
+            "execution_status": "running",
+            "execution_active": True,
+            "execution_identity": "identity-" + "x" * 64,
+            "execution_transaction": [
                 {"operation": "observe", "physical": False, "detail": "x" * 80}
                 for _ in range(8)
             ],
@@ -256,11 +256,11 @@ class _SyntheticRuntime:
                 {"operation": "wait", "physical": False, "detail": "x" * 80},
                 {"operation": "switch_self_consumption", "physical": False, "detail": "x" * 80},
             ],
-            "execution_shadow_trace": [
+            "execution_trace": [
                 {"at": "2026-09-25T06:00:00+00:00", "event": "x" * 80}
                 for _ in range(12)
             ],
-            "execution_shadow_run_history": [
+            "execution_run_history": [
                 {"result": "success", "detail": "x" * 96}
                 for _ in range(6)
             ],
@@ -281,9 +281,9 @@ class _SyntheticRuntime:
         self.last_error = None
         self.plan_store = _SyntheticPlanStore()
         self.entry = SimpleNamespace(entry_id="test_entry")
-        self.execution_shadow_store_status = "loaded"
-        self.execution_shadow_store_error = None
-        self.execution_shadow_store_last_saved_at = "2026-09-25T06:00:00+00:00"
+        self.execution_store_status = "loaded"
+        self.execution_store_error = None
+        self.execution_store_last_saved_at = "2026-09-25T06:00:00+00:00"
         self._automatic_execution_armed = False
 
 

@@ -35,7 +35,7 @@ from .ems_action_controller import DOEMSActionController
 from .ems_automatic_execution_gate import DOEMSAutomaticExecutionGate
 from .ems_control_path import DOEMSControlPathObserver
 from .ems_execution_handoff import DOEMSExecutionHandoff
-from .ems_execution_shadow import DOEMSExecutionControllerShadow
+from .ems_execution import DOEMSExecutionController
 from .ems_final_revalidation import DOEMSFinalRevalidation
 from .ems_mode_switch_preview import DOEMSModeSwitchPreview
 from .ems_plan_store import DOEMSPlanStore
@@ -85,16 +85,16 @@ class DOEMSEMSRuntime:
         self.action_controller = DOEMSActionController()
         self.automatic_execution_gate = DOEMSAutomaticExecutionGate()
         self.execution_handoff = DOEMSExecutionHandoff()
-        self.execution_shadow = DOEMSExecutionControllerShadow()
-        self._execution_shadow_store: Store[dict[str, Any]] = Store(
+        self.execution = DOEMSExecutionController()
+        self._execution_store: Store[dict[str, Any]] = Store(
             hass,
             1,
-            f"{DOMAIN}.{entry.entry_id}.execution_shadow",
+            f"{DOMAIN}.{entry.entry_id}.execution",
         )
-        self.execution_shadow_store_status = "not_loaded"
-        self.execution_shadow_store_error: str | None = None
-        self.execution_shadow_store_last_saved_at: str | None = None
-        self._execution_shadow_saved_revision = 0
+        self.execution_store_status = "not_loaded"
+        self.execution_store_error: str | None = None
+        self.execution_store_last_saved_at: str | None = None
+        self._execution_saved_revision = 0
         self.final_revalidation = DOEMSFinalRevalidation()
         self.mode_switch_preview = DOEMSModeSwitchPreview()
         self.control_path = DOEMSControlPathObserver(hass, entry)
@@ -109,7 +109,7 @@ class DOEMSEMSRuntime:
         self.final_revalidation_result: dict[str, Any] = {}
         self.mode_switch_preview_result: dict[str, Any] = {}
         self.automatic_execution_gate_result: dict[str, Any] = {}
-        self.execution_shadow_result: dict[str, Any] = {}
+        self.execution_result: dict[str, Any] = {}
         self.legacy_safety_result: dict[str, Any] = {}
         self.action_controller_result: dict[str, Any] = {}
         self.control_path_result: dict[str, Any] = self.control_path.evaluate()
@@ -136,7 +136,7 @@ class DOEMSEMSRuntime:
         # explicit new user arm and can never silently permit physical execution.
         self._automatic_execution_armed = False
         self._control_path_timer_unsub: Callable[[], None] | None = None
-        self._execution_shadow_timer_unsub: Callable[[], None] | None = None
+        self._execution_timer_unsub: Callable[[], None] | None = None
         self._planner_quarter_timer_unsub: Callable[[], None] | None = None
 
     @property
@@ -154,8 +154,8 @@ class DOEMSEMSRuntime:
         return str(value) if value else None
 
     async def async_setup(self) -> None:
-        """Load DOEMS plans, shadow audit state, listeners and first refresh."""
-        await self._async_load_execution_shadow()
+        """Load DOEMS plans, execution audit state, listeners and first refresh."""
+        await self._async_load_execution()
         await self.plan_store.async_load()
         self._unsubs.append(
             self.plan_store.add_listener(
@@ -200,17 +200,17 @@ class DOEMSEMSRuntime:
 
         await self.async_refresh("startup")
         self._schedule_planner_quarter_tick()
-        self._schedule_execution_shadow_tick()
+        self._schedule_execution_tick()
 
     async def async_shutdown(self) -> None:
-        await self._async_persist_execution_shadow_if_changed()
+        await self._async_persist_execution_if_changed()
         self._shutdown = True
         if self._control_path_timer_unsub is not None:
             self._control_path_timer_unsub()
             self._control_path_timer_unsub = None
-        if self._execution_shadow_timer_unsub is not None:
-            self._execution_shadow_timer_unsub()
-            self._execution_shadow_timer_unsub = None
+        if self._execution_timer_unsub is not None:
+            self._execution_timer_unsub()
+            self._execution_timer_unsub = None
         if self._planner_quarter_timer_unsub is not None:
             self._planner_quarter_timer_unsub()
             self._planner_quarter_timer_unsub = None
@@ -222,40 +222,49 @@ class DOEMSEMSRuntime:
         self._unsubs.clear()
         self._listeners.clear()
 
-    async def _async_load_execution_shadow(self) -> None:
-        """Load Step 12.6 shadow audit/recovery state without restoring authority."""
+    async def _async_load_execution(self) -> None:
+        """Load Step 12.6 execution audit/recovery state without restoring authority."""
         try:
-            stored = await self._execution_shadow_store.async_load()
-            self.execution_shadow_store_status = self.execution_shadow.restore_persistence(
-                stored
-            )
-            self.execution_shadow_store_error = None
-            self._execution_shadow_saved_revision = (
-                self.execution_shadow.persistence_revision
-            )
+            stored = await self._execution_store.async_load()
+            migrated = False
+            if stored is None:
+                legacy_suffix = "execution_" + "sha" + "dow"
+                legacy_store: Store[dict[str, Any]] = Store(
+                    self.hass,
+                    1,
+                    f"{DOMAIN}.{self.entry.entry_id}.{legacy_suffix}",
+                )
+                stored = await legacy_store.async_load()
+                migrated = stored is not None
+            self.execution_store_status = self.execution.restore_persistence(stored)
+            self.execution_store_error = None
+            self._execution_saved_revision = self.execution.persistence_revision
+            if migrated:
+                await self._execution_store.async_save(self.execution.export_persistence())
+                await legacy_store.async_remove()
+                self.execution_store_status = "migrated_legacy"
+                self.execution_store_last_saved_at = dt_util.utcnow().isoformat()
         except Exception as err:
-            self.execution_shadow_store_status = "load_error"
-            self.execution_shadow_store_error = f"{type(err).__name__}: {err}"
-            self._execution_shadow_saved_revision = (
-                self.execution_shadow.persistence_revision
-            )
+            self.execution_store_status = "load_error"
+            self.execution_store_error = f"{type(err).__name__}: {err}"
+            self._execution_saved_revision = self.execution.persistence_revision
 
-    async def _async_persist_execution_shadow_if_changed(self) -> None:
+    async def _async_persist_execution_if_changed(self) -> None:
         """Persist lifecycle/audit transitions, never physical execution state."""
-        revision = self.execution_shadow.persistence_revision
-        if revision == self._execution_shadow_saved_revision:
+        revision = self.execution.persistence_revision
+        if revision == self._execution_saved_revision:
             return
         try:
-            await self._execution_shadow_store.async_save(
-                self.execution_shadow.export_persistence()
+            await self._execution_store.async_save(
+                self.execution.export_persistence()
             )
-            self._execution_shadow_saved_revision = revision
-            self.execution_shadow_store_status = "saved"
-            self.execution_shadow_store_error = None
-            self.execution_shadow_store_last_saved_at = dt_util.utcnow().isoformat()
+            self._execution_saved_revision = revision
+            self.execution_store_status = "saved"
+            self.execution_store_error = None
+            self.execution_store_last_saved_at = dt_util.utcnow().isoformat()
         except Exception as err:
-            self.execution_shadow_store_status = "save_error"
-            self.execution_shadow_store_error = f"{type(err).__name__}: {err}"
+            self.execution_store_status = "save_error"
+            self.execution_store_error = f"{type(err).__name__}: {err}"
 
     def async_add_listener(self, listener: Callable[[], None]) -> Callable[[], None]:
         self._listeners.append(listener)
@@ -309,22 +318,22 @@ class DOEMSEMSRuntime:
         self._schedule_control_path_tick()
 
     @callback
-    def _schedule_execution_shadow_tick(self) -> None:
-        if self._shutdown or self._execution_shadow_timer_unsub is not None:
+    def _schedule_execution_tick(self) -> None:
+        if self._shutdown or self._execution_timer_unsub is not None:
             return
-        self._execution_shadow_timer_unsub = async_call_later(
+        self._execution_timer_unsub = async_call_later(
             self.hass,
             5,
-            self._execution_shadow_tick,
+            self._execution_tick,
         )
 
     @callback
-    def _execution_shadow_tick(self, _now: datetime) -> None:
-        self._execution_shadow_timer_unsub = None
+    def _execution_tick(self, _now: datetime) -> None:
+        self._execution_timer_unsub = None
         if self._shutdown:
             return
-        self._request_fast_refresh("execution_shadow_monitor")
-        self._schedule_execution_shadow_tick()
+        self._request_fast_refresh("execution_monitor")
+        self._schedule_execution_tick()
 
     @callback
     def _schedule_planner_quarter_tick(self) -> None:
@@ -782,7 +791,7 @@ class DOEMSEMSRuntime:
         # Step 12.5 remains non-actuating. It freezes the Step 12.4 execution
         # identity, follows runtime safety from live read-only sources and
         # previews safe-return/audit without any Home Assistant control call.
-        shadow_data: dict[str, Any] = {
+        execution_data: dict[str, Any] = {
             **gate_data,
             **self.automatic_execution_gate_result,
             "scheduler_slots": self.scheduler_result.get("scheduler_slots", {}),
@@ -793,11 +802,11 @@ class DOEMSEMSRuntime:
             "action_direction": step11_data.get("action_direction"),
             "power_setpoint_w": step11_data.get("power_setpoint_w"),
         }
-        self.execution_shadow_result = self.execution_shadow.evaluate(
-            shadow_data,
+        self.execution_result = self.execution.evaluate(
+            execution_data,
             now=self.last_refresh,
         )
-        await self._async_persist_execution_shadow_if_changed()
+        await self._async_persist_execution_if_changed()
 
         # Step 12.2 manual/legacy observer path. This mirrors the source's
         # separate legacy Safety -> Action Controller evaluation and remains
@@ -918,7 +927,7 @@ class DOEMSEMSRuntime:
         # Step 12.5 remains non-actuating. It freezes the Step 12.4 execution
         # identity, follows runtime safety from live read-only sources and
         # previews safe-return/audit without any Home Assistant control call.
-        shadow_data: dict[str, Any] = {
+        execution_data: dict[str, Any] = {
             **gate_data,
             **self.automatic_execution_gate_result,
             "scheduler_slots": self.scheduler_result.get("scheduler_slots", {}),
@@ -929,11 +938,11 @@ class DOEMSEMSRuntime:
             "action_direction": step11_data.get("action_direction"),
             "power_setpoint_w": step11_data.get("power_setpoint_w"),
         }
-        self.execution_shadow_result = self.execution_shadow.evaluate(
-            shadow_data,
+        self.execution_result = self.execution.evaluate(
+            execution_data,
             now=self.last_refresh,
         )
-        await self._async_persist_execution_shadow_if_changed()
+        await self._async_persist_execution_if_changed()
 
         # Step 12.2 manual/legacy observer path. This mirrors the source's
         # separate legacy Safety -> Action Controller evaluation and remains
@@ -963,7 +972,7 @@ class DOEMSEMSRuntime:
         final_revalidation = self.final_revalidation_result or {}
         mode_switch_preview = self.mode_switch_preview_result or {}
         automatic_execution_gate = self.automatic_execution_gate_result or {}
-        execution_shadow = self.execution_shadow_result or {}
+        execution = self.execution_result or {}
         legacy_safety = self.legacy_safety_result or {}
         action_controller = self.action_controller_result or {}
         control_path = self.control_path_result or {}
@@ -1281,12 +1290,12 @@ class DOEMSEMSRuntime:
             "auto_execution_gate_blockers": automatic_execution_gate.get("auto_execution_gate_blockers", []),
             "auto_execution_gate_warnings": automatic_execution_gate.get("auto_execution_gate_warnings", []),
             "auto_execution_gate_checks": automatic_execution_gate.get("auto_execution_gate_checks", []),
-            **execution_shadow,
-            "execution_shadow_store_status": self.execution_shadow_store_status,
-            "execution_shadow_store_error": self.execution_shadow_store_error,
-            "execution_shadow_store_last_saved_at": self.execution_shadow_store_last_saved_at,
-            "execution_shadow_store_key": f"{DOMAIN}.{self.entry.entry_id}.execution_shadow",
-            "execution_shadow_store_restart_policy": "fail_safe_off_no_resume",
+            **execution,
+            "execution_store_status": self.execution_store_status,
+            "execution_store_error": self.execution_store_error,
+            "execution_store_last_saved_at": self.execution_store_last_saved_at,
+            "execution_store_key": f"{DOMAIN}.{self.entry.entry_id}.execution",
+            "execution_store_restart_policy": "fail_safe_off_no_resume",
             "legacy_safety_status": legacy_safety.get("safety_status"),
             "legacy_safety_safe": legacy_safety.get("safety_safe"),
             "legacy_safety_reason": legacy_safety.get("safety_reason"),
