@@ -73,6 +73,7 @@ jobs:
           test -f custom_components/doems/ems_execution.py
           test -f tests/test_step12_2_action_handoff_contract.py
           test -f tests/test_step12_5_execution_controller.py
+          test -f tests/test_alpha23_execution_naming_cleanup.py
           test -f tests/test_step12_6_restart_recovery_observability.py
           test -f tests/test_step13_g5_frozen_live_parity.py
           test -f tests/test_alpha20_cheapest_energy_safety.py
