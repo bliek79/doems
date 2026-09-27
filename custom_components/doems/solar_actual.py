@@ -212,7 +212,8 @@ class SolarActualQuarterManager:
             if self._locked_forecast_kwh is not None
             else None
         )
-        error, absolute, percent = _forecast_error_metrics(actual, forecast)
+        comparable_forecast = forecast if self._forecast_locked_at_start else None
+        error, absolute, percent = _forecast_error_metrics(actual, comparable_forecast)
         self.last_quarter = SolarQuarterResult(
             start=self._quarter_start,
             end=end_utc,
