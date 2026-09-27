@@ -307,6 +307,14 @@ class SolarForecastManager:
                 break
         return result
 
+    def forecast_point_for_start(self, start: datetime) -> SolarForecastPoint | None:
+        """Return the cached forecast point for one exact native slot start."""
+        target = dt_util.as_utc(start)
+        for point in self._source_points:
+            if dt_util.as_utc(point.start) == target:
+                return point
+        return None
+
     def next_quarter_point(self) -> SolarForecastPoint | None:
         points = self.points
         return points[0] if points else None
