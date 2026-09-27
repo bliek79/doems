@@ -626,11 +626,11 @@ class DOEMSEMSStatusSensor(_DOEMSEMSRuntimeSensor):
         "auto_final_revalidation_checks",
         "auto_mode_switch_preview_transaction",
         "auto_execution_gate_checks",
-        "execution_shadow_transaction",
+        "execution_transaction",
         "runtime_safety_checks",
         "safe_return_steps",
-        "execution_shadow_trace",
-        "execution_shadow_run_history",
+        "execution_trace",
+        "execution_run_history",
     })
     _attr_name = "DOEMS EMS"
     _attr_unique_id = "doems_ems"
