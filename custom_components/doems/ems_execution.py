@@ -1,4 +1,4 @@
-"""Step 12.5 non-actuating Execution Controller non-actuating.
+"""Step 12.5 non-actuating Execution Controller.
 
 Models the automatic execution lifecycle, runtime safety, safe-return and audit
 without making Home Assistant service calls or claiming physical authority.
