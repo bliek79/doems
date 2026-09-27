@@ -340,7 +340,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view 0.1.0-alpha.24 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.24 --title "DOEMS 0.1.0-alpha.24 - Execution Naming Cleanup" --notes-file RELEASE_NOTES_0.1.0-alpha.24.md --prerelease
+            gh release edit 0.1.0-alpha.24 --title "DOEMS 0.1.0-alpha.24 - Solar Actual Quarter Validation" --notes-file RELEASE_NOTES_0.1.0-alpha.24.md --prerelease
           else
-            gh release create 0.1.0-alpha.24 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.24 - Execution Naming Cleanup" --notes-file RELEASE_NOTES_0.1.0-alpha.24.md --prerelease
+            gh release create 0.1.0-alpha.24 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.24 - Solar Actual Quarter Validation" --notes-file RELEASE_NOTES_0.1.0-alpha.24.md --prerelease
           fi
