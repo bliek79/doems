@@ -119,7 +119,7 @@ def _snapshot() -> dict:
             "minimum_trade_margin_eur_per_kwh": 0.10,
             "startup_delay_seconds": 30,
         },
-        "shadow_only": True,
+        "non_actuating_only": True,
         "service_calls_performed": False,
         "plan_store_mutated_by_capture": False,
         "physical_execution_authority": False,
@@ -135,7 +135,7 @@ def test_step13_same_frozen_input_is_exact_policy_baseline_match() -> None:
     assert result["differences"] == []
     assert result["policy_version"] == "alpha76_baseline_v1"
     assert result["golden_decision"] == result["doems_decision"]
-    assert result["shadow_only"] is True
+    assert result["non_actuating_only"] is True
     assert result["service_calls_performed"] is False
     assert result["plan_store_mutated"] is False
     assert result["physical_execution_authority"] is False
