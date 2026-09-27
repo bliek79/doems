@@ -116,6 +116,14 @@ class SolarForecastManager:
                 second=SOLAR_REFRESH_SECOND,
             )
         )
+        self._unsubs.append(
+            async_track_time_change(
+                self.hass,
+                self._publish_quarter_roll,
+                minute=list(SOLAR_PUBLISH_MINUTES),
+                second=SOLAR_PUBLISH_SECOND,
+            )
+        )
 
     async def async_shutdown(self) -> None:
         for unsub in self._unsubs:
@@ -137,6 +145,11 @@ class SolarForecastManager:
     def _notify(self) -> None:
         for listener in list(self._listeners):
             listener()
+
+    @callback
+    def _publish_quarter_roll(self, _now: datetime) -> None:
+        """Republish the rolling native window without extra provider I/O."""
+        self._notify()
 
     async def _async_hourly_refresh(self, _now: datetime) -> None:
         await self.async_refresh()
