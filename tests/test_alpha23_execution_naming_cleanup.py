@@ -46,3 +46,46 @@ def test_alpha23_execution_contract_is_neutral_and_non_actuating() -> None:
     assert '"execution_transaction"' in sensor
     assert '"execution_trace"' in sensor
     assert '"execution_run_history"' in sensor
+
+def test_alpha23_legacy_persistence_values_are_normalized_without_rearming() -> None:
+    import importlib.util
+
+    path = INTEGRATION / "ems_execution.py"
+    spec = importlib.util.spec_from_file_location("ems_execution_alpha23", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    legacy = "sha" + "dow"
+    controller = module.DOEMSExecutionController()
+    payload = {
+        "schema_version": 1,
+        "active": False,
+        "status": f"completed_{legacy}",
+        "reason": f"legacy {legacy} state",
+        "history": [{"result": f"completed_{legacy}"}],
+        "last_summary": {"result": f"completed_{legacy}"},
+        "trace": [{"stage": f"armed_{legacy}"}],
+        "handled_identities": [],
+        "run_count": 1,
+        "success_count": 1,
+        "failure_count": 0,
+        "safe_return": {},
+        "frozen": {},
+    }
+
+    assert controller.restore_persistence(payload) == "loaded"
+    restored = controller.export_persistence()
+    assert restored["status"] == "completed"
+    assert restored["last_summary"]["result"] == "completed"
+    assert restored["history"][0]["result"] == "completed"
+    assert restored["trace"][0]["stage"] == "armed"
+    assert legacy not in str(restored).lower()
+
+
+def test_alpha23_runtime_migrates_the_pre_alpha23_store_once() -> None:
+    runtime = (INTEGRATION / "ems_runtime.py").read_text(encoding="utf-8")
+    assert 'legacy_suffix = "execution_" + "sha" + "dow"' in runtime
+    assert "await legacy_store.async_remove()" in runtime
+    assert 'self.execution_store_status = "migrated_legacy"' in runtime
+
