@@ -71,3 +71,25 @@ def test_foundation_runtime_flag_is_live_but_safety_authority_stays_false() -> N
     assert "SolarForecastManager" in init
     assert "await solar_forecast.async_setup()" in init
     assert '"physical_execution_authority": False' in binary
+
+def test_runtime_republishes_rolling_window_each_native_quarter_without_provider_fetch() -> None:
+    text = (INTEGRATION / "solar_forecast.py").read_text(encoding="utf-8")
+    assert "SOLAR_PUBLISH_MINUTES = (0, 15, 30, 45)" in text
+    assert "SOLAR_PUBLISH_SECOND = 30" in text
+
+    setup = text.split("async def async_setup", 1)[1].split("async def async_shutdown", 1)[0]
+    assert "self._publish_quarter_roll" in setup
+    assert "minute=list(SOLAR_PUBLISH_MINUTES)" in setup
+    assert "second=SOLAR_PUBLISH_SECOND" in setup
+
+    quarter_publish = text.split("def _publish_quarter_roll", 1)[1].split(
+        "async def _async_hourly_refresh", 1
+    )[0]
+    assert "self._notify()" in quarter_publish
+    assert "async_refresh" not in quarter_publish
+
+    hourly_refresh = text.split("async def _async_hourly_refresh", 1)[1].split(
+        "async def async_refresh", 1
+    )[0]
+    assert "await self.async_refresh()" in hourly_refresh
+
