@@ -40,6 +40,7 @@ def test_public_solar_sensor_contract_is_doems_prefixed_and_native() -> None:
         "doems_solar_forecast_timeline",
         "doems_solar_forecast_next_quarter",
         "doems_solar_forecast_model",
+        "doems_solar_actual_quarter",
     ):
         assert object_id in text
     assert 'day not in {"today", "tomorrow"}' in text
