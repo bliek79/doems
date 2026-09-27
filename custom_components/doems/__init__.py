@@ -28,6 +28,7 @@ from .ems_runtime import DOEMSEMSRuntime
 from .energy_coordinator import DOEMSEnergyCoordinator
 from .prices_runtime import DOEMSRegisteredPricesManager
 from .presence import DOEMSPresenceStore
+from .solar_actual import SolarActualQuarterManager
 from .solar_forecast import SolarForecastManager
 from .solar_foundation import SolarFoundationManager
 
@@ -135,6 +136,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
     await foundation.async_setup()
     solar_forecast = SolarForecastManager(hass, foundation)
     await solar_forecast.async_setup()
+    solar_actual = SolarActualQuarterManager(hass, foundation, solar_forecast)
+    await solar_actual.async_setup()
 
     prices: DOEMSRegisteredPricesManager | None = None
     if entry.options.get(CONF_PRICES_ENABLED, False):
@@ -167,6 +170,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
         "energy_forecast_enabled": coordinator is not None,
         "solar_foundation": foundation,
         "solar_forecast": solar_forecast,
+        "solar_actual": solar_actual,
         "prices": prices,
         "presence": presence,
         "ems_settings": ems_settings,
@@ -224,6 +228,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> bo
     prices = entry_data.get("prices")
     if isinstance(prices, DOEMSRegisteredPricesManager):
         await prices.async_shutdown()
+
+    solar_actual = entry_data.get("solar_actual")
+    if isinstance(solar_actual, SolarActualQuarterManager):
+        await solar_actual.async_shutdown()
 
     solar_forecast = entry_data.get("solar_forecast")
     if isinstance(solar_forecast, SolarForecastManager):

@@ -39,6 +39,7 @@ from .energy_forecast import EnergyBaselineForecast, ceil_quarter
 from .prices import DOEMSPricesManager
 from .presence import DOEMSPresenceStore
 from .prices_sensor import build_prices_sensors
+from .solar_actual import SolarActualQuarterManager
 from .solar_forecast import SolarForecastManager
 from .solar_sensor import build_solar_sensors
 
@@ -109,8 +110,15 @@ async def async_setup_entry(
         )
 
     solar_forecast = entry_data.get("solar_forecast")
+    solar_actual = entry_data.get("solar_actual")
     if isinstance(solar_forecast, SolarForecastManager):
-        entities.extend(build_solar_sensors(entry, solar_forecast))
+        entities.extend(
+            build_solar_sensors(
+                entry,
+                solar_forecast,
+                solar_actual if isinstance(solar_actual, SolarActualQuarterManager) else None,
+            )
+        )
 
     prices = entry_data.get("prices")
     if isinstance(prices, DOEMSPricesManager):

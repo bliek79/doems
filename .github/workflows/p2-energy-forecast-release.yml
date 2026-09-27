@@ -1,4 +1,4 @@
-name: DOEMS CI and Alpha23 Execution Naming Cleanup Release
+name: DOEMS CI and Alpha24 Solar Actual Quarter Validation Release
 
 on:
   pull_request:
@@ -29,9 +29,9 @@ jobs:
               json.loads(path.read_text(encoding='utf-8'))
               print(f'valid: {path}')
           PY
-      - name: Validate Alpha23 release contract
+      - name: Validate Alpha24 release contract
         run: |
-          test -f RELEASE_NOTES_0.1.0-alpha.23.md
+          test -f RELEASE_NOTES_0.1.0-alpha.24.md
           test -f examples/prices_p4_forecast_card.yaml
           test -f custom_components/doems/prices.py
           test -f custom_components/doems/prices_model.py
@@ -41,8 +41,8 @@ jobs:
           test ! -f scripts/build_brand_assets.py
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
-          grep -F 'VERSION = "0.1.0-alpha.23"' custom_components/doems/const.py
-          grep -F '"version": "0.1.0-alpha.23"' custom_components/doems/manifest.json
+          grep -F 'VERSION = "0.1.0-alpha.24"' custom_components/doems/const.py
+          grep -F '"version": "0.1.0-alpha.24"' custom_components/doems/manifest.json
           grep -F 'CONF_EMS_ENABLED = "ems_enabled"' custom_components/doems/const.py
           grep -F 'CONF_BATTERY_CAPACITY_KWH = "battery_capacity_kwh"' custom_components/doems/const.py
           grep -F 'CONF_TECHNICAL_MIN_SOC_PERCENT = "technical_min_soc_percent"' custom_components/doems/const.py
@@ -71,6 +71,8 @@ jobs:
           test -f custom_components/doems/ems_mode_switch_preview.py
           test -f custom_components/doems/ems_automatic_execution_gate.py
           test -f custom_components/doems/ems_execution.py
+          test -f custom_components/doems/solar_actual.py
+          test -f tests/test_solar_actual_quarter_validation.py
           test -f tests/test_step12_2_action_handoff_contract.py
           test -f tests/test_step12_5_execution_controller.py
           test -f tests/test_alpha23_execution_naming_cleanup.py
@@ -266,6 +268,10 @@ jobs:
           grep -F 'SOLAR_PUBLISH_SECOND = 30' custom_components/doems/solar_forecast.py
           grep -F 'self._publish_quarter_roll' custom_components/doems/solar_forecast.py
           grep -F 'def test_runtime_republishes_rolling_window_each_native_quarter_without_provider_fetch' tests/test_solar_p31_runtime_contract.py
+          grep -F 'class SolarActualQuarterManager' custom_components/doems/solar_actual.py
+          grep -F 'doems_solar_actual_quarter' custom_components/doems/solar_sensor.py
+          grep -F 'forecast_locked_at_start' custom_components/doems/solar_actual.py
+          grep -F 'forecast_point_for_start' custom_components/doems/solar_forecast.py
           grep -F 'class DOEMSExecutionController' custom_components/doems/ems_execution.py
           grep -F '"execution_status": self._status' custom_components/doems/ems_execution.py
           grep -F '"execution_active": self._active' custom_components/doems/ems_execution.py
@@ -274,7 +280,7 @@ jobs:
           grep -F '"execution_store_key": f"{DOMAIN}.{self.entry.entry_id}.execution"' custom_components/doems/ems_runtime.py
           test "$(find custom_components/doems -type f -iname '*sha*dow*' | wc -l)" -eq 0
 
-  publish-alpha23:
+  publish-alpha24:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
@@ -284,7 +290,7 @@ jobs:
           fetch-depth: 0
       - name: Build release archive
         run: |
-          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.23.md
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.24.md
           sha256sum doems.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - name: Verify EMS settings, Presence and Prices runtime are packaged
@@ -308,6 +314,7 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_mode_switch_preview.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_automatic_execution_gate.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_execution.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/solar_actual.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_g5_live_parity.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_g5_live_parity_runtime.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_g5_live_parity_sensor.py'
@@ -328,12 +335,12 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/icon.png'
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
-      - name: Publish Alpha23 Execution Naming Cleanup release
+      - name: Publish Alpha24 Solar Actual Quarter Validation release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view 0.1.0-alpha.23 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.23 --title "DOEMS 0.1.0-alpha.23 - Execution Naming Cleanup" --notes-file RELEASE_NOTES_0.1.0-alpha.23.md --prerelease
+          if gh release view 0.1.0-alpha.24 >/dev/null 2>&1; then
+            gh release edit 0.1.0-alpha.24 --title "DOEMS 0.1.0-alpha.24 - Execution Naming Cleanup" --notes-file RELEASE_NOTES_0.1.0-alpha.24.md --prerelease
           else
-            gh release create 0.1.0-alpha.23 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.23 - Execution Naming Cleanup" --notes-file RELEASE_NOTES_0.1.0-alpha.23.md --prerelease
+            gh release create 0.1.0-alpha.24 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.24 - Execution Naming Cleanup" --notes-file RELEASE_NOTES_0.1.0-alpha.24.md --prerelease
           fi
