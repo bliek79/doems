@@ -9,16 +9,16 @@ INTEGRATION = ROOT / "custom_components" / "doems"
 
 
 def _load_module():
-    path = INTEGRATION / "ems_execution_shadow.py"
-    spec = importlib.util.spec_from_file_location("ems_execution_shadow_step126", path)
+    path = INTEGRATION / "ems_execution.py"
+    spec = importlib.util.spec_from_file_location("ems_execution_step126", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-def _new_shadow():
-    return _load_module().DOEMSExecutionControllerShadow()
+def _new_execution():
+    return _load_module().DOEMSExecutionController()
 
 
 def _data(
@@ -60,50 +60,50 @@ def _data(
 
 
 def test_step12_6_completed_history_roundtrips_without_rearming() -> None:
-    shadow = _new_shadow()
+    execution = _new_execution()
     start = datetime(2026, 9, 25, 17, 0, tzinfo=timezone.utc)
-    shadow.evaluate(_data(), now=start)
-    completed = shadow.evaluate(
+    execution.evaluate(_data(), now=start)
+    completed = execution.evaluate(
         _data(armed=False, permitted=False),
         now=start + timedelta(seconds=5),
     )
-    assert completed["execution_shadow_status"] == "completed_shadow"
-    payload = shadow.export_persistence()
+    assert completed["execution_status"] == "completed"
+    payload = execution.export_persistence()
 
-    restored = _new_shadow()
+    restored = _new_execution()
     assert restored.restore_persistence(payload) == "loaded"
     result = restored.evaluate(
         _data(armed=False, permitted=False),
         now=start + timedelta(minutes=1),
     )
-    assert result["execution_shadow_active"] is False
+    assert result["execution_active"] is False
     assert result["automatic_run_count"] == 1
     assert result["automatic_success_count"] == 1
-    assert len(result["execution_shadow_run_history"]) == 1
-    assert result["execution_shadow_recovery_status"] == "not_required"
+    assert len(result["execution_run_history"]) == 1
+    assert result["execution_recovery_status"] == "not_required"
     assert result["service_calls_performed"] is False
     assert result["physical_execution_authority"] is False
 
 
 def test_step12_6_active_run_becomes_restart_recovery_and_never_resumes() -> None:
-    shadow = _new_shadow()
+    execution = _new_execution()
     start = datetime(2026, 9, 25, 17, 0, tzinfo=timezone.utc)
-    running = shadow.evaluate(_data(), now=start)
-    assert running["execution_shadow_active"] is True
-    payload = shadow.export_persistence()
+    running = execution.evaluate(_data(), now=start)
+    assert running["execution_active"] is True
+    payload = execution.export_persistence()
     assert payload["active"] is True
 
-    restored = _new_shadow()
+    restored = _new_execution()
     assert restored.restore_persistence(payload) == "loaded"
     result = restored.evaluate(
         _data(armed=False, permitted=False),
         now=start + timedelta(minutes=2),
     )
-    assert result["execution_shadow_status"] == "recovered_interrupted_shadow"
-    assert result["execution_shadow_active"] is False
-    assert result["execution_shadow_recovery_status"] == "recovered_interrupted"
-    assert result["execution_shadow_recovery_reason"] == "restart_recovery"
-    assert result["execution_shadow_recovery_interrupted_run"] is True
+    assert result["execution_status"] == "recovered_interrupted"
+    assert result["execution_active"] is False
+    assert result["execution_recovery_status"] == "recovered_interrupted"
+    assert result["execution_recovery_reason"] == "restart_recovery"
+    assert result["execution_recovery_interrupted_run"] is True
     assert result["automatic_failure_count"] == 1
     assert result["automatic_last_run"]["reason"] == "restart_recovery"
     assert result["safe_return_required"] is True
@@ -118,12 +118,12 @@ def test_step12_6_active_run_becomes_restart_recovery_and_never_resumes() -> Non
 
 
 def test_step12_6_recovered_identity_cannot_restart_same_run() -> None:
-    shadow = _new_shadow()
+    execution = _new_execution()
     start = datetime(2026, 9, 25, 17, 0, tzinfo=timezone.utc)
-    shadow.evaluate(_data(), now=start)
-    payload = shadow.export_persistence()
+    execution.evaluate(_data(), now=start)
+    payload = execution.export_persistence()
 
-    restored = _new_shadow()
+    restored = _new_execution()
     restored.restore_persistence(payload)
     restored.evaluate(
         _data(armed=False, permitted=False),
@@ -133,21 +133,21 @@ def test_step12_6_recovered_identity_cannot_restart_same_run() -> None:
         _data(),
         now=start + timedelta(minutes=3),
     )
-    assert again["execution_shadow_status"] == "recovered_interrupted_shadow"
-    assert again["execution_shadow_active"] is False
+    assert again["execution_status"] == "recovered_interrupted"
+    assert again["execution_active"] is False
     assert again["automatic_run_count"] == 1
 
 
 def test_step12_6_corrupt_store_is_fail_safe() -> None:
-    shadow = _new_shadow()
-    assert shadow.restore_persistence("not-a-dict") == "invalid_payload"
-    assert shadow.active is False
+    execution = _new_execution()
+    assert execution.restore_persistence("not-a-dict") == "invalid_payload"
+    assert execution.active is False
 
-    shadow = _new_shadow()
-    assert shadow.restore_persistence({"schema_version": 999, "active": True}) == "invalid_schema"
-    assert shadow.active is False
+    execution = _new_execution()
+    assert execution.restore_persistence({"schema_version": 999, "active": True}) == "invalid_schema"
+    assert execution.active is False
 
-    shadow = _new_shadow()
+    execution = _new_execution()
     malformed = {
         "schema_version": 1,
         "active": False,
@@ -158,30 +158,30 @@ def test_step12_6_corrupt_store_is_fail_safe() -> None:
         "safe_return": "invalid",
         "frozen": "invalid",
     }
-    assert shadow.restore_persistence(malformed) == "loaded"
-    result = shadow.evaluate(
+    assert execution.restore_persistence(malformed) == "loaded"
+    result = execution.evaluate(
         _data(armed=False, permitted=False),
         now=datetime(2026, 9, 25, 17, 0, tzinfo=timezone.utc),
     )
-    assert result["execution_shadow_active"] is False
+    assert result["execution_active"] is False
     assert result["automatic_run_count"] == 0
 
 
 def test_step12_6_runtime_store_and_arm_contract_is_non_actuating() -> None:
     runtime_text = (INTEGRATION / "ems_runtime.py").read_text(encoding="utf-8")
-    shadow_text = (INTEGRATION / "ems_execution_shadow.py").read_text(encoding="utf-8")
+    execution_text = (INTEGRATION / "ems_execution.py").read_text(encoding="utf-8")
     switch_text = (INTEGRATION / "switch.py").read_text(encoding="utf-8")
 
     assert "Store[dict[str, Any]]" in runtime_text
-    assert '.execution_shadow"' in runtime_text
+    assert '.execution"' in runtime_text
     assert "restore_persistence(" in runtime_text
     assert "export_persistence(" in runtime_text
     assert '"fail_safe_off_no_resume"' in runtime_text
     assert "self._automatic_execution_armed = False" in runtime_text
     assert "RestoreEntity" not in switch_text
-    assert ".services.async_call(" not in shadow_text
-    assert "select.select_option" not in shadow_text
-    assert "number.set_value" not in shadow_text
-    assert '"safe_return_performed": False' in shadow_text
-    assert '"service_calls_performed": False' in shadow_text
-    assert '"physical_execution_authority": False' in shadow_text
+    assert ".services.async_call(" not in execution_text
+    assert "select.select_option" not in execution_text
+    assert "number.set_value" not in execution_text
+    assert '"safe_return_performed": False' in execution_text
+    assert '"service_calls_performed": False' in execution_text
+    assert '"physical_execution_authority": False' in execution_text
