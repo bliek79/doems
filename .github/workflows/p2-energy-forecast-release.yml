@@ -29,7 +29,7 @@ jobs:
               json.loads(path.read_text(encoding='utf-8'))
               print(f'valid: {path}')
           PY
-      - name: Validate Alpha23 release contract
+      - name: Validate Alpha24 release contract
         run: |
           test -f RELEASE_NOTES_0.1.0-alpha.24.md
           test -f examples/prices_p4_forecast_card.yaml
