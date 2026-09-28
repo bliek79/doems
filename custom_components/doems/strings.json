@@ -91,7 +91,8 @@
           "dc_kwp": "DC capacity",
           "tilt_deg": "Tilt",
           "azimuth_deg": "Azimuth",
-          "actual_power_entity": "Optional array actual power sensor"
+          "actual_power_entity": "Optional array actual power sensor",
+          "performance_factor_percent": "Performance factor / static yield factor (%)"
         }
       },
       "prices": {
