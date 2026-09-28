@@ -99,6 +99,7 @@ from .const import (
     PRICES_RESOLUTION_AUTO,
     SOLAR_LOCATION_HOME_ASSISTANT,
     SOLAR_LOCATION_OVERRIDE,
+    SOLAR_DEFAULT_PERFORMANCE_FACTOR,
     SOLAR_MAX_ARRAYS,
     SOLAR_MAX_INVERTER_GROUPS,
 )
@@ -495,6 +496,7 @@ class DOEMSOptionsFlow(OptionsFlow):
                     "dc_kwp": float(user_input["dc_kwp"]),
                     "tilt_deg": float(user_input["tilt_deg"]),
                     "azimuth_deg": float(user_input["azimuth_deg"]),
+                    "performance_factor": round(float(user_input["performance_factor_percent"]) / 100.0, 6),
                     "actual_power_entity": str(actual) if actual else None,
                 }
                 if index < len(self._solar_arrays): self._solar_arrays[index] = item
@@ -523,6 +525,10 @@ class DOEMSOptionsFlow(OptionsFlow):
                 vol.Required("dc_kwp", default=float(existing.get("dc_kwp", 1.0))): _number(0.01, 100, 0.01, "kWp"),
                 vol.Required("tilt_deg", default=float(existing.get("tilt_deg", 30.0))): _number(0, 90, 0.1, "°"),
                 vol.Required("azimuth_deg", default=float(existing.get("azimuth_deg", 180.0))): _number(0, 359.9, 0.1, "°"),
+                vol.Required(
+                    "performance_factor_percent",
+                    default=round(float(existing.get("performance_factor", SOLAR_DEFAULT_PERFORMANCE_FACTOR)) * 100.0, 1),
+                ): _number(0, 100, 0.1, "%"),
                 _optional_entity("actual_power_entity", existing.get("actual_power_entity")): _power_selector(),
             }),
             errors=errors,
