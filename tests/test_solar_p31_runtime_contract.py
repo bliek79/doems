@@ -95,3 +95,12 @@ def test_runtime_republishes_rolling_window_each_native_quarter_without_provider
     )[0]
     assert "await self.async_refresh()" in hourly_refresh
 
+
+
+def test_runtime_uses_per_array_performance_factors_without_global_override() -> None:
+    forecast = (INTEGRATION / "solar_forecast.py").read_text(encoding="utf-8")
+    model = (INTEGRATION / "solar_forecast_model.py").read_text(encoding="utf-8")
+    assert "performance_factor=SOLAR_PERFORMANCE_FACTOR" not in forecast
+    assert 'array.get("performance_factor", SOLAR_PERFORMANCE_FACTOR)' in model
+    assert '"array_performance_factors": array_performance_factors' in forecast
+    assert '"performance_factor_semantics": "static_per_array_before_group_ac_cap"' in forecast

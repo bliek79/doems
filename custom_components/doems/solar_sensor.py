@@ -351,7 +351,7 @@ class DOEMSSolarForecastModelSensor(DOEMSSolarBaseSensor):
                 "provider": "Open-Meteo",
                 "attribution": "Weather data by Open-Meteo.com",
                 "endpoint": OPEN_METEO_SOLAR_ENDPOINT,
-                "calculation": "gti/1000 x array_dc_kwp x performance_factor; cap inverter-group sum and scale member arrays proportionally",
+                "calculation": "gti/1000 x array_dc_kwp x array_performance_factor; cap inverter-group sum and scale member arrays proportionally",
                 "mode": "forecast_only_no_physical_execution",
             }
         )

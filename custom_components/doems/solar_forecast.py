@@ -263,7 +263,6 @@ class SolarForecastManager:
             self.foundation_snapshot,
             starts=ordered_starts,
             irradiance_by_array=irradiance_by_array,
-            performance_factor=SOLAR_PERFORMANCE_FACTOR,
         )
         self.source_generation_time_ms = generation_times
 
@@ -355,6 +354,18 @@ class SolarForecastManager:
     def contract(self) -> dict[str, Any]:
         snapshot = self.foundation_snapshot
         arrays = self._arrays() if self.enabled else []
+        array_performance_factors = {
+            str(array.get("array_id")): round(
+                float(array.get("performance_factor", SOLAR_PERFORMANCE_FACTOR)), 6
+            )
+            for array in arrays
+        }
+        unique_factors = sorted(set(array_performance_factors.values()))
+        performance_factor: float | str = (
+            unique_factors[0]
+            if len(unique_factors) == 1
+            else ("mixed" if unique_factors else SOLAR_PERFORMANCE_FACTOR)
+        )
         return {
             "provider": "open_meteo",
             "provider_model": OPEN_METEO_SOLAR_PROVIDER_MODEL,
@@ -364,7 +375,9 @@ class SolarForecastManager:
             "resolution_minutes": SOLAR_RESOLUTION_MINUTES,
             "horizon_hours": SOLAR_HORIZON_HOURS,
             "slot_count": SOLAR_FORECAST_SLOTS,
-            "performance_factor": SOLAR_PERFORMANCE_FACTOR,
+            "performance_factor": performance_factor,
+            "array_performance_factors": array_performance_factors,
+            "performance_factor_semantics": "static_per_array_before_group_ac_cap",
             "location_source": snapshot.get("location_source"),
             "latitude": snapshot.get("latitude"),
             "longitude": snapshot.get("longitude"),

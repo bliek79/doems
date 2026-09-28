@@ -47,6 +47,9 @@ def test_generic_1_to_n_topology_is_ready_and_native_contract_stays_fixed() -> N
     assert snapshot["native_time_contract"] == {"resolution_minutes": 15, "horizon_hours": 72, "slot_count": 288}
     assert snapshot["physical_execution_authority"] is False
     assert snapshot["forecast_runtime_active"] is False
+    assert snapshot["schema_version"] == 2
+    assert snapshot["default_performance_factor"] == 0.90
+    assert [item["performance_factor"] for item in snapshot["arrays"]] == [0.90, 0.90]
 
 
 def test_labels_do_not_change_stable_topology_signature() -> None:
@@ -68,6 +71,29 @@ def test_geometry_or_stable_identity_changes_signature() -> None:
     a = m.build_solar_foundation_snapshot(first, ha_latitude=51.0, ha_longitude=5.0)
     b = m.build_solar_foundation_snapshot(second, ha_latitude=51.0, ha_longitude=5.0)
     assert a["topology_signature"] != b["topology_signature"]
+
+
+
+def test_array_performance_factor_is_preserved_and_changes_signature() -> None:
+    m = _load("solar_foundation_model")
+    first = _options()
+    second = _options()
+    first["solar_arrays"][0]["performance_factor"] = 0.82
+    first["solar_arrays"][1]["performance_factor"] = 0.67
+    second["solar_arrays"][0]["performance_factor"] = 0.90
+    second["solar_arrays"][1]["performance_factor"] = 0.90
+    a = m.build_solar_foundation_snapshot(first, ha_latitude=51.0, ha_longitude=5.0)
+    b = m.build_solar_foundation_snapshot(second, ha_latitude=51.0, ha_longitude=5.0)
+    assert [item["performance_factor"] for item in a["arrays"]] == [0.82, 0.67]
+    assert a["topology_signature"] != b["topology_signature"]
+
+
+def test_invalid_array_performance_factor_is_blocked() -> None:
+    m = _load("solar_foundation_model")
+    options = _options()
+    options["solar_arrays"][0]["performance_factor"] = 1.01
+    blockers = m.validate_solar_foundation(options, ha_latitude=51.0, ha_longitude=5.0)
+    assert "array_performance_factor_invalid:arr_n" in blockers
 
 
 def test_invalid_group_link_and_duplicate_actual_are_blocked() -> None:
