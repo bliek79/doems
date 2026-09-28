@@ -91,7 +91,8 @@
           "dc_kwp": "DC-vermogen",
           "tilt_deg": "Hellingshoek",
           "azimuth_deg": "Azimut",
-          "actual_power_entity": "Optionele actual-vermogenssensor van deze array"
+          "actual_power_entity": "Optionele actual-vermogenssensor van deze array",
+          "performance_factor_percent": "Performancefactor / statische opbrengstfactor (%)"
         }
       },
       "prices": {
