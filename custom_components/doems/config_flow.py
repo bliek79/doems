@@ -564,6 +564,8 @@ class DOEMSOptionsFlow(OptionsFlow):
                     self._pending.update(normalized)
                     if not normalized.get(CONF_SOC_ENTITY):
                         self._pending.pop(CONF_SOC_ENTITY, None)
+                    if not normalized.get(CONF_DEVICE_STATUS_ENTITY):
+                        self._pending.pop(CONF_DEVICE_STATUS_ENTITY, None)
                     for key in control_keys:
                         if not normalized.get(key):
                             self._pending.pop(key, None)
