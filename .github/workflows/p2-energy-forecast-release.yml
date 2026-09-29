@@ -1,4 +1,4 @@
-name: DOEMS CI and Alpha25 Solar Array Performance Factor Release
+name: DOEMS CI and Alpha26 Step15A Manual Physical Execution Release
 
 on:
   pull_request:
@@ -29,9 +29,9 @@ jobs:
               json.loads(path.read_text(encoding='utf-8'))
               print(f'valid: {path}')
           PY
-      - name: Validate Alpha25 release contract
+      - name: Validate Alpha26 release contract
         run: |
-          test -f RELEASE_NOTES_0.1.0-alpha.25.md
+          test -f RELEASE_NOTES_0.1.0-alpha.26.md
           test -f examples/prices_p4_forecast_card.yaml
           test -f custom_components/doems/prices.py
           test -f custom_components/doems/prices_model.py
@@ -41,8 +41,8 @@ jobs:
           test ! -f scripts/build_brand_assets.py
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
-          grep -F 'VERSION = "0.1.0-alpha.25"' custom_components/doems/const.py
-          grep -F '"version": "0.1.0-alpha.25"' custom_components/doems/manifest.json
+          grep -F 'VERSION = "0.1.0-alpha.26"' custom_components/doems/const.py
+          grep -F '"version": "0.1.0-alpha.26"' custom_components/doems/manifest.json
           grep -F 'CONF_EMS_ENABLED = "ems_enabled"' custom_components/doems/const.py
           grep -F 'CONF_BATTERY_CAPACITY_KWH = "battery_capacity_kwh"' custom_components/doems/const.py
           grep -F 'CONF_TECHNICAL_MIN_SOC_PERCENT = "technical_min_soc_percent"' custom_components/doems/const.py
@@ -163,11 +163,15 @@ jobs:
           grep -F 'self._automatic_execution_armed = False' custom_components/doems/ems_runtime.py
           grep -F '"automatic_execution_armed": self._automatic_execution_armed' custom_components/doems/ems_runtime.py
           grep -F 'class DOEMSAutomaticExecutionSwitch' custom_components/doems/switch.py
-          grep -F '"physical_execution_enabled": False' custom_components/doems/switch.py
+          grep -F '"physical_execution_enabled": True' custom_components/doems/switch.py
           ! grep -F 'RestoreEntity' custom_components/doems/switch.py
-          grep -F '"execution_controller_invoked": False' custom_components/doems/ems_runtime.py
-          grep -F '"service_calls_performed": False' custom_components/doems/ems_runtime.py
-          grep -F '"physical_execution_authority": False' custom_components/doems/ems_runtime.py
+          grep -F 'manual_physical_execution_enabled' custom_components/doems/ems_runtime.py
+          grep -F 'automatic_planner_physical_execution_enabled' custom_components/doems/ems_runtime.py
+          grep -F 'physical_execution_authority' custom_components/doems/ems_runtime.py
+          test -f custom_components/doems/ems_manual_physical_execution.py
+          test -f tests/test_alpha26_step15a_manual_physical_execution.py
+          grep -F '.services.async_call(' custom_components/doems/ems_manual_physical_execution.py
+          grep -F 'Step 15A staat alleen handmatig geplande acties fysiek toe' custom_components/doems/ems_manual_physical_execution.py
           test -f tests/test_step12_1_control_path_contract.py
           grep -F 'CONF_OPERATING_MODE_ENTITY = "operating_mode_entity"' custom_components/doems/const.py
           grep -F 'CONF_ACTION_DIRECTION_ENTITY = "action_direction_entity"' custom_components/doems/const.py
@@ -284,7 +288,7 @@ jobs:
           grep -F '"execution_store_key": f"{DOMAIN}.{self.entry.entry_id}.execution"' custom_components/doems/ems_runtime.py
           test "$(find custom_components/doems -type f -iname '*sha*dow*' | wc -l)" -eq 0
 
-  publish-alpha25:
+  publish-alpha26:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
@@ -294,7 +298,7 @@ jobs:
           fetch-depth: 0
       - name: Build release archive
         run: |
-          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.25.md
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.26.md
           sha256sum doems.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - name: Verify EMS settings, Presence and Prices runtime are packaged
@@ -318,6 +322,7 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_mode_switch_preview.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_automatic_execution_gate.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_execution.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_manual_physical_execution.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/solar_actual.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_g5_live_parity.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_g5_live_parity_runtime.py'
@@ -339,12 +344,12 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/icon.png'
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
-      - name: Publish Alpha25 Solar Array Performance Factor release
+      - name: Publish Alpha26 Step15A Manual Physical Execution release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view 0.1.0-alpha.25 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.25 --title "DOEMS 0.1.0-alpha.25 - Solar Array Performance Factor" --notes-file RELEASE_NOTES_0.1.0-alpha.25.md --prerelease
+          if gh release view 0.1.0-alpha.26 >/dev/null 2>&1; then
+            gh release edit 0.1.0-alpha.26 --title "DOEMS 0.1.0-alpha.26 - Step15A Manual Physical Execution" --notes-file RELEASE_NOTES_0.1.0-alpha.26.md --prerelease
           else
-            gh release create 0.1.0-alpha.25 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.25 - Solar Array Performance Factor" --notes-file RELEASE_NOTES_0.1.0-alpha.25.md --prerelease
+            gh release create 0.1.0-alpha.26 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.26 - Step15A Manual Physical Execution" --notes-file RELEASE_NOTES_0.1.0-alpha.26.md --prerelease
           fi
