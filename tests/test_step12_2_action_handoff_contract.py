@@ -77,10 +77,10 @@ def test_step12_2_runtime_keeps_manual_and_automatic_paths_separate() -> None:
     assert "action_controller_result" not in handoff_block
 
     assert ".services.async_call(" not in runtime
-    assert '"execution_controller_invoked": False' in runtime
     assert '"automatic_execution_armed": self._automatic_execution_armed' in runtime
-    assert '"service_calls_performed": False' in runtime
-    assert '"physical_execution_authority": False' in runtime
+    assert '"manual_physical_execution_enabled": True' in runtime
+    assert '"automatic_planner_physical_execution_enabled": False' in runtime
+    assert '"physical_execution_authority": bool(self._automatic_execution_armed)' in runtime
 
 
 def test_step12_2_runtime_exposes_execution_diagnostics() -> None:
@@ -93,10 +93,10 @@ def test_step12_2_runtime_exposes_execution_diagnostics() -> None:
         '"execution_handoff_status": execution_handoff.get(',
         '"execution_handoff_ready": execution_handoff.get(',
         '"execution_handoff_execution_permitted": execution_handoff.get(',
-        '"execution_controller_invoked": False',
         '"automatic_execution_armed": self._automatic_execution_armed',
-        '"service_calls_performed": False',
-        '"physical_execution_authority": False',
+        '"manual_physical_execution_enabled": True',
+        '"automatic_planner_physical_execution_enabled": False',
+        '"physical_execution_authority": bool(self._automatic_execution_armed)',
     ):
         assert token in runtime
 
