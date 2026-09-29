@@ -26,6 +26,7 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_BATTERY_CHARGE_POWER_ENTITY,
     CONF_BATTERY_DISCHARGE_POWER_ENTITY,
+    CONF_DEVICE_STATUS_ENTITY,
     CONF_SOC_ENTITY,
     DOMAIN,
 )
@@ -138,6 +139,15 @@ class DOEMSManualPhysicalExecution:
         if state is None or state.state in UNAVAILABLE_SOC_STATES:
             return None
         return parse_soc_percent(state.state)
+
+    def _read_state(self, key: str) -> str | None:
+        entity_id = self._option(key)
+        if not entity_id:
+            return None
+        state = self.hass.states.get(entity_id)
+        if state is None or state.state in {"unknown", "unavailable"}:
+            return None
+        return str(state.state)
 
     def _read_power(self, key: str) -> float | None:
         entity_id = self._option(key)
@@ -292,6 +302,16 @@ class DOEMSManualPhysicalExecution:
 
         self._armed_provider = armed_provider
         slot, detail = self._validate_selected_manual_plan(snapshot)
+
+        # Fail before entering third_party_control when the copied manual Safety
+        # Guard cannot possibly become complete.
+        if self._read_state(CONF_DEVICE_STATUS_ENTITY) is None:
+            raise HomeAssistantError("Batterij-apparaatstatus is niet geconfigureerd/beschikbaar")
+        if self._read_power(CONF_BATTERY_CHARGE_POWER_ENTITY) is None:
+            raise HomeAssistantError("Batterij-laadvermogenbron is niet beschikbaar")
+        if self._read_power(CONF_BATTERY_DISCHARGE_POWER_ENTITY) is None:
+            raise HomeAssistantError("Batterij-ontlaadvermogenbron is niet beschikbaar")
+
         action = str(detail["action"])
         power_w = int(float(detail["power_w"]))
         target_soc = float(detail["target_soc"])
