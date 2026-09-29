@@ -54,12 +54,17 @@ def test_step12_3_source_parity_safety_stages_are_previewed() -> None:
         assert token in preview
 
 
-def test_step12_3_runtime_stays_non_actuating_when_step12_4_is_present() -> None:
+def test_step12_3_automatic_preview_stays_non_actuating_after_step15a() -> None:
     runtime = _read("ems_runtime.py")
-    assert '"execution_controller_invoked": False' in runtime
+    execution = _read("ems_execution.py")
+    physical = _read("ems_manual_physical_execution.py")
     assert '"automatic_execution_armed": self._automatic_execution_armed' in runtime
-    assert '"service_calls_performed": False' in runtime
-    assert '"physical_execution_authority": False' in runtime
+    assert '"automatic_planner_physical_execution_enabled": False' in runtime
+    assert ".services.async_call(" not in execution
+    assert '"service_calls_performed": False' in execution
+    assert '"physical_execution_authority": False' in execution
+    assert ".services.async_call(" in physical
+    assert "automatic_72h_planner" in physical
 
 
 def _load_module(name: str):
