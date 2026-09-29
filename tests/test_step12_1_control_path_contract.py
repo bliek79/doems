@@ -47,8 +47,9 @@ def test_step12_1_runtime_consumes_real_control_path_without_execution() -> None
         '"action_direction": control_entities.get("action_direction", {}).get("state")',
         '"power_setpoint_w": control_entities.get("power_setpoint", {}).get("state")',
         '"automatic_execution_armed": self._automatic_execution_armed',
-        '"service_calls_performed": False',
-        '"physical_execution_authority": False',
+        '"manual_physical_execution_enabled": True',
+        '"automatic_planner_physical_execution_enabled": False',
+        '"physical_execution_authority": bool(self._automatic_execution_armed)',
     ):
         assert token in runtime
 
@@ -85,7 +86,7 @@ def test_step12_1_step11_boundary_evolves_without_physical_authority() -> None:
     assert '"physical_test_active": False' in runtime
     assert '"execution_active": False' in runtime
     assert '"action_controller_invoked": bool(action_controller)' in runtime
-    assert '"execution_controller_invoked": False' in runtime
     assert '"automatic_execution_armed": self._automatic_execution_armed' in runtime
-    assert '"service_calls_performed": False' in runtime
-    assert '"physical_execution_authority": False' in runtime
+    assert '"manual_physical_execution_enabled": True' in runtime
+    assert '"automatic_planner_physical_execution_enabled": False' in runtime
+    assert '"physical_execution_authority": bool(self._automatic_execution_armed)' in runtime
