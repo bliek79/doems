@@ -1052,8 +1052,12 @@ class DOEMSEMSRuntime:
             except asyncio.CancelledError:
                 raise
             except HomeAssistantError as err:
+                # A failed physical start is fail-safe and requires an explicit
+                # new user arm before another write attempt.
+                self._automatic_execution_armed = False
                 _LOGGER.warning("Step15A manual physical execution blocked: %s", err)
             except Exception:
+                self._automatic_execution_armed = False
                 _LOGGER.exception("Step15A manual physical execution failed")
             finally:
                 self._manual_physical_start_task = None
