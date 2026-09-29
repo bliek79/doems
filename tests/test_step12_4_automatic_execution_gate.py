@@ -186,15 +186,28 @@ def test_step12_4_source_is_non_actuating_and_switch_is_fail_safe_off() -> None:
 
     assert "self._automatic_execution_armed = False" in runtime_text
     assert "RestoreEntity" not in switch_text
-    assert '"physical_execution_enabled": False' in switch_text
-    assert '"restart_policy": "fail_safe_off"' in switch_text
+    # Step 15A reuses this fail-safe arm for a separate manual scheduled
+    # physical path; the Step 12.4 automatic planner gate itself stays
+    # non-actuating and is still covered by the assertions above.
+    assert '"physical_execution_enabled": True' in switch_text
+    assert '"automatic_planner_execution_enabled": False' in switch_text
+    assert '"restart_policy": "fail_safe_off_no_resume"' in switch_text
     assert "async_set_automatic_execution_armed(True)" in switch_text
     assert "async_set_automatic_execution_armed(False)" in switch_text
 
 
-def test_step12_4_runtime_stops_before_step12_5() -> None:
+def test_step12_4_automatic_path_remains_non_actuating_after_step15a() -> None:
     runtime = _read("ems_runtime.py")
-    assert '"execution_controller_invoked": False' in runtime
-    assert '"service_calls_performed": False' in runtime
-    assert '"physical_execution_authority": False' in runtime
-    assert "async_execute_selected_plan" not in runtime
+    execution = _read("ems_execution.py")
+    manual_physical = _read("ems_manual_physical_execution.py")
+
+    assert "self.execution.evaluate(" in runtime
+    assert '"service_calls_performed": False' in execution
+    assert '"physical_execution_authority": False' in execution
+    assert ".services.async_call(" not in execution
+
+    # Physical writes exist only in the separately scoped Step 15A manual
+    # executor; automatic_72h_planner is explicitly excluded there.
+    assert ".services.async_call(" in manual_physical
+    assert "automatic_72h_planner" in manual_physical
+    assert "Step 15A staat alleen handmatig geplande acties fysiek toe" in manual_physical

@@ -96,7 +96,7 @@ def test_step11_runtime_order_and_step12_boundary() -> None:
     assert "DOEMSActionController" in runtime
     assert "DOEMSExecutionController" in runtime
     assert "async_execute_selected_plan" not in runtime
-    assert '"physical_execution_authority": False' in runtime
+    assert '"automatic_planner_physical_execution_enabled": False' in runtime
 
 
 def test_step11_runtime_exposes_diagnostics_without_execution_rights() -> None:
@@ -109,9 +109,9 @@ def test_step11_runtime_exposes_diagnostics_without_execution_rights() -> None:
         '"safety_handoff_status": safety.get("auto_safety_handoff_status")',
         '"safety_handoff_execution_permitted": safety.get(',
         '"action_controller_invoked": bool(action_controller)',
-        '"execution_controller_invoked": False',
         '"automatic_execution_armed": self._automatic_execution_armed',
-        '"service_calls_performed": False',
-        '"physical_execution_authority": False',
+        '"manual_physical_execution_enabled": True',
+        '"automatic_planner_physical_execution_enabled": False',
+        '"physical_execution_authority": bool(self._automatic_execution_armed)',
     ):
         assert token in runtime

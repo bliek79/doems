@@ -38,7 +38,7 @@ def test_alpha6_public_solar_runtime_contract_is_carried_forward() -> None:
 def test_safety_and_branding_scope_remain_explicit() -> None:
     active_text = "\n".join(path.read_text(encoding="utf-8") for path in INTEGRATION.rglob("*.py"))
     workflow = (ROOT / ".github/workflows/p2-energy-forecast-release.yml").read_text(encoding="utf-8")
-    assert active_text.count(".services.async_call(") == 1
+    assert active_text.count(".services.async_call(") == 2
     prices = (INTEGRATION / "prices.py").read_text(encoding="utf-8")
     assert '"energyzero"' in prices and '"get_gas_prices"' in prices
     assert '"physical_execution_authority": False' in active_text

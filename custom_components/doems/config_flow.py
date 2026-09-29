@@ -31,6 +31,7 @@ from .const import (
     CONF_AWAY_END,
     CONF_EMS_ENABLED,
     CONF_SOC_ENTITY,
+    CONF_DEVICE_STATUS_ENTITY,
     CONF_OPERATING_MODE_ENTITY,
     CONF_ACTION_DIRECTION_ENTITY,
     CONF_POWER_SETPOINT_ENTITY,
@@ -563,6 +564,8 @@ class DOEMSOptionsFlow(OptionsFlow):
                     self._pending.update(normalized)
                     if not normalized.get(CONF_SOC_ENTITY):
                         self._pending.pop(CONF_SOC_ENTITY, None)
+                    if not normalized.get(CONF_DEVICE_STATUS_ENTITY):
+                        self._pending.pop(CONF_DEVICE_STATUS_ENTITY, None)
                     for key in control_keys:
                         if not normalized.get(key):
                             self._pending.pop(key, None)
@@ -572,6 +575,10 @@ class DOEMSOptionsFlow(OptionsFlow):
             step_id="ems",
             data_schema=vol.Schema({
                 _optional_entity(CONF_SOC_ENTITY, self._current(CONF_SOC_ENTITY)): _sensor_selector(),
+                _optional_entity(
+                    CONF_DEVICE_STATUS_ENTITY,
+                    self._current(CONF_DEVICE_STATUS_ENTITY),
+                ): _sensor_selector(),
                 _optional_entity(
                     CONF_OPERATING_MODE_ENTITY,
                     self._current(CONF_OPERATING_MODE_ENTITY),

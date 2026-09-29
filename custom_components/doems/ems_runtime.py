@@ -1,18 +1,21 @@
-"""DOEMS Alpha8 EMS planning runtime.
+"""DOEMS EMS planning/runtime orchestration.
 
-Consumes the existing DOEMS forecast stack plus one configured SOC sensor and
-invokes the copied EMS decision chain and owns the definitive DOEMS Plan Store and Scheduler. It performs no physical service calls and has no physical execution authority.
+The native planner remains 15 minutes / 72 hours / 288 slots. Step 15A adds a
+narrow, explicitly armed physical path for manually scheduled plan slots only;
+automatic Plan72 actions remain non-actuating.
 """
 from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
+import logging
 from datetime import datetime, timedelta
 from functools import partial
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
@@ -20,6 +23,7 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_BATTERY_CHARGE_POWER_ENTITY,
     CONF_BATTERY_DISCHARGE_POWER_ENTITY,
+    CONF_DEVICE_STATUS_ENTITY,
     CONF_SOC_ENTITY,
     CONTROL_PATH_OBSERVER_INTERVAL_SECONDS,
     DOMAIN,
@@ -44,9 +48,12 @@ from .ems_safety_guard import DOEMSSafetyGuard
 from .ems_scheduler import DOEMSScheduler
 from .ems_planner_bridge import build_planner_action_bridge
 from .ems_live_input import build_live_ems_input
+from .ems_manual_physical_execution import DOEMSManualPhysicalExecution
 from .ems_settings import EMSSettings
 from .ems_soc import UNAVAILABLE_SOC_STATES, parse_soc_percent
 from .energy_sources import normalize_power_w
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class DOEMSEMSRuntime:
@@ -84,6 +91,12 @@ class DOEMSEMSRuntime:
         self.safety_guard = DOEMSSafetyGuard()
         self.action_controller = DOEMSActionController()
         self.automatic_execution_gate = DOEMSAutomaticExecutionGate()
+        self.manual_physical_execution = DOEMSManualPhysicalExecution(
+            hass,
+            entry,
+            self.plan_store,
+            settings,
+        )
         self.execution_handoff = DOEMSExecutionHandoff()
         self.execution = DOEMSExecutionController()
         self._execution_store: Store[dict[str, Any]] = Store(
@@ -131,6 +144,7 @@ class DOEMSEMSRuntime:
         self._planner_debounce_seconds = 2.0
         self._planner_publish_active = False
         self._deferred_fast_trigger: str | None = None
+        self._manual_physical_start_task: asyncio.Task[None] | None = None
         # Step 12.4 fail-safe arm: always starts OFF after integration setup/reload.
         # No restore-state path exists in this phase, so a restart requires an
         # explicit new user arm and can never silently permit physical execution.
@@ -144,8 +158,20 @@ class DOEMSEMSRuntime:
         return self._automatic_execution_armed
 
     async def async_set_automatic_execution_armed(self, armed: bool) -> None:
-        """Set the explicit Step 12.4 user arm without actuating anything."""
+        """Set the fail-safe physical arm for Step 15A manual scheduled actions."""
         self._automatic_execution_armed = bool(armed)
+        if not self._automatic_execution_armed:
+            if (
+                self._manual_physical_start_task is not None
+                and not self._manual_physical_start_task.done()
+            ):
+                self._manual_physical_start_task.cancel()
+                self._manual_physical_start_task = None
+            if self.manual_physical_execution.busy:
+                await self.manual_physical_execution.async_stop(
+                    "automatic_execution_disarmed",
+                    emergency=False,
+                )
         await self._async_fast_execution_refresh("automatic_execution_arm_change")
 
     @property
@@ -157,6 +183,7 @@ class DOEMSEMSRuntime:
         """Load DOEMS plans, execution audit state, listeners and first refresh."""
         await self._async_load_execution()
         await self.plan_store.async_load()
+        await self.manual_physical_execution.async_load_and_recover()
         self._unsubs.append(
             self.plan_store.add_listener(
                 lambda: self._request_fast_refresh("plan_store_change")
@@ -203,6 +230,16 @@ class DOEMSEMSRuntime:
         self._schedule_execution_tick()
 
     async def async_shutdown(self) -> None:
+        # Step 15A is fail-safe: never leave a DOEMS-owned physical transaction
+        # active across integration unload or Home Assistant shutdown.
+        self._automatic_execution_armed = False
+        if (
+            self._manual_physical_start_task is not None
+            and not self._manual_physical_start_task.done()
+        ):
+            self._manual_physical_start_task.cancel()
+            self._manual_physical_start_task = None
+        await self.manual_physical_execution.async_shutdown_stop()
         await self._async_persist_execution_if_changed()
         self._shutdown = True
         if self._control_path_timer_unsub is not None:
@@ -440,6 +477,16 @@ class DOEMSEMSRuntime:
         if value is None:
             return None, "invalid_value", updated
         return value, "ok", updated
+
+    def _read_optional_state(self, option_key: str) -> str | None:
+        """Read one configured diagnostic source as a raw state string."""
+        entity_id = self.entry.options.get(option_key)
+        if not entity_id:
+            return None
+        state = self.hass.states.get(str(entity_id))
+        if state is None or state.state in UNAVAILABLE_SOC_STATES:
+            return None
+        return str(state.state)
 
     def _read_optional_power(self, option_key: str) -> float | None:
         """Read one already-configured battery power source without adding control."""
@@ -718,6 +765,7 @@ class DOEMSEMSRuntime:
             **self.scheduler_result,
             "forecast_ready": True,
             "soc": self.soc_percent,
+            "device_status": self._read_optional_state(CONF_DEVICE_STATUS_ENTITY),
             "max_charge_power_w": self.settings.max_charge_power_w,
             "max_discharge_power_w": self.settings.max_discharge_power_w,
             "technical_min_soc_percent": self.settings.technical_min_soc_percent,
@@ -817,6 +865,7 @@ class DOEMSEMSRuntime:
             **self.legacy_safety_result,
         }
         self.action_controller_result = self.action_controller.evaluate(action_data)
+        self._schedule_manual_physical_start()
 
     async def _async_fast_execution_refresh(self, trigger: str) -> None:
         """Run Scheduler/Safety/Execution against the cached plan only."""
@@ -854,6 +903,7 @@ class DOEMSEMSRuntime:
             **self.scheduler_result,
             "forecast_ready": (self.input_result or {}).get("status") == "ready",
             "soc": self.soc_percent,
+            "device_status": self._read_optional_state(CONF_DEVICE_STATUS_ENTITY),
             "max_charge_power_w": self.settings.max_charge_power_w,
             "max_discharge_power_w": self.settings.max_discharge_power_w,
             "technical_min_soc_percent": self.settings.technical_min_soc_percent,
@@ -953,8 +1003,71 @@ class DOEMSEMSRuntime:
             **self.legacy_safety_result,
         }
         self.action_controller_result = self.action_controller.evaluate(action_data)
+        self._schedule_manual_physical_start()
 
         self._notify()
+
+    def _manual_physical_snapshot(self) -> dict[str, Any]:
+        """Build an internal Step15A snapshot without expanding public recorder data."""
+        result = self.snapshot()
+        result["scheduler_slots"] = (self.scheduler_result or {}).get(
+            "scheduler_slots", {}
+        )
+        return result
+
+    def _schedule_manual_physical_start(self) -> None:
+        """Auto-start only a due manual planned slot while the explicit arm is ON."""
+        if self._shutdown or not self._automatic_execution_armed:
+            return
+        if self.manual_physical_execution.busy:
+            return
+        if (
+            self._manual_physical_start_task is not None
+            and not self._manual_physical_start_task.done()
+        ):
+            return
+
+        scheduler = self.scheduler_result or {}
+        if scheduler.get("scheduler_ready") is not True:
+            return
+        if scheduler.get("scheduler_selected_execution_mode") != "gepland":
+            return
+        slot = scheduler.get("scheduler_selected_slot")
+        slots = scheduler.get("scheduler_slots") or {}
+        detail = slots.get(slot) or slots.get(str(slot)) or {}
+        if str(detail.get("origin") or "manual") == "automatic_72h_planner":
+            # Step 15A intentionally leaves Plan72 physical execution closed.
+            return
+        if detail.get("action") not in {"laden", "ontladen"}:
+            return
+
+        async def _runner() -> None:
+            try:
+                await self.manual_physical_execution.async_start(
+                    self._manual_physical_snapshot(),
+                    refresh=self.async_refresh,
+                    snapshot_provider=self._manual_physical_snapshot,
+                    armed_provider=lambda: self._automatic_execution_armed,
+                )
+            except asyncio.CancelledError:
+                raise
+            except HomeAssistantError as err:
+                # A failed physical start is fail-safe and requires an explicit
+                # new user arm before another write attempt.
+                self._automatic_execution_armed = False
+                _LOGGER.warning("Step15A manual physical execution blocked: %s", err)
+            except Exception:
+                self._automatic_execution_armed = False
+                _LOGGER.exception("Step15A manual physical execution failed")
+            finally:
+                self._manual_physical_start_task = None
+                if not self._shutdown:
+                    self._request_fast_refresh("manual_physical_execution_terminal")
+
+        self._manual_physical_start_task = self.hass.async_create_task(
+            _runner(),
+            "DOEMS Step15A manual physical start",
+        )
 
     def snapshot(self) -> dict[str, Any]:
         """Return compact entity-safe diagnostics without publishing Plan72 arrays."""
@@ -975,6 +1088,8 @@ class DOEMSEMSRuntime:
         execution = self.execution_result or {}
         legacy_safety = self.legacy_safety_result or {}
         action_controller = self.action_controller_result or {}
+        manual_controller = getattr(self, "manual_physical_execution", None)
+        manual_physical = manual_controller.data if manual_controller is not None else {}
         control_path = self.control_path_result or {}
         control_entities = control_path.get("entities") or {}
         slots = scheduler.get("scheduler_slots") or {}
@@ -1327,9 +1442,29 @@ class DOEMSEMSRuntime:
             "controller_physical_control": action_controller.get(
                 "controller_physical_control", False
             ),
-            "execution_controller_invoked": False,
-            "execution_mode": "validation",
+            "execution_controller_invoked": bool(manual_physical.get("active")),
+            "execution_mode": (
+                "live_guarded_manual"
+                if self._automatic_execution_armed
+                else "validation"
+            ),
             "automatic_execution_armed": self._automatic_execution_armed,
-            "service_calls_performed": False,
-            "physical_execution_authority": False,
+            "manual_physical_execution_enabled": True,
+            "manual_physical_execution_active": bool(manual_physical.get("active")),
+            "manual_physical_execution_busy": bool(manual_physical.get("busy")),
+            "manual_physical_execution_status": manual_physical.get("status"),
+            "manual_physical_execution_reason": manual_physical.get("reason"),
+            "manual_physical_execution_slot": manual_physical.get("slot"),
+            "manual_physical_execution_action": manual_physical.get("action"),
+            "manual_physical_execution_power_w": manual_physical.get("power_w"),
+            "manual_physical_execution_target_soc": manual_physical.get("target_soc"),
+            "manual_physical_safe_return_performed": manual_physical.get(
+                "safe_return_performed", False
+            ),
+            "manual_physical_write_count": manual_physical.get("write_count", 0),
+            "automatic_planner_physical_execution_enabled": False,
+            "service_calls_performed": bool(
+                manual_physical.get("service_calls_performed", False)
+            ),
+            "physical_execution_authority": bool(self._automatic_execution_armed),
         }

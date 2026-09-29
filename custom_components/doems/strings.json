@@ -116,7 +116,7 @@
       },
       "ems": {
         "title": "EMS battery settings",
-        "description": "Configure the static EMS settings plus the optional read-only Step 12.1 battery control-path mappings. No physical commands are sent.",
+        "description": "Configure the static EMS settings and battery observation/control entities. The physical Step 15A trial stays fail-safe off until DOEMS Automatic Execution is explicitly enabled.",
         "data": {
           "battery_capacity_kwh": "Battery capacity",
           "technical_min_soc_percent": "Technical minimum SOC",
@@ -129,9 +129,10 @@
           "minimum_trade_margin_eur_per_kwh": "Minimum trade margin",
           "startup_delay_seconds": "Startup delay",
           "soc_entity": "Battery SOC sensor",
-          "operating_mode_entity": "Operating-mode select (read-only mapping)",
-          "action_direction_entity": "Charge/discharge direction select (read-only mapping)",
-          "power_setpoint_entity": "Power-setpoint number (read-only mapping)"
+          "operating_mode_entity": "Operating-mode select",
+          "action_direction_entity": "Charge/discharge direction select",
+          "power_setpoint_entity": "Power-setpoint number",
+          "device_status_entity": "Battery device-status sensor"
         }
       },
       "prices_gas": {
