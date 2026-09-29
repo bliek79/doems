@@ -129,7 +129,7 @@
       },
       "ems": {
         "title": "EMS batterij-instellingen",
-        "description": "Configureer de statische EMS-instellingen plus optioneel de read-only Step 12.1 batterijbesturingsentiteiten. Er worden geen fysieke commando's verstuurd.",
+        "description": "Configureer de statische EMS-instellingen en de batterijbronnen/besturingsentiteiten. De fysieke Step 15A-proef blijft fail-safe uit totdat DOEMS Automatic Execution expliciet wordt ingeschakeld.",
         "data": {
           "battery_capacity_kwh": "Batterijcapaciteit",
           "technical_min_soc_percent": "Technische minimum-SOC",
@@ -142,9 +142,10 @@
           "minimum_trade_margin_eur_per_kwh": "Minimale handelsmarge",
           "startup_delay_seconds": "Opstartvertraging",
           "soc_entity": "Batterij-SOC sensor (alleen lezen)",
-          "operating_mode_entity": "Bedrijfsmodus-select (read-only koppeling)",
-          "action_direction_entity": "Laad/ontlaadrichting-select (read-only koppeling)",
-          "power_setpoint_entity": "Vermogenssetpoint-number (read-only koppeling)"
+          "operating_mode_entity": "Bedrijfsmodus-select",
+          "action_direction_entity": "Laad/ontlaadrichting-select",
+          "power_setpoint_entity": "Vermogenssetpoint-number",
+          "device_status_entity": "Batterij-apparaatstatus sensor"
         }
       }
     },
