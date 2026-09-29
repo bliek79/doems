@@ -32,7 +32,7 @@ def test_alpha26_physical_path_is_manual_scheduled_only() -> None:
     assert '== "automatic_72h_planner"' in runtime
     assert "scheduler_selected_execution_mode" in runtime
     assert '"gepland"' in runtime
-    assert "detail.get("action") not in {"laden", "ontladen"}" in runtime
+    assert 'detail.get("action") not in {"laden", "ontladen"}' in runtime
 
 
 def test_alpha26_uses_fixed_physical_handoff_and_safe_return() -> None:
