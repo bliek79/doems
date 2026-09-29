@@ -87,11 +87,11 @@ class DOEMSAwayScheduleEnabledSwitch(SwitchEntity):
 
 
 class DOEMSAutomaticExecutionSwitch(SwitchEntity):
-    """Explicit fail-safe Step 12.4 arm for future automatic execution.
+    """Fail-safe physical arm for Step 15A manual scheduled execution.
 
-    This switch only changes the permission bit consumed by the read-only
-    Automatic Execution Gate. Step 12.4 never invokes the Execution Controller.
-    The state is intentionally not restored after integration reload/restart.
+    The switch is intentionally not restored after reload/restart. In Step 15A
+    it can physically execute only a Scheduler-selected manual planned slot;
+    automatic Plan72 actions remain non-actuating.
     """
 
     _attr_should_poll = False
@@ -99,7 +99,7 @@ class DOEMSAutomaticExecutionSwitch(SwitchEntity):
     _attr_name = "DOEMS Automatic Execution"
     _attr_unique_id = "doems_automatic_execution"
     _attr_suggested_object_id = "doems_automatic_execution"
-    _attr_icon = "mdi:robot-off-outline"
+    _attr_icon = "mdi:battery-sync-outline"
 
     def __init__(self, entry: ConfigEntry, runtime: DOEMSEMSRuntime) -> None:
         self.runtime = runtime
@@ -120,19 +120,23 @@ class DOEMSAutomaticExecutionSwitch(SwitchEntity):
     def extra_state_attributes(self) -> dict[str, object]:
         data = self.runtime.snapshot()
         return {
-            "mode": "guarded_handoff",
-            "technical_ready": data.get("auto_execution_gate_technical_ready", False),
-            "gate_status": data.get("auto_execution_gate_status"),
-            "blockers": data.get("auto_execution_gate_blockers", []),
-            "warnings": data.get("auto_execution_gate_warnings", []),
-            "execution_permitted": data.get(
-                "auto_execution_gate_execution_permitted", False
+            "mode": "live_guarded_manual",
+            "manual_scheduled_execution_enabled": True,
+            "automatic_planner_execution_enabled": False,
+            "manual_execution_status": data.get("manual_physical_execution_status"),
+            "manual_execution_reason": data.get("manual_physical_execution_reason"),
+            "manual_execution_active": data.get(
+                "manual_physical_execution_active", False
             ),
-            "physical_execution_enabled": False,
-            "execution_controller_invoked": False,
-            "service_calls_performed": False,
-            "physical_execution_authority": False,
-            "restart_policy": "fail_safe_off",
+            "manual_execution_busy": data.get(
+                "manual_physical_execution_busy", False
+            ),
+            "selected_slot": data.get("scheduler_selected_slot"),
+            "selected_action": data.get("scheduler_selected_action"),
+            "service_calls_performed": data.get("service_calls_performed", False),
+            "physical_execution_enabled": True,
+            "physical_execution_authority": bool(self.runtime.automatic_execution_armed),
+            "restart_policy": "fail_safe_off_no_resume",
         }
 
     async def async_added_to_hass(self) -> None:
