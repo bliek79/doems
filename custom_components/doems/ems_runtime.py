@@ -1,7 +1,8 @@
-"""DOEMS Alpha8 EMS planning runtime.
+"""DOEMS EMS planning/runtime orchestration.
 
-Consumes the existing DOEMS forecast stack plus one configured SOC sensor and
-invokes the copied EMS decision chain and owns the definitive DOEMS Plan Store and Scheduler. It performs no physical service calls and has no physical execution authority.
+The native planner remains 15 minutes / 72 hours / 288 slots. Step 15A adds a
+narrow, explicitly armed physical path for manually scheduled plan slots only;
+automatic Plan72 actions remain non-actuating.
 """
 from __future__ import annotations
 
@@ -14,6 +15,7 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
@@ -763,6 +765,7 @@ class DOEMSEMSRuntime:
             **self.scheduler_result,
             "forecast_ready": True,
             "soc": self.soc_percent,
+            "device_status": self._read_optional_state(CONF_DEVICE_STATUS_ENTITY),
             "max_charge_power_w": self.settings.max_charge_power_w,
             "max_discharge_power_w": self.settings.max_discharge_power_w,
             "technical_min_soc_percent": self.settings.technical_min_soc_percent,
