@@ -1088,7 +1088,8 @@ class DOEMSEMSRuntime:
         execution = self.execution_result or {}
         legacy_safety = self.legacy_safety_result or {}
         action_controller = self.action_controller_result or {}
-        manual_physical = self.manual_physical_execution.data
+        manual_controller = getattr(self, "manual_physical_execution", None)
+        manual_physical = manual_controller.data if manual_controller is not None else {}
         control_path = self.control_path_result or {}
         control_entities = control_path.get("entities") or {}
         slots = scheduler.get("scheduler_slots") or {}
