@@ -31,6 +31,7 @@ from .const import (
     CONF_AWAY_END,
     CONF_EMS_ENABLED,
     CONF_SOC_ENTITY,
+    CONF_DEVICE_STATUS_ENTITY,
     CONF_OPERATING_MODE_ENTITY,
     CONF_ACTION_DIRECTION_ENTITY,
     CONF_POWER_SETPOINT_ENTITY,
@@ -572,6 +573,10 @@ class DOEMSOptionsFlow(OptionsFlow):
             step_id="ems",
             data_schema=vol.Schema({
                 _optional_entity(CONF_SOC_ENTITY, self._current(CONF_SOC_ENTITY)): _sensor_selector(),
+                _optional_entity(
+                    CONF_DEVICE_STATUS_ENTITY,
+                    self._current(CONF_DEVICE_STATUS_ENTITY),
+                ): _sensor_selector(),
                 _optional_entity(
                     CONF_OPERATING_MODE_ENTITY,
                     self._current(CONF_OPERATING_MODE_ENTITY),
