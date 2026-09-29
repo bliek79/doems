@@ -31,8 +31,9 @@ def test_alpha8_plan_store_uses_definitive_namespace_and_three_slots() -> None:
     assert '"automatic_72h_planner"' in store
 
 
-def test_alpha8_runtime_is_independent_and_non_actuating() -> None:
+def test_alpha8_runtime_independence_is_carried_forward_into_step15a() -> None:
     runtime = (INTEGRATION / "ems_runtime.py").read_text(encoding="utf-8")
+    physical = (INTEGRATION / "ems_manual_physical_execution.py").read_text(encoding="utf-8")
     init = (INTEGRATION / "__init__.py").read_text(encoding="utf-8")
     config = (INTEGRATION / "config_flow.py").read_text(encoding="utf-8")
     assert "class DOEMSEMSRuntime" in runtime
@@ -41,11 +42,11 @@ def test_alpha8_runtime_is_independent_and_non_actuating() -> None:
     assert "build_planner_action_bridge" in runtime
     assert "run_planner_worker" in runtime
     assert "ems_multirate" in runtime
-    assert 'execution_mode": "validation"' in runtime
     assert '"automatic_execution_armed": self._automatic_execution_armed' in runtime
-    assert '"service_calls_performed": False' in runtime
-    assert '"physical_execution_authority": False' in runtime
+    assert '"automatic_planner_physical_execution_enabled": False' in runtime
     assert ".services.async_call(" not in runtime
+    assert ".services.async_call(" in physical
+    assert "automatic_72h_planner" in physical
     assert "legacy_authority" not in runtime
     assert "legacy_automatic_execution" not in runtime
     assert "anker_ems" not in runtime
