@@ -65,6 +65,7 @@ class DOEMSManualPhysicalExecution:
             f"{DOMAIN}.{entry.entry_id}.manual_physical_execution",
         )
         self._monitor_task: asyncio.Task[None] | None = None
+        self._armed_provider: Callable[[], bool] | None = None
         self._state: dict[str, Any] = {
             "active": False,
             "status": "idle",
@@ -92,8 +93,23 @@ class DOEMSManualPhysicalExecution:
         return bool(self._state.get("active"))
 
     @property
+    def busy(self) -> bool:
+        return bool(
+            self.active
+            or self._state.get("status")
+            in {"arming_external_mode", "post_mode_stability", "stopping"}
+        )
+
+    @property
     def data(self) -> dict[str, Any]:
-        return dict(self._state)
+        result = dict(self._state)
+        result["busy"] = self.busy
+        result["physical_execution_authority"] = bool(
+            self._armed_provider is not None and self._armed_provider()
+        )
+        result["manual_scheduled_execution_enabled"] = True
+        result["automatic_planner_execution_enabled"] = False
+        return result
 
     def _option(self, key: str) -> str | None:
         value = self.entry.options.get(key)
@@ -165,7 +181,12 @@ class DOEMSManualPhysicalExecution:
             for key in self._state:
                 if key in stored:
                     self._state[key] = stored[key]
-        if self._state.get("active") is True:
+        interrupted = bool(
+            self._state.get("active") is True
+            or self._state.get("status")
+            in {"arming_external_mode", "post_mode_stability", "running", "stopping"}
+        )
+        if interrupted:
             self._state["status"] = "restart_recovery"
             self._state["reason"] = "Onderbroken DOEMS-proef wordt fail-safe teruggezet"
             await self._async_save()
@@ -177,10 +198,13 @@ class DOEMSManualPhysicalExecution:
         mode_entity: str,
         direction_entity: str,
         power_entity: str,
+        armed_provider: Callable[[], bool],
     ) -> None:
         deadline = dt_util.now() + timedelta(seconds=_CONTROL_WAIT_SECONDS)
         zero_written = False
         while dt_util.now() < deadline:
+            if not armed_provider():
+                raise HomeAssistantError("DOEMS Automatic Execution werd uitgezet")
             mode = self.hass.states.get(mode_entity)
             direction = self.hass.states.get(direction_entity)
             power = self.hass.states.get(power_entity)
@@ -230,14 +254,6 @@ class DOEMSManualPhysicalExecution:
             )
         if str(detail.get("execution_mode") or "") != "gepland":
             raise HomeAssistantError("Step 15A vereist een gepland handmatig planslot")
-        if snapshot.get("legacy_safety_safe") is not True:
-            raise HomeAssistantError(
-                f"Safety Guard blokkeert: {snapshot.get('legacy_safety_reason') or 'onbekend'}"
-            )
-        if snapshot.get("controller_ready") is not True:
-            raise HomeAssistantError(
-                f"Action Controller niet gereed: {snapshot.get('controller_reason') or 'onbekend'}"
-            )
         action = detail.get("action")
         if action not in {"laden", "ontladen"}:
             raise HomeAssistantError("Planslot bevat geen ondersteunde laad/ontlaadactie")
@@ -267,11 +283,14 @@ class DOEMSManualPhysicalExecution:
         snapshot: dict[str, Any],
         *,
         refresh: Callable[[str], Any],
+        snapshot_provider: Callable[[], dict[str, Any]],
+        armed_provider: Callable[[], bool],
     ) -> bool:
         """Physically execute the Scheduler-selected manual planned action."""
-        if self.active:
+        if self.busy:
             return False
 
+        self._armed_provider = armed_provider
         slot, detail = self._validate_selected_manual_plan(snapshot)
         action = str(detail["action"])
         power_w = int(float(detail["power_w"]))
@@ -351,10 +370,33 @@ class DOEMSManualPhysicalExecution:
                 mode_entity=mode_entity,
                 direction_entity=direction_entity,
                 power_entity=power_entity,
+                armed_provider=armed_provider,
             )
 
-            # Refresh the existing safety/controller chain after mode transition.
+            # Refresh the copied Safety Guard / Action Controller only after the
+            # battery has entered third_party_control, matching the proven Anker
+            # manual execution sequence.
             await refresh("manual_physical_post_mode_revalidation")
+            live_snapshot = snapshot_provider()
+            if not armed_provider():
+                raise HomeAssistantError("DOEMS Automatic Execution werd uitgezet")
+            if live_snapshot.get("scheduler_ready") is not True:
+                raise HomeAssistantError("Scheduler is niet langer startklaar")
+            if live_snapshot.get("scheduler_selected_slot") != slot:
+                raise HomeAssistantError("Geselecteerd planslot wijzigde tijdens fysieke arming")
+            if live_snapshot.get("legacy_safety_safe") is not True:
+                raise HomeAssistantError(
+                    f"Safety Guard blokkeert na mode-switch: "
+                    f"{live_snapshot.get('legacy_safety_reason') or 'onbekend'}"
+                )
+            if live_snapshot.get("controller_ready") is not True:
+                raise HomeAssistantError(
+                    f"Action Controller niet gereed na mode-switch: "
+                    f"{live_snapshot.get('controller_reason') or 'onbekend'}"
+                )
+            if live_snapshot.get("controller_action") != action:
+                raise HomeAssistantError("Action Controller wijzigde richting tijdens arming")
+
             live_plan = self.plan_store.get_plan(slot)
             if str(live_plan.get("lifecycle_status") or "").lower() != "pending":
                 raise HomeAssistantError("Planslot is niet langer pending")
@@ -411,6 +453,9 @@ class DOEMSManualPhysicalExecution:
             while self.active:
                 await asyncio.sleep(_MONITOR_INTERVAL_SECONDS)
                 if not self.active:
+                    return
+                if self._armed_provider is None or not self._armed_provider():
+                    await self.async_stop("automatic_execution_disarmed", emergency=False)
                     return
                 action = str(self._state.get("action") or "")
                 target = float(self._state.get("target_soc") or 0)
@@ -531,5 +576,5 @@ class DOEMSManualPhysicalExecution:
         self._monitor_task = None
 
     async def async_shutdown_stop(self) -> None:
-        if self.active:
+        if self.busy:
             await self.async_stop("home_assistant_stop", emergency=True)
