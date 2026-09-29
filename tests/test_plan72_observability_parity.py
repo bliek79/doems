@@ -61,13 +61,16 @@ def test_plan72_hours_exposes_dashboard_fields_already_computed_by_planner() -> 
         assert token in planner
 
 
-def test_plan72_observability_does_not_change_physical_boundary() -> None:
+def test_plan72_observability_does_not_gain_physical_authority() -> None:
     sensor = (INTEGRATION / "sensor.py").read_text(encoding="utf-8")
     runtime = (INTEGRATION / "ems_runtime.py").read_text(encoding="utf-8")
+    execution = (INTEGRATION / "ems_execution.py").read_text(encoding="utf-8")
     assert ".services.async_call(" not in sensor
+    assert ".services.async_call(" not in execution
     assert '"automatic_execution_armed": self._automatic_execution_armed' in runtime
-    assert '"service_calls_performed": False' in runtime
-    assert '"physical_execution_authority": False' in runtime
+    assert '"automatic_planner_physical_execution_enabled": False' in runtime
+    assert '"service_calls_performed": False' in execution
+    assert '"physical_execution_authority": False' in execution
 
 
 def test_plan72_solar_horizon_uses_clear_single_sensor_contract() -> None:
