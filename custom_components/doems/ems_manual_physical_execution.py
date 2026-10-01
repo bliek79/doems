@@ -1,10 +1,12 @@
-"""Step 15A guarded physical execution for manually scheduled DOEMS plans.
+"""Step 15 guarded physical execution for Scheduler-selected DOEMS plans.
 
-This is the first actuating DOEMS path. It deliberately accepts only a
-Scheduler-selected manual plan. Automatic Plan72 actions remain non-actuating
-until a later, separately approved Step-15 gate.
+This remains the single actuating DOEMS path. Beta phase 2 keeps the proven
+manual execution sequence unchanged and additionally permits a Scheduler-selected
+origin=automatic_72h_planner plan only when the existing Automatic Execution
+Gate is armed_ready and execution_permitted. No planner policy is implemented
+or recalculated in this module.
 
-The controller copies the proven Anker EMS manual execution sequence:
+The controller copies the proven Anker EMS execution sequence:
 self_consumption -> third_party_control -> zero-power guard -> stable controls
 -> safety recheck -> direction/power handoff -> runtime monitoring -> 0 W ->
 self_consumption.
@@ -47,7 +49,7 @@ _POWER_TOLERANCE_W = 25.0
 
 
 class DOEMSManualPhysicalExecution:
-    """Execute one manually scheduled planslot behind the explicit DOEMS arm."""
+    """Execute one guarded Scheduler-selected planslot behind the explicit DOEMS arm."""
 
     def __init__(
         self,
@@ -73,6 +75,9 @@ class DOEMSManualPhysicalExecution:
             "reason": "Geen fysieke handmatige DOEMS-uitvoering actief",
             "slot": None,
             "action": None,
+            "origin": None,
+            "planner_identity": None,
+            "planner_signature": None,
             "power_w": None,
             "target_soc": None,
             "max_runtime_h": None,
@@ -109,7 +114,7 @@ class DOEMSManualPhysicalExecution:
             self._armed_provider is not None and self._armed_provider()
         )
         result["manual_scheduled_execution_enabled"] = True
-        result["automatic_planner_execution_enabled"] = False
+        result["automatic_planner_execution_enabled"] = True
         return result
 
     def _option(self, key: str) -> str | None:
@@ -248,7 +253,8 @@ class DOEMSManualPhysicalExecution:
             "third_party_control/control-entiteiten werden niet 60 seconden stabiel"
         )
 
-    def _validate_selected_manual_plan(self, snapshot: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+    def _validate_selected_plan(self, snapshot: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+        """Validate one Scheduler-selected manual or guarded Plan72 action."""
         if snapshot.get("automatic_execution_armed") is not True:
             raise HomeAssistantError("DOEMS Automatic Execution staat uit")
         if snapshot.get("scheduler_ready") is not True:
@@ -258,12 +264,11 @@ class DOEMSManualPhysicalExecution:
             raise HomeAssistantError("Scheduler heeft geen geldig planslot geselecteerd")
         slots = snapshot.get("scheduler_slots") or {}
         detail = slots.get(slot) or slots.get(str(slot)) or {}
-        if str(detail.get("origin") or "manual") == "automatic_72h_planner":
-            raise HomeAssistantError(
-                "Step 15A staat alleen handmatig geplande acties fysiek toe"
-            )
+        origin = str(detail.get("origin") or "manual")
+        if origin not in {"manual", "automatic_72h_planner"}:
+            raise HomeAssistantError(f"Onbekende planslot-origin: {origin}")
         if str(detail.get("execution_mode") or "") != "gepland":
-            raise HomeAssistantError("Step 15A vereist een gepland handmatig planslot")
+            raise HomeAssistantError("Fysieke uitvoering vereist een gepland planslot")
         action = detail.get("action")
         if action not in {"laden", "ontladen"}:
             raise HomeAssistantError("Planslot bevat geen ondersteunde laad/ontlaadactie")
@@ -286,6 +291,39 @@ class DOEMSManualPhysicalExecution:
             raise HomeAssistantError("Doel-SOC valt buiten 5-100%")
         if not 0.25 <= max_runtime_h <= 12:
             raise HomeAssistantError("Maximale looptijd valt buiten 0,25-12 uur")
+
+        if origin == "automatic_72h_planner":
+            planner_identity = detail.get("planner_identity")
+            planner_signature = detail.get("planner_signature")
+            if not isinstance(planner_identity, str) or not planner_identity:
+                raise HomeAssistantError("Automatic Plan72 planner_identity ontbreekt")
+            if not isinstance(planner_signature, str) or not planner_signature:
+                raise HomeAssistantError("Automatic Plan72 planner_signature ontbreekt")
+            if snapshot.get("auto_execution_gate_status") != "armed_ready":
+                raise HomeAssistantError("Automatic Execution Gate is niet armed_ready")
+            if snapshot.get("auto_execution_gate_execution_permitted") is not True:
+                raise HomeAssistantError("Automatic Execution Gate geeft geen uitvoering vrij")
+            if snapshot.get("auto_execution_gate_selected_slot") != slot:
+                raise HomeAssistantError("Automatic Execution Gate selecteert een ander planslot")
+            if snapshot.get("auto_execution_gate_planner_identity") != planner_identity:
+                raise HomeAssistantError("Automatic planner_identity is niet stabiel")
+            if snapshot.get("prestart_signature_match") is not True:
+                raise HomeAssistantError("Automatic planner_signature is niet actueel/stabiel")
+            if snapshot.get("auto_execution_gate_action") != action:
+                raise HomeAssistantError("Automatic gate-action wijkt af van Scheduler")
+            try:
+                gate_power = int(float(snapshot.get("auto_execution_gate_power_w") or 0))
+                gate_target = float(snapshot.get("auto_execution_gate_target_soc") or 0)
+                gate_runtime = float(snapshot.get("auto_execution_gate_max_runtime_h") or 0)
+            except (TypeError, ValueError) as err:
+                raise HomeAssistantError("Automatic gate bevat ongeldige fysieke waarden") from err
+            if gate_power != power_w:
+                raise HomeAssistantError("Automatic gate-vermogen wijkt af van planslot")
+            if abs(gate_target - target_soc) > 0.001:
+                raise HomeAssistantError("Automatic gate-doel-SOC wijkt af van planslot")
+            if abs(gate_runtime - max_runtime_h) > 0.0001:
+                raise HomeAssistantError("Automatic gate-looptijd wijkt af van planslot")
+
         return slot, detail
 
     async def async_start(
@@ -296,12 +334,12 @@ class DOEMSManualPhysicalExecution:
         snapshot_provider: Callable[[], dict[str, Any]],
         armed_provider: Callable[[], bool],
     ) -> bool:
-        """Physically execute the Scheduler-selected manual planned action."""
+        """Physically execute one Scheduler-selected guarded planned action."""
         if self.busy:
             return False
 
         self._armed_provider = armed_provider
-        slot, detail = self._validate_selected_manual_plan(snapshot)
+        slot, detail = self._validate_selected_plan(snapshot)
 
         # Fail before entering third_party_control when the copied manual Safety
         # Guard cannot possibly become complete.
@@ -313,6 +351,9 @@ class DOEMSManualPhysicalExecution:
             raise HomeAssistantError("Batterij-ontlaadvermogenbron is niet beschikbaar")
 
         action = str(detail["action"])
+        origin = str(detail.get("origin") or "manual")
+        planner_identity = detail.get("planner_identity")
+        planner_signature = detail.get("planner_signature")
         power_w = int(float(detail["power_w"]))
         target_soc = float(detail["target_soc"])
         max_runtime_h = float(detail["max_runtime_h"])
@@ -353,6 +394,9 @@ class DOEMSManualPhysicalExecution:
                 "reason": f"Plan {slot} wordt fysiek voorbereid",
                 "slot": slot,
                 "action": action,
+                "origin": origin,
+                "planner_identity": planner_identity,
+                "planner_signature": planner_signature,
                 "power_w": power_w,
                 "target_soc": target_soc,
                 "max_runtime_h": max_runtime_h,
@@ -393,10 +437,11 @@ class DOEMSManualPhysicalExecution:
                 armed_provider=armed_provider,
             )
 
-            # Refresh the copied Safety Guard / Action Controller only after the
-            # battery has entered third_party_control, matching the proven Anker
-            # manual execution sequence.
-            await refresh("manual_physical_post_mode_revalidation")
+            # Re-evaluate the existing safety chain only after the battery has
+            # entered third_party_control. Manual actions keep the proven legacy
+            # Safety/Action Controller check. Automatic Plan72 actions must pass
+            # the existing automatic gate again with the same frozen identity.
+            await refresh("physical_post_mode_revalidation")
             live_snapshot = snapshot_provider()
             if not armed_provider():
                 raise HomeAssistantError("DOEMS Automatic Execution werd uitgezet")
@@ -404,24 +449,58 @@ class DOEMSManualPhysicalExecution:
                 raise HomeAssistantError("Scheduler is niet langer startklaar")
             if live_snapshot.get("scheduler_selected_slot") != slot:
                 raise HomeAssistantError("Geselecteerd planslot wijzigde tijdens fysieke arming")
-            if live_snapshot.get("legacy_safety_safe") is not True:
-                raise HomeAssistantError(
-                    f"Safety Guard blokkeert na mode-switch: "
-                    f"{live_snapshot.get('legacy_safety_reason') or 'onbekend'}"
-                )
-            if live_snapshot.get("controller_ready") is not True:
-                raise HomeAssistantError(
-                    f"Action Controller niet gereed na mode-switch: "
-                    f"{live_snapshot.get('controller_reason') or 'onbekend'}"
-                )
-            if live_snapshot.get("controller_action") != action:
-                raise HomeAssistantError("Action Controller wijzigde richting tijdens arming")
 
             live_plan = self.plan_store.get_plan(slot)
             if str(live_plan.get("lifecycle_status") or "").lower() != "pending":
                 raise HomeAssistantError("Planslot is niet langer pending")
             if live_plan.get("action") != action:
                 raise HomeAssistantError("Planslotactie wijzigde tijdens fysieke arming")
+            if str(live_plan.get("origin") or "manual") != origin:
+                raise HomeAssistantError("Planslot-origin wijzigde tijdens fysieke arming")
+
+            if origin == "automatic_72h_planner":
+                if live_snapshot.get("auto_execution_gate_status") != "armed_ready":
+                    raise HomeAssistantError(
+                        f"Automatic gate blokkeert na mode-switch: "
+                        f"{live_snapshot.get('auto_execution_gate_status') or 'onbekend'}"
+                    )
+                if live_snapshot.get("auto_execution_gate_execution_permitted") is not True:
+                    raise HomeAssistantError("Automatic gate geeft na mode-switch geen uitvoering vrij")
+                if live_snapshot.get("auto_execution_gate_selected_slot") != slot:
+                    raise HomeAssistantError("Automatic gate-slot wijzigde tijdens arming")
+                if live_snapshot.get("auto_execution_gate_planner_identity") != planner_identity:
+                    raise HomeAssistantError("Automatic planner_identity wijzigde tijdens arming")
+                if live_snapshot.get("prestart_signature_match") is not True:
+                    raise HomeAssistantError("Automatic planner_signature wijzigde tijdens arming")
+                if live_snapshot.get("auto_execution_gate_action") != action:
+                    raise HomeAssistantError("Automatic gate-action wijzigde tijdens arming")
+                try:
+                    gate_power = int(float(live_snapshot.get("auto_execution_gate_power_w") or 0))
+                    gate_target = float(live_snapshot.get("auto_execution_gate_target_soc") or 0)
+                    gate_runtime = float(live_snapshot.get("auto_execution_gate_max_runtime_h") or 0)
+                except (TypeError, ValueError) as err:
+                    raise HomeAssistantError(
+                        "Automatic gate bevat na mode-switch ongeldige fysieke waarden"
+                    ) from err
+                if gate_power != power_w:
+                    raise HomeAssistantError("Automatic gate-vermogen wijzigde tijdens arming")
+                if abs(gate_target - target_soc) > 0.001:
+                    raise HomeAssistantError("Automatic gate-doel-SOC wijzigde tijdens arming")
+                if abs(gate_runtime - max_runtime_h) > 0.0001:
+                    raise HomeAssistantError("Automatic gate-looptijd wijzigde tijdens arming")
+            else:
+                if live_snapshot.get("legacy_safety_safe") is not True:
+                    raise HomeAssistantError(
+                        f"Safety Guard blokkeert na mode-switch: "
+                        f"{live_snapshot.get('legacy_safety_reason') or 'onbekend'}"
+                    )
+                if live_snapshot.get("controller_ready") is not True:
+                    raise HomeAssistantError(
+                        f"Action Controller niet gereed na mode-switch: "
+                        f"{live_snapshot.get('controller_reason') or 'onbekend'}"
+                    )
+                if live_snapshot.get("controller_action") != action:
+                    raise HomeAssistantError("Action Controller wijzigde richting tijdens arming")
 
             current_soc = self._read_soc()
             if current_soc is None:
@@ -456,11 +535,14 @@ class DOEMSManualPhysicalExecution:
                 }
             )
             await self._async_save()
-            await self.plan_store.async_mark_lifecycle(
-                slot, "actief", "step15a_physical_execution_running"
+            lifecycle_reason = (
+                "beta2_automatic_plan72_physical_execution_running"
+                if origin == "automatic_72h_planner"
+                else "step15a_physical_execution_running"
             )
+            await self.plan_store.async_mark_lifecycle(slot, "actief", lifecycle_reason)
             self._monitor_task = self.hass.async_create_task(
-                self._monitor_loop(), "DOEMS Step15A manual physical execution"
+                self._monitor_loop(), "DOEMS guarded physical execution"
             )
             return True
         except Exception as err:

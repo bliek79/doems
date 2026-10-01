@@ -59,7 +59,7 @@ def test_step12_3_automatic_preview_stays_non_actuating_after_step15a() -> None:
     execution = _read("ems_execution.py")
     physical = _read("ems_manual_physical_execution.py")
     assert '"automatic_execution_armed": self._automatic_execution_armed' in runtime
-    assert '"automatic_planner_physical_execution_enabled": False' in runtime
+    assert '"automatic_planner_physical_execution_enabled": True' in runtime
     assert ".services.async_call(" not in execution
     assert '"service_calls_performed": False' in execution
     assert '"physical_execution_authority": False' in execution

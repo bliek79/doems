@@ -186,11 +186,10 @@ def test_step12_4_source_is_non_actuating_and_switch_is_fail_safe_off() -> None:
 
     assert "self._automatic_execution_armed = False" in runtime_text
     assert "RestoreEntity" not in switch_text
-    # Step 15A reuses this fail-safe arm for a separate manual scheduled
-    # physical path; the Step 12.4 automatic planner gate itself stays
-    # non-actuating and is still covered by the assertions above.
+    # Beta phase 2 reuses the same fail-safe arm and proven physical writer.
+    # The Step 12.4 gate itself remains non-actuating; it only grants permission.
     assert '"physical_execution_enabled": True' in switch_text
-    assert '"automatic_planner_execution_enabled": False' in switch_text
+    assert '"automatic_planner_execution_enabled": True' in switch_text
     assert '"restart_policy": "fail_safe_off_no_resume"' in switch_text
     assert "async_set_automatic_execution_armed(True)" in switch_text
     assert "async_set_automatic_execution_armed(False)" in switch_text
@@ -206,8 +205,10 @@ def test_step12_4_automatic_path_remains_non_actuating_after_step15a() -> None:
     assert '"physical_execution_authority": False' in execution
     assert ".services.async_call(" not in execution
 
-    # Physical writes exist only in the separately scoped Step 15A manual
-    # executor; automatic_72h_planner is explicitly excluded there.
+    # Physical writes still exist only in the single proven Step-15 physical
+    # writer. Beta phase 2 lets automatic_72h_planner reach that writer only
+    # after the non-actuating gate is armed_ready/execution_permitted.
     assert ".services.async_call(" in manual_physical
     assert "automatic_72h_planner" in manual_physical
-    assert "Step 15A staat alleen handmatig geplande acties fysiek toe" in manual_physical
+    assert 'snapshot.get("auto_execution_gate_status") != "armed_ready"' in manual_physical
+    assert 'snapshot.get("auto_execution_gate_execution_permitted") is not True' in manual_physical

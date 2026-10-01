@@ -1,0 +1,46 @@
+type: vertical-stack
+cards:
+  - type: entities
+    title: DOEMS - Beta fase 2 cutover
+    show_header_toggle: false
+    entities:
+      - entity: switch.doems_automatic_execution
+        name: Automatic Execution
+      - entity: sensor.doems_ems
+        name: DOEMS EMS
+
+  - type: markdown
+    content: >-
+      {% set e = 'sensor.doems_ems' %}
+      {% set selected = state_attr(e, 'scheduler_selected_slot') %}
+      {% set slot = state_attr(e, 'plan_slot_' ~ selected) if selected else none %}
+      {% set selected_origin = slot.origin if slot is mapping and 'origin' in slot else none %}
+      **Veilige uitgangspositie**
+
+      - Arm: **{{ states('switch.doems_automatic_execution') | upper }}**
+      - Batterijmodus: **{{ state_attr(e, 'control_path_operating_mode') | default('onbekend', true) }}**
+      - Control path: **{{ 'READY' if state_attr(e, 'control_path_ready') else 'NIET READY' }}**
+
+      **Scheduler-selectie**
+
+      - Slot: **{{ selected | default('-', true) }}**
+      - Origin: **{{ selected_origin | default('-', true) }}**
+      - Actie: **{{ state_attr(e, 'scheduler_selected_action') | default('-', true) }}**
+      - Start: **{{ state_attr(e, 'scheduler_selected_start_time') | default('-', true) }}**
+      - Automatic gate: **{{ state_attr(e, 'auto_execution_gate_status') | default('-', true) }}**
+      - Gate permitted: **{{ state_attr(e, 'auto_execution_gate_execution_permitted') | default(false, true) }}**
+
+      **Fysieke uitvoering**
+
+      - Origin: **{{ state_attr(e, 'physical_execution_origin') | default('-', true) }}**
+      - Status: **{{ state_attr(e, 'physical_execution_status') | default('-', true) }}**
+      - Actie: **{{ state_attr(e, 'physical_execution_action') | default('-', true) }}**
+      - Vermogen: **{{ state_attr(e, 'physical_execution_power_w') | default('-', true) }} W**
+      - Doel-SOC: **{{ state_attr(e, 'physical_execution_target_soc') | default('-', true) }} %**
+      - Richting: **{{ state_attr(e, 'control_path_action_direction') | default('-', true) }}**
+      - Setpoint: **{{ state_attr(e, 'control_path_power_setpoint') | default('-', true) }} W**
+      - Safe return: **{{ state_attr(e, 'physical_execution_safe_return_performed') | default(false, true) }}**
+
+      **Cutoverregel:** arm alleen bij één natuurlijke
+      `origin=automatic_72h_planner` selectie, volledige readiness,
+      Anker EMS OFF/quiescent en batterij in `self_consumption`.

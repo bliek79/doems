@@ -10,7 +10,7 @@ def _read(name: str) -> str:
     return (INTEGRATION / name).read_text(encoding="utf-8")
 
 
-def test_alpha26_step15a_has_one_explicit_manual_physical_executor() -> None:
+def test_step15a_proven_physical_executor_is_still_the_single_writer() -> None:
     physical = _read("ems_manual_physical_execution.py")
     runtime = _read("ems_runtime.py")
     switch = _read("switch.py")
@@ -18,18 +18,15 @@ def test_alpha26_step15a_has_one_explicit_manual_physical_executor() -> None:
     assert "class DOEMSManualPhysicalExecution" in physical
     assert ".services.async_call(" in physical
     assert '"physical_execution_enabled": True' in switch
-    assert '"automatic_planner_execution_enabled": False' in switch
     assert "self.manual_physical_execution = DOEMSManualPhysicalExecution(" in runtime
     assert "self._schedule_manual_physical_start()" in runtime
 
 
-def test_alpha26_physical_path_is_manual_scheduled_only() -> None:
+def test_step15a_manual_scheduled_route_remains_supported() -> None:
     physical = _read("ems_manual_physical_execution.py")
     runtime = _read("ems_runtime.py")
 
-    assert "Step 15A staat alleen handmatig geplande acties fysiek toe" in physical
-    assert '== "automatic_72h_planner"' in physical
-    assert '== "automatic_72h_planner"' in runtime
+    assert 'origin not in {"manual", "automatic_72h_planner"}' in physical
     assert "scheduler_selected_execution_mode" in runtime
     assert '"gepland"' in runtime
     assert 'detail.get("action") not in {"laden", "ontladen"}' in runtime
@@ -74,7 +71,7 @@ def test_alpha26_requires_device_status_for_copied_manual_safety_guard() -> None
     assert 'data.get("device_status")' in safety
 
 
-def test_alpha26_automatic_plan72_executor_remains_non_actuating() -> None:
+def test_automatic_shadow_controller_and_gate_remain_non_actuating() -> None:
     execution = _read("ems_execution.py")
     gate = _read("ems_automatic_execution_gate.py")
 

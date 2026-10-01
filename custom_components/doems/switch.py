@@ -87,11 +87,11 @@ class DOEMSAwayScheduleEnabledSwitch(SwitchEntity):
 
 
 class DOEMSAutomaticExecutionSwitch(SwitchEntity):
-    """Fail-safe physical arm for Step 15A manual scheduled execution.
+    """Fail-safe physical arm for guarded manual and automatic Plan72 execution.
 
-    The switch is intentionally not restored after reload/restart. In Step 15A
-    it can physically execute only a Scheduler-selected manual planned slot;
-    automatic Plan72 actions remain non-actuating.
+    The switch is intentionally not restored after reload/restart. Beta phase 2
+    opens only a Scheduler-selected automatic_72h_planner action that is already
+    armed_ready through the existing automatic safety gate.
     """
 
     _attr_should_poll = False
@@ -120,9 +120,9 @@ class DOEMSAutomaticExecutionSwitch(SwitchEntity):
     def extra_state_attributes(self) -> dict[str, object]:
         data = self.runtime.snapshot()
         return {
-            "mode": "live_guarded_manual",
+            "mode": "live_guarded_phase2",
             "manual_scheduled_execution_enabled": True,
-            "automatic_planner_execution_enabled": False,
+            "automatic_planner_execution_enabled": True,
             "manual_execution_status": data.get("manual_physical_execution_status"),
             "manual_execution_reason": data.get("manual_physical_execution_reason"),
             "manual_execution_active": data.get(
@@ -133,6 +133,11 @@ class DOEMSAutomaticExecutionSwitch(SwitchEntity):
             ),
             "selected_slot": data.get("scheduler_selected_slot"),
             "selected_action": data.get("scheduler_selected_action"),
+            "selected_origin": data.get("physical_execution_origin"),
+            "physical_execution_status": data.get("physical_execution_status"),
+            "physical_execution_safe_return_performed": data.get(
+                "physical_execution_safe_return_performed", False
+            ),
             "service_calls_performed": data.get("service_calls_performed", False),
             "physical_execution_enabled": True,
             "physical_execution_authority": bool(self.runtime.automatic_execution_armed),

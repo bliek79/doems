@@ -68,7 +68,7 @@ def test_plan72_observability_does_not_gain_physical_authority() -> None:
     assert ".services.async_call(" not in sensor
     assert ".services.async_call(" not in execution
     assert '"automatic_execution_armed": self._automatic_execution_armed' in runtime
-    assert '"automatic_planner_physical_execution_enabled": False' in runtime
+    assert '"automatic_planner_physical_execution_enabled": True' in runtime
     assert '"service_calls_performed": False' in execution
     assert '"physical_execution_authority": False' in execution
 
