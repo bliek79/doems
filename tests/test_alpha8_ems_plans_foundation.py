@@ -43,7 +43,7 @@ def test_alpha8_runtime_independence_is_carried_forward_into_step15a() -> None:
     assert "run_planner_worker" in runtime
     assert "ems_multirate" in runtime
     assert '"automatic_execution_armed": self._automatic_execution_armed' in runtime
-    assert '"automatic_planner_physical_execution_enabled": False' in runtime
+    assert '"automatic_planner_physical_execution_enabled": True' in runtime
     assert ".services.async_call(" not in runtime
     assert ".services.async_call(" in physical
     assert "automatic_72h_planner" in physical
