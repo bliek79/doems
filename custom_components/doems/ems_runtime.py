@@ -158,7 +158,7 @@ class DOEMSEMSRuntime:
         return self._automatic_execution_armed
 
     async def async_set_automatic_execution_armed(self, armed: bool) -> None:
-        """Set the fail-safe physical arm for Step 15A manual scheduled actions."""
+        """Set the fail-safe physical arm for guarded manual/Plan72 execution."""
         self._automatic_execution_armed = bool(armed)
         if not self._automatic_execution_armed:
             if (
@@ -1016,7 +1016,12 @@ class DOEMSEMSRuntime:
         return result
 
     def _schedule_manual_physical_start(self) -> None:
-        """Auto-start only a due manual planned slot while the explicit arm is ON."""
+        """Start one due guarded Scheduler action while the explicit arm is ON.
+
+        The historic method name is retained for storage/API stability until the
+        later cleanup phase. Beta phase 2 opens automatic_72h_planner only when
+        the existing automatic execution gate is armed_ready and permitted.
+        """
         if self._shutdown or not self._automatic_execution_armed:
             return
         if self.manual_physical_execution.busy:
@@ -1035,8 +1040,24 @@ class DOEMSEMSRuntime:
         slot = scheduler.get("scheduler_selected_slot")
         slots = scheduler.get("scheduler_slots") or {}
         detail = slots.get(slot) or slots.get(str(slot)) or {}
-        if str(detail.get("origin") or "manual") == "automatic_72h_planner":
-            # Step 15A intentionally leaves Plan72 physical execution closed.
+        origin = str(detail.get("origin") or "manual")
+        if origin == "automatic_72h_planner":
+            gate = self.automatic_execution_gate_result or {}
+            if gate.get("auto_execution_gate_status") != "armed_ready":
+                return
+            if gate.get("auto_execution_gate_execution_permitted") is not True:
+                return
+            if gate.get("auto_execution_gate_selected_slot") != slot:
+                return
+            if gate.get("auto_execution_gate_planner_identity") != detail.get(
+                "planner_identity"
+            ):
+                return
+            if (self.prestart_result or {}).get(
+                "auto_prestart_current_signature_match"
+            ) is not True:
+                return
+        elif origin != "manual":
             return
         if detail.get("action") not in {"laden", "ontladen"}:
             return
@@ -1444,7 +1465,7 @@ class DOEMSEMSRuntime:
             ),
             "execution_controller_invoked": bool(manual_physical.get("active")),
             "execution_mode": (
-                "live_guarded_manual"
+                "live_guarded_phase2"
                 if self._automatic_execution_armed
                 else "validation"
             ),
@@ -1462,7 +1483,22 @@ class DOEMSEMSRuntime:
                 "safe_return_performed", False
             ),
             "manual_physical_write_count": manual_physical.get("write_count", 0),
-            "automatic_planner_physical_execution_enabled": False,
+            "physical_execution_origin": manual_physical.get("origin"),
+            "physical_execution_planner_identity": manual_physical.get("planner_identity"),
+            "physical_execution_planner_signature": manual_physical.get("planner_signature"),
+            "physical_execution_active": bool(manual_physical.get("active")),
+            "physical_execution_busy": bool(manual_physical.get("busy")),
+            "physical_execution_status": manual_physical.get("status"),
+            "physical_execution_reason": manual_physical.get("reason"),
+            "physical_execution_slot": manual_physical.get("slot"),
+            "physical_execution_action": manual_physical.get("action"),
+            "physical_execution_power_w": manual_physical.get("power_w"),
+            "physical_execution_target_soc": manual_physical.get("target_soc"),
+            "physical_execution_safe_return_performed": manual_physical.get(
+                "safe_return_performed", False
+            ),
+            "physical_execution_write_count": manual_physical.get("write_count", 0),
+            "automatic_planner_physical_execution_enabled": True,
             "service_calls_performed": bool(
                 manual_physical.get("service_calls_performed", False)
             ),
