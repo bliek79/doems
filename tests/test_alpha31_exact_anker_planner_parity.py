@@ -61,7 +61,7 @@ def _input_result(*, soc: float = 10.0) -> tuple[dict, float]:
     for index in range(72):
         start = START + timedelta(hours=index)
         home = 0.03
-        solar = 0.0
+        solar = 0.50 if index in {24, 25} else 0.0
         import_price = 0.30
         export_price = 0.30
         if index == 0:
