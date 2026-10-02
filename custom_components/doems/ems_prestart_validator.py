@@ -6,16 +6,13 @@ from typing import Any
 
 from homeassistant.util import dt as dt_util
 
-from .const import (
-    DEFAULT_MAX_SOC_PERCENT as MAX_SOC_PERCENT,
-    DEFAULT_TECHNICAL_MIN_SOC_PERCENT as MIN_SOC_PERCENT,
-)
+from .const import MAX_SOC_PERCENT, MIN_SOC_PERCENT
 
 
 class DOEMSPreStartValidator:
     """Validate and diagnose automatic plans immediately before execution.
 
-    Physical automatic execution remains disabled in DOEMS Step 11. This validator separates the
+    Physical automatic execution remains disabled. This validator separates the
     continuous early diagnostic from the authoritative Scheduler-ready pre-start
     gate. Live-SOC direction and execution-reserve checks are informative while
     a plan is still far away and become hard blockers only close to start.
