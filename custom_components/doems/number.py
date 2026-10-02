@@ -47,7 +47,7 @@ class PlanNumberDefinition:
 
 DEFINITIONS = (
     PlanNumberDefinition("power_w", "power", "Power", 100, 3500, 100, UnitOfPower.WATT),
-    PlanNumberDefinition("target_soc", "target_soc", "Target SOC", 0, 100, 1, PERCENTAGE),
+    PlanNumberDefinition("target_soc", "target_soc", "Target SOC", 5, 100, 1, PERCENTAGE),
     PlanNumberDefinition("max_runtime_h", "max_runtime", "Maximum Runtime", 0.25, 12, 0.25, UnitOfTime.HOURS),
     PlanNumberDefinition("max_start_delay_min", "max_start_delay", "Maximum Start Delay", 1, 120, 1, UnitOfTime.MINUTES),
 )
@@ -101,14 +101,10 @@ class DOEMSPlanNumber(NumberEntity):
 
     @property
     def native_min_value(self) -> float:
-        if self.definition.field == "target_soc":
-            return float(self.runtime.settings.technical_min_soc_percent)
         return float(self._attr_native_min_value)
 
     @property
     def native_max_value(self) -> float:
-        if self.definition.field == "target_soc":
-            return float(self.runtime.settings.max_soc_percent)
         if self.definition.field == "power_w":
             action = self.plan_store.get_value(self.slot, "action")
             if action == "ontladen":

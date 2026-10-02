@@ -141,6 +141,4 @@ class DOEMSPlanStartTime(DateTimeEntity):
         return parsed
 
     async def async_set_value(self, value: datetime) -> None:
-        if value.tzinfo is None:
-            raise ValueError("DOEMS plan start time must be timezone-aware")
         await self.plan_store.async_set_value(self.slot, "start_time", value)
