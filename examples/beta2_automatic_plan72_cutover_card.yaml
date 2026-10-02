@@ -33,6 +33,9 @@ cards:
       - Gate permitted: **{{ state_attr(e, 'auto_execution_gate_execution_permitted') | default(false, true) }}**
       - Gate blockers: **{{ state_attr(e, 'auto_execution_gate_blockers') | default([], true) }}**
       - Gate warnings: **{{ state_attr(e, 'auto_execution_gate_warnings') | default([], true) }}**
+      - Plan72 safety charge: **{{ states('sensor.doems_ems_plan72_grid_safety_charge') }} kWh**
+      - Plan72 trade charge: **{{ states('sensor.doems_ems_plan72_grid_trade_charge') }} kWh**
+      - Plan72 trade discharge: **{{ states('sensor.doems_ems_plan72_grid_trade_discharge') }} kWh**
 
       **Fysieke uitvoering**
 
