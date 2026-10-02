@@ -19,8 +19,12 @@ jobs:
           python-version: "3.13"
       - run: python -m pip install --upgrade pip pytest
       - run: python -m compileall -q custom_components/doems
-      - name: Alpha31 exact Anker planner parity regression
-        run: pytest -q tests/test_alpha31_exact_anker_planner_parity.py
+      - name: Alpha31 exact adapter production path
+        run: pytest -q tests/test_alpha31_exact_anker_planner_parity.py::test_alpha31_production_worker_is_exact_adapter_path
+      - name: Alpha31 safety plus trade source parity
+        run: pytest -q tests/test_alpha31_exact_anker_planner_parity.py::test_alpha31_exact_source_allows_safety_and_profitable_trade_in_same_plan
+      - name: Alpha31 no DOEMS policy override
+        run: pytest -q tests/test_alpha31_exact_anker_planner_parity.py::test_alpha31_production_multirate_does_not_import_doems_policy_override
       - name: Version and carried-forward contract suite
         run: pytest -q tests/test_alpha5_1_hotfix_contract.py tests/test_alpha5_2_status_hotfix_contract.py tests/test_alpha6_solar_p31_release_contract.py tests/test_alpha7_prices_release_contract.py tests/test_energy_forecast_contract.py tests/test_foundation_contract.py
       - name: Alpha21 runtime regression
