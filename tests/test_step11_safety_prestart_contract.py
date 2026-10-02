@@ -8,8 +8,8 @@ def test_step11_prestart_and_safety_modules_are_alpha76_source_translations() ->
     pre=_read("ems_prestart_validator.py"); safety=_read("ems_safety_guard.py")
     assert "class DOEMSPreStartValidator" in pre
     assert "class DOEMSSafetyGuard" in safety
-    assert "5 <= target_soc <= 100" in pre
-    assert "5 <= target_soc <= 100" in safety
+    assert "MIN_SOC_PERCENT <= target_soc <= MAX_SOC_PERCENT" in pre
+    assert "MIN_SOC_PERCENT <= target_soc <= MAX_SOC_PERCENT" in safety
     assert ".services.async_call(" not in pre
     assert ".services.async_call(" not in safety
 
