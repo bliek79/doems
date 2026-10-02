@@ -80,9 +80,6 @@ def run_energy_need(*, input_result: dict[str, Any], settings: EMSSettings, soc_
         forecast_from_input(input_result),
         soc_percent,
         settings.software_reserve_percent,
-        battery_capacity_kwh=settings.battery_capacity_kwh,
-        technical_min_soc_percent=settings.technical_min_soc_percent,
-        max_soc_percent=settings.max_soc_percent,
         now=reference,
     )
 
@@ -96,9 +93,6 @@ def run_preview(*, input_result: dict[str, Any], settings: EMSSettings, energy_n
         settings.discharge_efficiency_percent,
         settings.minimum_trade_margin_eur_per_kwh,
         max_charge_power_w=settings.max_charge_power_w,
-        battery_capacity_kwh=settings.battery_capacity_kwh,
-        technical_min_soc_percent=settings.technical_min_soc_percent,
-        max_soc_percent=settings.max_soc_percent,
         now=reference,
     )
 
@@ -114,9 +108,6 @@ def run_plan72(*, input_result: dict[str, Any], settings: EMSSettings, energy_ne
         execution_buffer_percent=EXECUTION_BUFFER_PERCENT,
         max_charge_power_w=settings.max_charge_power_w,
         max_discharge_power_w=settings.max_discharge_power_w,
-        battery_capacity_kwh=settings.battery_capacity_kwh,
-        technical_min_soc_percent=settings.technical_min_soc_percent,
-        max_soc_percent=settings.max_soc_percent,
         now=reference,
     )
 
