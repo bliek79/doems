@@ -323,7 +323,7 @@ jobs:
           grep -F '"execution_store_key": f"{DOMAIN}.{self.entry.entry_id}.execution"' custom_components/doems/ems_runtime.py
           test "$(find custom_components/doems -type f -iname '*sha*dow*' | wc -l)" -eq 0
 
-  publish-alpha29:
+  publish-alpha30:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
