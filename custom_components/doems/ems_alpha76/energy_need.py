@@ -35,9 +35,6 @@ def build_energy_need_analysis(
     forecast: list[dict[str, Any]],
     soc: float | None,
     safety_reserve_percent: float,
-    battery_capacity_kwh: float = DEFAULT_BATTERY_CAPACITY_KWH,
-    technical_min_soc_percent: float = MIN_SOC_PERCENT,
-    max_soc_percent: float = 100.0,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Build an observational energy balance until usable solar returns.
@@ -48,10 +45,7 @@ def build_energy_need_analysis(
     """
     now_utc = (now or dt_util.utcnow()).astimezone(dt_util.UTC)
     reserve_percent = max(0.0, min(30.0, float(safety_reserve_percent)))
-    capacity_kwh = max(0.1, float(battery_capacity_kwh))
-    min_soc_percent = max(0.0, min(100.0, float(technical_min_soc_percent)))
-    max_soc_limit = max(min_soc_percent, min(100.0, float(max_soc_percent)))
-    reserve_kwh = capacity_kwh * reserve_percent / 100.0
+    reserve_kwh = DEFAULT_BATTERY_CAPACITY_KWH * reserve_percent / 100.0
 
     rows: list[dict[str, Any]] = []
     for raw in forecast:
@@ -116,8 +110,8 @@ def build_energy_need_analysis(
 
     available_battery_kwh: float | None = None
     if soc is not None:
-        usable_soc = max(0.0, min(max_soc_limit, float(soc)) - min_soc_percent)
-        available_battery_kwh = capacity_kwh * usable_soc / 100.0
+        usable_soc = max(0.0, min(100.0, float(soc)) - MIN_SOC_PERCENT)
+        available_battery_kwh = DEFAULT_BATTERY_CAPACITY_KWH * usable_soc / 100.0
 
     required_including_reserve = net_need_kwh + reserve_kwh
     additional_grid_charge_kwh: float | None = None
@@ -171,8 +165,8 @@ def build_energy_need_analysis(
             else None
         ),
         "energy_need_contributing_hours": round(contributing_hours, 2),
-        "energy_need_battery_capacity_kwh": capacity_kwh,
-        "energy_need_min_soc_percent": min_soc_percent,
+        "energy_need_battery_capacity_kwh": DEFAULT_BATTERY_CAPACITY_KWH,
+        "energy_need_min_soc_percent": MIN_SOC_PERCENT,
         "energy_need_usable_solar_rule": (
             "eerste van twee opeenvolgende forecasturen waarin solar >= woningverbruik"
         ),
