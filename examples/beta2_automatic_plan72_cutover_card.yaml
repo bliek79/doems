@@ -28,7 +28,11 @@ cards:
       - Actie: **{{ state_attr(e, 'scheduler_selected_action') | default('-', true) }}**
       - Start: **{{ state_attr(e, 'scheduler_selected_start_time') | default('-', true) }}**
       - Automatic gate: **{{ state_attr(e, 'auto_execution_gate_status') | default('-', true) }}**
+      - Signature match: **{{ state_attr(e, 'prestart_signature_match') | default(false, true) }}**
+      - Gate technical ready: **{{ state_attr(e, 'auto_execution_gate_technical_ready') | default(false, true) }}**
       - Gate permitted: **{{ state_attr(e, 'auto_execution_gate_execution_permitted') | default(false, true) }}**
+      - Gate blockers: **{{ state_attr(e, 'auto_execution_gate_blockers') | default([], true) }}**
+      - Gate warnings: **{{ state_attr(e, 'auto_execution_gate_warnings') | default([], true) }}**
 
       **Fysieke uitvoering**
 
@@ -42,5 +46,6 @@ cards:
       - Safe return: **{{ state_attr(e, 'physical_execution_safe_return_performed') | default(false, true) }}**
 
       **Cutoverregel:** arm alleen bij één natuurlijke
-      `origin=automatic_72h_planner` selectie, volledige readiness,
-      Anker EMS OFF/quiescent en batterij in `self_consumption`.
+      `origin=automatic_72h_planner` selectie, signature match `true`,
+      gate `ready_disarmed`, geen blockers, Anker EMS OFF/quiescent en
+      batterij in `self_consumption`.
