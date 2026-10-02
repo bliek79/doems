@@ -9,7 +9,7 @@ INTEGRATION = ROOT / "custom_components" / "doems"
 
 def _load_gate():
     path = INTEGRATION / "ems_automatic_execution_gate.py"
-    spec = importlib.util.spec_from_file_location("ems_automatic_execution_gate_alpha28", path)
+    spec = importlib.util.spec_from_file_location("ems_automatic_execution_gate_alpha29", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -17,16 +17,16 @@ def _load_gate():
 
 
 def _ready_data(signature_match: bool) -> dict:
-    identity = "laden|veiligheidsladen|2026-10-02T08:15:00+00:00|2026-10-02T09:15:00+00:00"
+    identity = "laden|veiligheidsladen|2026-10-02T09:30:00+00:00|2026-10-02T10:30:00+00:00"
     detail = {
         "origin": "automatic_72h_planner",
         "lifecycle_status": "pending",
         "planner_identity": identity,
-        "planner_signature": identity + "|8.1|0.17",
+        "planner_signature": identity + "|9.8|0.30",
         "action": "laden",
         "purpose": "veiligheidsladen",
-        "power_w": 180,
-        "target_soc": 8.1,
+        "power_w": 320,
+        "target_soc": 9.8,
         "max_runtime_h": 1.0,
         "price_sources": ["known"],
         "all_prices_known": True,
@@ -56,39 +56,37 @@ def _ready_data(signature_match: bool) -> dict:
     }
 
 
-def test_alpha28_signature_revision_blocks_disarmed_gate() -> None:
-    result = _load_gate().evaluate(_ready_data(False), armed=False)
-    assert result["auto_execution_gate_status"] == "blocked"
-    assert result["auto_execution_gate_technical_ready"] is False
-    assert result["auto_execution_gate_execution_permitted"] is False
-    assert "planner_revision_changed" in result["auto_execution_gate_blockers"]
-    assert "planner_revision_changed" not in result["auto_execution_gate_warnings"]
-
-
-def test_alpha28_signature_revision_blocks_even_when_user_armed() -> None:
-    result = _load_gate().evaluate(_ready_data(False), armed=True)
-    assert result["auto_execution_gate_status"] == "blocked"
-    assert result["auto_execution_gate_technical_ready"] is False
-    assert result["auto_execution_gate_execution_permitted"] is False
-
-
-def test_alpha28_matching_signature_preserves_phase2_ready_states() -> None:
+def test_alpha29_revision_signature_remains_warning_for_stable_identity() -> None:
     gate = _load_gate()
-    disarmed = gate.evaluate(_ready_data(True), armed=False)
+    disarmed = gate.evaluate(_ready_data(False), armed=False)
     assert disarmed["auto_execution_gate_status"] == "ready_disarmed"
     assert disarmed["auto_execution_gate_technical_ready"] is True
     assert disarmed["auto_execution_gate_execution_permitted"] is False
+    assert "planner_revision_changed" in disarmed["auto_execution_gate_warnings"]
+    assert "planner_revision_changed" not in disarmed["auto_execution_gate_blockers"]
 
-    armed = gate.evaluate(_ready_data(True), armed=True)
+    armed = gate.evaluate(_ready_data(False), armed=True)
     assert armed["auto_execution_gate_status"] == "armed_ready"
-    assert armed["auto_execution_gate_technical_ready"] is True
     assert armed["auto_execution_gate_execution_permitted"] is True
 
 
-def test_alpha28_keeps_runtime_and_physical_signature_fences() -> None:
+def test_alpha29_physical_path_does_not_require_rolling_signature_equality() -> None:
     runtime = (INTEGRATION / "ems_runtime.py").read_text(encoding="utf-8")
     physical = (INTEGRATION / "ems_manual_physical_execution.py").read_text(encoding="utf-8")
 
-    assert 'auto_prestart_current_signature_match' in runtime
-    assert 'prestart_signature_match' in physical
-    assert 'Automatic planner_signature is niet actueel/stabiel' in physical
+    assert 'auto_prestart_current_signature_match' not in runtime.split("def _schedule_manual_physical_start", 1)[1].split("async def", 1)[0]
+    assert 'snapshot.get("prestart_signature_match") is not True' not in physical
+    assert 'live_snapshot.get("prestart_signature_match") is not True' not in physical
+
+    for token in (
+        'snapshot.get("auto_execution_gate_status") != "armed_ready"',
+        'snapshot.get("auto_execution_gate_execution_permitted") is not True',
+        'snapshot.get("auto_execution_gate_selected_slot") != slot',
+        'snapshot.get("auto_execution_gate_planner_identity") != planner_identity',
+        'live_snapshot.get("auto_execution_gate_planner_identity") != planner_identity',
+        'live_snapshot.get("auto_execution_gate_action") != action',
+        "Automatic gate-vermogen wijzigde tijdens arming",
+        "Automatic gate-doel-SOC wijzigde tijdens arming",
+        "Automatic gate-looptijd wijzigde tijdens arming",
+    ):
+        assert token in physical

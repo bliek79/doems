@@ -1053,10 +1053,6 @@ class DOEMSEMSRuntime:
                 "planner_identity"
             ):
                 return
-            if (self.prestart_result or {}).get(
-                "auto_prestart_current_signature_match"
-            ) is not True:
-                return
         elif origin != "manual":
             return
         if detail.get("action") not in {"laden", "ontladen"}:
