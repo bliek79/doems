@@ -31,6 +31,7 @@ from .const import (
     VERSION,
 )
 from .ems_settings import EMSSettings
+from .ems_alpha76_surface import build_alpha76_sensors
 from .ems_runtime import DOEMSEMSRuntime
 from .ems_g5_live_parity_runtime import get_g5_live_parity_runtime
 from .ems_g5_live_parity_sensor import DOEMSG5LiveParitySensor
@@ -106,6 +107,7 @@ async def async_setup_entry(
                     entry,
                     get_g5_live_parity_runtime(ems_runtime),
                 ),
+                *build_alpha76_sensors(entry, ems_runtime),
             ]
         )
 
