@@ -7,6 +7,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
     CONF_INSTANCE_NAME,
@@ -86,20 +87,15 @@ class DOEMSAwayScheduleEnabledSwitch(SwitchEntity):
         self.async_write_ha_state()
 
 
-class DOEMSAutomaticExecutionSwitch(SwitchEntity):
-    """Fail-safe physical arm for guarded manual and automatic Plan72 execution.
-
-    The switch is intentionally not restored after reload/restart. Beta phase 2
-    opens only a Scheduler-selected automatic_72h_planner action that is already
-    armed_ready through the existing automatic safety gate.
-    """
+class DOEMSAutomaticExecutionSwitch(RestoreEntity, SwitchEntity):
+    """Frozen Alpha76 arm switch for automatic physical execution only."""
 
     _attr_should_poll = False
     _attr_has_entity_name = False
     _attr_name = "DOEMS Automatic Execution"
     _attr_unique_id = "doems_automatic_execution"
     _attr_suggested_object_id = "doems_automatic_execution"
-    _attr_icon = "mdi:battery-sync-outline"
+    _attr_icon = "mdi:robot"
 
     def __init__(self, entry: ConfigEntry, runtime: DOEMSEMSRuntime) -> None:
         self.runtime = runtime
@@ -110,43 +106,51 @@ class DOEMSAutomaticExecutionSwitch(SwitchEntity):
     def is_on(self) -> bool:
         return self.runtime.automatic_execution_armed
 
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        previous = await self.async_get_last_state()
+        # Exact Alpha76 migration/restore rule: only a previously saved
+        # live_guarded ON state may restore the automatic physical arm.
+        armed = bool(
+            previous is not None
+            and previous.state == "on"
+            and previous.attributes.get("mode") == "live_guarded"
+        )
+        await self.runtime.async_set_automatic_execution_armed(armed)
+        self._remove_listener = self.runtime.async_add_listener(self._handle_update)
+
     async def async_turn_on(self, **kwargs) -> None:
         await self.runtime.async_set_automatic_execution_armed(True)
 
     async def async_turn_off(self, **kwargs) -> None:
         await self.runtime.async_set_automatic_execution_armed(False)
+        execution = self.runtime.execution.data
+        if (
+            execution.get("active")
+            and execution.get("origin") == "automatic_72h_planner"
+        ):
+            await self.runtime.execution.async_stop(
+                "automatic_execution_disarmed", emergency=False
+            )
+        elif execution.get("auto_mode_switch_active"):
+            await self.runtime.execution.async_abort_automatic_arming(
+                "automatic_execution_disarmed"
+            )
 
     @property
     def extra_state_attributes(self) -> dict[str, object]:
-        data = self.runtime.snapshot()
+        data = self.runtime.data
         return {
-            "mode": "live_guarded_phase2",
-            "manual_scheduled_execution_enabled": True,
-            "automatic_planner_execution_enabled": True,
-            "manual_execution_status": data.get("manual_physical_execution_status"),
-            "manual_execution_reason": data.get("manual_physical_execution_reason"),
-            "manual_execution_active": data.get(
-                "manual_physical_execution_active", False
-            ),
-            "manual_execution_busy": data.get(
-                "manual_physical_execution_busy", False
-            ),
-            "selected_slot": data.get("scheduler_selected_slot"),
-            "selected_action": data.get("scheduler_selected_action"),
-            "selected_origin": data.get("physical_execution_origin"),
-            "physical_execution_status": data.get("physical_execution_status"),
-            "physical_execution_safe_return_performed": data.get(
-                "physical_execution_safe_return_performed", False
-            ),
-            "service_calls_performed": data.get("service_calls_performed", False),
+            "mode": "live_guarded",
+            "technical_ready": data.get("auto_shadow_technical_ready", False),
+            "execution_status": data.get("auto_shadow_status"),
+            "blockers": data.get("auto_shadow_blockers", []),
+            "warnings": data.get("auto_shadow_warnings", []),
             "physical_execution_enabled": True,
-            "physical_execution_authority": bool(self.runtime.automatic_execution_armed),
-            "restart_policy": "fail_safe_off_no_resume",
+            "execution_permitted": data.get(
+                "auto_shadow_execution_permitted", False
+            ),
         }
-
-    async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
-        self._remove_listener = self.runtime.async_add_listener(self._handle_update)
 
     async def async_will_remove_from_hass(self) -> None:
         if self._remove_listener is not None:
@@ -156,3 +160,4 @@ class DOEMSAutomaticExecutionSwitch(SwitchEntity):
     @callback
     def _handle_update(self) -> None:
         self.async_write_ha_state()
+
