@@ -17,7 +17,7 @@ def test_alpha76_scheduler_priority_and_fixed_soc_contract() -> None:
     assert "item.ready_since" in scheduler
     assert "item.slot" in scheduler
     assert '"scheduler_physical_control": False' in scheduler
-    assert "5 <= target_soc <= 100" in scheduler
+    assert "5 <= float(target_soc) <= 100" in scheduler
     assert "technical_min_soc_percent" not in scheduler
     assert "max_soc_percent" not in scheduler
 
