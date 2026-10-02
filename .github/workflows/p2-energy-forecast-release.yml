@@ -43,8 +43,20 @@ jobs:
         run: pytest -q tests/test_plan72_observability_parity.py
       - name: Prestart regression
         run: pytest -q tests/test_step11_safety_prestart_contract.py
-      - name: Step12-13 regression suite
-        run: pytest -q tests/test_step12_1_control_path_contract.py tests/test_step12_2_action_handoff_contract.py tests/test_step12_3_final_revalidation_mode_switch_preview.py tests/test_step12_4_automatic_execution_gate.py tests/test_step12_5_execution_controller.py tests/test_step12_6_restart_recovery_observability.py tests/test_step13_g5_frozen_live_parity.py
+      - name: Step12.1 control path regression
+        run: pytest -q tests/test_step12_1_control_path_contract.py
+      - name: Step12.2 action handoff regression
+        run: pytest -q tests/test_step12_2_action_handoff_contract.py
+      - name: Step12.3 revalidation regression
+        run: pytest -q tests/test_step12_3_final_revalidation_mode_switch_preview.py
+      - name: Step12.4 automatic gate regression
+        run: pytest -q tests/test_step12_4_automatic_execution_gate.py
+      - name: Step12.5 execution controller regression
+        run: pytest -q tests/test_step12_5_execution_controller.py
+      - name: Step12.6 restart recovery regression
+        run: pytest -q tests/test_step12_6_restart_recovery_observability.py
+      - name: Step13 G5 parity regression
+        run: pytest -q tests/test_step13_g5_frozen_live_parity.py
       - name: Forecast, prices and runtime regression suite
         run: pytest -q tests/test_alpha25_solar_array_performance.py tests/test_ems_config_validation.py tests/test_ems_settings_contract.py tests/test_presence_runtime_contract.py tests/test_prices_p4_contract.py tests/test_recorder_attribute_budget.py tests/test_solar_actual_quarter_validation.py tests/test_solar_forecast_model.py tests/test_solar_foundation_contract.py tests/test_solar_p31_runtime_contract.py tests/test_step5a_consumer_wiring_part1.py tests/test_step5a_forecast_diagnostics.py tests/test_step5a_prices_76h_window_fix.py
       - run: pytest -q
