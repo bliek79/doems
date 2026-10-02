@@ -27,8 +27,6 @@ ERR_SOC_RANGE_INVALID = "ems_soc_range_invalid"
 
 _NUMERIC_RULES: dict[str, tuple[Decimal, Decimal, Decimal, bool]] = {
     CONF_BATTERY_CAPACITY_KWH: (Decimal("1.0"), Decimal("30.0"), Decimal("0.1"), False),
-    CONF_TECHNICAL_MIN_SOC_PERCENT: (Decimal("0"), Decimal("30"), Decimal("1"), True),
-    CONF_MAX_SOC_PERCENT: (Decimal("50"), Decimal("100"), Decimal("1"), True),
     CONF_MAX_CHARGE_POWER_W: (Decimal("100"), Decimal("3500"), Decimal("100"), True),
     CONF_MAX_DISCHARGE_POWER_W: (Decimal("100"), Decimal("3500"), Decimal("100"), True),
     CONF_SOFTWARE_RESERVE_PERCENT: (Decimal("0"), Decimal("30"), Decimal("1"), False),
@@ -90,8 +88,6 @@ def validate_ems_field(key: str, value: Any) -> str | None:
 
 EMS_VALIDATED_FIELDS = (
     CONF_BATTERY_CAPACITY_KWH,
-    CONF_TECHNICAL_MIN_SOC_PERCENT,
-    CONF_MAX_SOC_PERCENT,
     CONF_MAX_CHARGE_POWER_W,
     CONF_MAX_DISCHARGE_POWER_W,
     CONF_SOFTWARE_RESERVE_PERCENT,
