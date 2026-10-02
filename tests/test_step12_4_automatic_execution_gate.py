@@ -94,19 +94,26 @@ def test_step12_4_ready_disarmed_then_armed_ready() -> None:
     assert armed["physical_execution_authority"] is False
 
 
-def test_step12_4_signature_is_warning_identity_change_is_blocker() -> None:
+def test_step12_4_signature_change_is_fail_closed_blocker() -> None:
     gate = _load_gate()
     data = _ready_data()
     data["auto_prestart_current_signature_match"] = False
-    warned = gate.evaluate(data, armed=False)
-    assert warned["auto_execution_gate_technical_ready"] is True
-    assert "planner_revision_changed" in warned["auto_execution_gate_warnings"]
+
+    disarmed = gate.evaluate(data, armed=False)
+    assert disarmed["auto_execution_gate_status"] == "blocked"
+    assert disarmed["auto_execution_gate_technical_ready"] is False
+    assert disarmed["auto_execution_gate_execution_permitted"] is False
+    assert "planner_revision_changed" in disarmed["auto_execution_gate_blockers"]
+    assert "planner_revision_changed" not in disarmed["auto_execution_gate_warnings"]
+
+    armed = gate.evaluate(data, armed=True)
+    assert armed["auto_execution_gate_status"] == "blocked"
+    assert armed["auto_execution_gate_technical_ready"] is False
+    assert armed["auto_execution_gate_execution_permitted"] is False
 
     data["auto_final_revalidation_planner_identity"] = "different"
-    blocked = gate.evaluate(data, armed=True)
-    assert blocked["auto_execution_gate_status"] == "blocked"
-    assert "planner_identity_changed" in blocked["auto_execution_gate_blockers"]
-    assert blocked["auto_execution_gate_execution_permitted"] is False
+    identity_blocked = gate.evaluate(data, armed=True)
+    assert "planner_identity_changed" in identity_blocked["auto_execution_gate_blockers"]
 
 
 def test_step12_4_manual_override_blocks() -> None:
