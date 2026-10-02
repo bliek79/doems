@@ -159,7 +159,8 @@ jobs:
           grep -F 'f"doems_ems_plan72_{suffix}"' custom_components/doems/sensor.py
           grep -F '"solar_valid": solar_valid' custom_components/doems/ems_input_contract.py
           grep -F '"solar_forecast_valid": bool(raw.get("solar_valid"))' custom_components/doems/ems_alpha76_adapter.py
-          grep -F '"auto_plan_72h_solar_horizon_status": solar_horizon_status' custom_components/doems/ems_alpha76/planner_72h.py
+          grep -F '"auto_plan_72h_solar_horizon_status": status' custom_components/doems/ems_alpha76_adapter.py
+          ! grep -F '"auto_plan_72h_solar_horizon_status"' custom_components/doems/ems_alpha76/planner_72h.py
           grep -F '"forecast_coverage_hours"' custom_components/doems/sensor.py
           grep -F '"hours_after_last_usable_solar"' custom_components/doems/sensor.py
           grep -F '"lookahead_limited_by_plan_end"' custom_components/doems/sensor.py
