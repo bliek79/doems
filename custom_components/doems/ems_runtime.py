@@ -1110,8 +1110,15 @@ class DOEMSEMSRuntime:
         """Publish the Alpha76 coordinator contract from native DOEMS sources."""
         physical = self.physical_test.data
         execution = self.execution.data
+        planner_bundle = self.planner_result or {}
+        energy_need = planner_bundle.get("energy_need") or {}
+        planner_preview = planner_bundle.get("planner_preview") or {}
+        input_result = self.input_result or {}
+        forecast_ready = input_result.get("status") == "ready"
         self._source_data_result = {
             **step11_data,
+            **energy_need,
+            **planner_preview,
             **plan72,
             **self.bridge_result,
             **self.scheduler_result,
@@ -1124,6 +1131,26 @@ class DOEMSEMSRuntime:
             **self.legacy_safety_result,
             **self.action_controller_result,
             "simulation_mode": True,
+            "forecast_ready": forecast_ready,
+            "forecast_status": input_result.get("status"),
+            "forecast_complete_hours": (
+                72 if forecast_ready else sum(
+                    1 for row in (input_result.get("rows") or [])
+                    if isinstance(row, dict) and row.get("fully_valid")
+                )
+            ),
+            "forecast_home_hours": len(input_result.get("rows") or []),
+            "forecast_solar_hours": sum(
+                1 for row in (input_result.get("rows") or [])
+                if isinstance(row, dict) and row.get("solar_valid")
+            ),
+            "forecast_price_hours": sum(
+                1 for row in (input_result.get("rows") or [])
+                if isinstance(row, dict) and row.get("import_price") is not None
+            ),
+            "forecast_missing_sources": (
+                [] if forecast_ready else ["doems_native_forecast_incomplete"]
+            ),
             "battery_capacity_kwh": self.settings.battery_capacity_kwh,
             "charge_efficiency_percent": self.settings.charge_efficiency_percent,
             "discharge_efficiency_percent": self.settings.discharge_efficiency_percent,
