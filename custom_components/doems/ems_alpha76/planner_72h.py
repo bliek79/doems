@@ -55,9 +55,6 @@ def build_72h_plan_preview(
     execution_buffer_percent: float = DEFAULT_AUTO_EXECUTION_BUFFER_PERCENT,
     max_charge_power_w: int = 3500,
     max_discharge_power_w: int = 3500,
-    battery_capacity_kwh: float = DEFAULT_BATTERY_CAPACITY_KWH,
-    technical_min_soc_percent: float = MIN_SOC_PERCENT,
-    max_soc_percent: float = 100.0,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Build a sequential 72-hour battery plan preview.
@@ -89,10 +86,6 @@ def build_72h_plan_preview(
         hour = _parse_time(raw.get("time"))
         if hour is None or hour < current_hour:
             continue
-        solar_forecast_value = _as_float(raw.get("solar_kwh"))
-        solar_forecast_valid = raw.get("solar_forecast_valid")
-        if solar_forecast_valid is None:
-            solar_forecast_valid = solar_forecast_value is not None
         rows.append(
             {
                 "time": hour,
@@ -102,8 +95,7 @@ def build_72h_plan_preview(
                 "price_source": raw.get("price_source"),
                 "import_price_source": raw.get("import_price_source") or raw.get("price_source"),
                 "export_price_source": raw.get("export_price_source") or raw.get("price_source"),
-                "solar_forecast_valid": bool(solar_forecast_valid),
-                "solar_kwh": max(0.0, solar_forecast_value or 0.0),
+                "solar_kwh": max(0.0, _as_float(raw.get("solar_kwh")) or 0.0),
                 "home_kwh": max(0.0, _as_float(raw.get("home_consumption_kwh")) or 0.0),
             }
         )
@@ -120,18 +112,15 @@ def build_72h_plan_preview(
             "auto_plan_72h_observational_only": True,
         }
 
-    capacity = max(0.1, float(battery_capacity_kwh))
-    min_soc_limit = max(0.0, min(100.0, float(technical_min_soc_percent)))
-    max_soc_limit = max(min_soc_limit, min(100.0, float(max_soc_percent)))
-    max_stored_kwh = capacity * max_soc_limit / 100.0
-    start_soc = max(min_soc_limit, min(max_soc_limit, float(soc)))
+    capacity = DEFAULT_BATTERY_CAPACITY_KWH
+    start_soc = max(float(MIN_SOC_PERCENT), min(100.0, float(soc)))
     stored_kwh = capacity * start_soc / 100.0
 
     reserve_kwh = _as_float(energy_need.get("energy_need_safety_reserve_kwh")) or 0.0
-    minimum_stored_kwh = capacity * min_soc_limit / 100.0
+    minimum_stored_kwh = capacity * float(MIN_SOC_PERCENT) / 100.0
     base_reserve_floor_kwh = minimum_stored_kwh + reserve_kwh
     base_reserve_floor_kwh = min(
-        max_stored_kwh,
+        capacity,
         max(minimum_stored_kwh, base_reserve_floor_kwh),
     )
     execution_buffer_kwh = capacity * execution_buffer_percent / 100.0
@@ -182,7 +171,7 @@ def build_72h_plan_preview(
 
         stored_need_kwh = net_home_need_kwh / discharge_eff
         floor_kwh = min(
-            max_stored_kwh,
+            capacity,
             max(
                 minimum_stored_kwh,
                 base_reserve_floor_kwh + stored_need_kwh,
@@ -194,7 +183,7 @@ def build_72h_plan_preview(
     def _execution_reserve(index: int) -> tuple[float, float, float, datetime | None]:
         """Return calculated reserve plus the alpha25 execution headroom."""
         floor_kwh, need_kwh, first_usable = _dynamic_reserve(index)
-        execution_floor_kwh = min(max_stored_kwh, floor_kwh + execution_buffer_kwh)
+        execution_floor_kwh = min(capacity, floor_kwh + execution_buffer_kwh)
         return execution_floor_kwh, floor_kwh, need_kwh, first_usable
 
     safety_hours_raw = planner_preview.get("planner_preview_safety_charge_hours") or []
@@ -323,12 +312,12 @@ def build_72h_plan_preview(
                     (sim_row["solar_kwh"] - sim_row["home_kwh"]) * frac,
                 )
                 estimated_stored = min(
-                    max_stored_kwh,
+                    capacity,
                     estimated_stored + solar_surplus * charge_eff,
                 )
                 key = sim_row["time"].isoformat()
                 if key in planned:
-                    estimated_stored = min(max_stored_kwh, estimated_stored + planned[key])
+                    estimated_stored = min(capacity, estimated_stored + planned[key])
 
             deficit_stored = max(0.0, required_floor_kwh - estimated_stored)
             if deficit_stored <= _MIN_ENERGY_KWH:
@@ -419,8 +408,8 @@ def build_72h_plan_preview(
         available_charge_input = charge_input_limit
 
         # 1) Solar surplus charges first.
-        if solar_surplus > _MIN_ENERGY_KWH and stored_kwh < max_stored_kwh - _MIN_ENERGY_KWH:
-            max_input_by_capacity = (max_stored_kwh - stored_kwh) / charge_eff
+        if solar_surplus > _MIN_ENERGY_KWH and stored_kwh < capacity - _MIN_ENERGY_KWH:
+            max_input_by_capacity = (capacity - stored_kwh) / charge_eff
             solar_charge_input = min(solar_surplus, available_charge_input, max_input_by_capacity)
             stored_added = solar_charge_input * charge_eff
             stored_kwh += stored_added
@@ -441,8 +430,8 @@ def build_72h_plan_preview(
             dynamic_safety_target_stored,
         )
 
-        if safety_target_stored > _MIN_ENERGY_KWH and stored_kwh < max_stored_kwh - _MIN_ENERGY_KWH:
-            max_input_by_capacity = (max_stored_kwh - stored_kwh) / charge_eff
+        if safety_target_stored > _MIN_ENERGY_KWH and stored_kwh < capacity - _MIN_ENERGY_KWH:
+            max_input_by_capacity = (capacity - stored_kwh) / charge_eff
             requested_input = safety_target_stored / charge_eff
             grid_safety_input = min(
                 requested_input,
@@ -459,9 +448,9 @@ def build_72h_plan_preview(
             and best_charge_time is not None
             and hour == best_charge_time
             and available_charge_input > _MIN_ENERGY_KWH
-            and stored_kwh < max_stored_kwh - _MIN_ENERGY_KWH
+            and stored_kwh < capacity - _MIN_ENERGY_KWH
         ):
-            free_capacity_stored = max(0.0, max_stored_kwh - stored_kwh)
+            free_capacity_stored = max(0.0, capacity - stored_kwh)
             solar_fill_stored = future_solar_charge_potential(index, best_discharge_time)
             solar_charge_delay_active = solar_fill_stored >= max(0.0, free_capacity_stored - _MIN_ENERGY_KWH)
 
@@ -500,7 +489,7 @@ def build_72h_plan_preview(
         # energy reserved for a later, more valuable trade discharge.
         operational_floor = execution_floor_end_kwh + trade_energy_reserved_kwh
         operational_floor = min(
-            max_stored_kwh,
+            capacity,
             max(execution_floor_end_kwh, operational_floor),
         )
 
@@ -568,8 +557,8 @@ def build_72h_plan_preview(
                 )
 
         stored_kwh = max(
-            minimum_stored_kwh,
-            min(max_stored_kwh, stored_kwh),
+            capacity * float(MIN_SOC_PERCENT) / 100.0,
+            min(capacity, stored_kwh),
         )
         soc_start = plan[-1]["soc_end"] if plan else start_soc
         soc_end = stored_kwh / capacity * 100.0
@@ -646,73 +635,6 @@ def build_72h_plan_preview(
 
     end_soc = plan[-1]["soc_end"] if plan else start_soc
 
-    # Solar-horizon observability is deliberately split into three concepts:
-    # forecast coverage, the next usable solar block from Plan72 start, and the
-    # natural end of the 72-hour look-ahead window. A valid night-time zero is
-    # forecast coverage; it is not missing solar data.
-    solar_forecast_coverage_hours = sum(
-        1 for row in rows if row.get("solar_forecast_valid")
-    )
-    solar_forecast_missing_hours = max(0, 72 - solar_forecast_coverage_hours)
-    solar_forecast_coverage_percent = round(
-        solar_forecast_coverage_hours / 72 * 100.0,
-        1,
-    )
-    solar_forecast_complete = solar_forecast_coverage_hours == 72
-
-    next_usable_solar = plan[0].get("next_usable_solar") if plan else None
-    next_usable_solar_dt = _parse_time(next_usable_solar)
-    hours_until_next_usable_solar = (
-        round(
-            max(
-                0.0,
-                (next_usable_solar_dt - rows[0]["time"]).total_seconds() / 3600.0,
-            ),
-            2,
-        )
-        if next_usable_solar_dt is not None and rows
-        else None
-    )
-    last_usable_solar = next(
-        (
-            item.get("next_usable_solar")
-            for item in reversed(plan)
-            if item.get("next_usable_solar") is not None
-        ),
-        None,
-    )
-    hours_after_last_usable_solar = sum(
-        1 for item in plan if not item.get("solar_horizon_complete", False)
-    )
-    lookahead_limited_by_plan_end = bool(
-        plan
-        and solar_forecast_complete
-        and hours_after_last_usable_solar > 0
-    )
-    next_usable_solar_available = next_usable_solar is not None
-
-    if solar_forecast_coverage_hours == 0 or not plan:
-        solar_horizon_status = "no_data"
-        solar_horizon_reason = "Geen bruikbare solarforecast beschikbaar voor Plan72."
-    elif not solar_forecast_complete:
-        solar_horizon_status = "limited"
-        solar_horizon_reason = (
-            f"Solarforecast dekt {solar_forecast_coverage_hours}/72 uur; "
-            f"{solar_forecast_missing_hours} uur ontbreekt."
-        )
-    elif not next_usable_solar_available:
-        solar_horizon_status = "limited"
-        solar_horizon_reason = (
-            "Solarforecast dekt 72 uur, maar vanaf Plan72-start is binnen "
-            "de huidige horizon geen bruikbaar zonneblok gevonden."
-        )
-    else:
-        solar_horizon_status = "ready"
-        solar_horizon_reason = (
-            "Solarforecast dekt 72 uur en het volgende bruikbare zonneblok "
-            "is vanaf Plan72-start beschikbaar."
-        )
-
     return {
         "auto_plan_72h_status": "ready",
         "auto_plan_72h_valid": True,
@@ -744,25 +666,12 @@ def build_72h_plan_preview(
         "auto_plan_72h_min_execution_headroom_soc": round(minimum_execution_headroom_soc, 1),
         "auto_plan_72h_execution_buffer_breach_hours": execution_buffer_breach_hours,
         "auto_plan_72h_execution_buffer_safe": execution_buffer_breach_hours == 0,
-        # Legacy source-parity fields remain available for compatibility.
         "auto_plan_72h_solar_horizon_complete": all(
             item.get("solar_horizon_complete", False) for item in plan
         ),
-        "auto_plan_72h_solar_horizon_incomplete_hours": hours_after_last_usable_solar,
-        # Clear solar-horizon diagnostics. These separate forecast coverage from
-        # usable-solar look-ahead and from the finite end of Plan72.
-        "auto_plan_72h_solar_horizon_status": solar_horizon_status,
-        "auto_plan_72h_solar_horizon_reason": solar_horizon_reason,
-        "auto_plan_72h_solar_forecast_coverage_hours": solar_forecast_coverage_hours,
-        "auto_plan_72h_solar_forecast_missing_hours": solar_forecast_missing_hours,
-        "auto_plan_72h_solar_forecast_coverage_percent": solar_forecast_coverage_percent,
-        "auto_plan_72h_solar_forecast_complete": solar_forecast_complete,
-        "auto_plan_72h_next_usable_solar_available": next_usable_solar_available,
-        "auto_plan_72h_next_usable_solar": next_usable_solar,
-        "auto_plan_72h_hours_until_next_usable_solar": hours_until_next_usable_solar,
-        "auto_plan_72h_last_usable_solar": last_usable_solar,
-        "auto_plan_72h_hours_after_last_usable_solar": hours_after_last_usable_solar,
-        "auto_plan_72h_lookahead_limited_by_plan_end": lookahead_limited_by_plan_end,
+        "auto_plan_72h_solar_horizon_incomplete_hours": sum(
+            1 for item in plan if not item.get("solar_horizon_complete", False)
+        ),
         "auto_plan_72h_solar_charge_kwh": round(total_solar_charge, 3),
         "auto_plan_72h_grid_safety_charge_kwh": round(total_grid_safety_charge, 3),
         "auto_plan_72h_grid_trade_charge_kwh": round(total_grid_trade_charge, 3),

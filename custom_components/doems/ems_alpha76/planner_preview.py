@@ -41,9 +41,6 @@ def build_planner_preview(
     discharge_efficiency_percent: float,
     minimum_trade_margin: float,
     max_charge_power_w: int = 3500,
-    battery_capacity_kwh: float = DEFAULT_BATTERY_CAPACITY_KWH,
-    technical_min_soc_percent: float = MIN_SOC_PERCENT,
-    max_soc_percent: float = 100.0,
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Build an observational planner and financial trade preview.
@@ -57,9 +54,6 @@ def build_planner_preview(
     discharge_eff = max(0.50, min(1.00, float(discharge_efficiency_percent) / 100.0))
     roundtrip_eff = charge_eff * discharge_eff
     min_margin = max(0.0, float(minimum_trade_margin))
-    battery_capacity = max(0.1, float(battery_capacity_kwh))
-    min_soc_limit = max(0.0, min(100.0, float(technical_min_soc_percent)))
-    max_soc_limit = max(min_soc_limit, min(100.0, float(max_soc_percent)))
 
     valid = bool(energy_need.get("energy_need_valid"))
     need_kwh = _as_float(energy_need.get("energy_need_until_solar_kwh")) or 0.0
@@ -68,10 +62,10 @@ def build_planner_preview(
     tradable_kwh = _as_float(energy_need.get("energy_need_tradable_battery_kwh"))
     first_usable = _parse_time(energy_need.get("energy_need_first_usable_solar"))
 
-    required_min_soc = min_soc_limit + (
-        (need_kwh + reserve_kwh) / battery_capacity * 100.0
+    required_min_soc = MIN_SOC_PERCENT + (
+        (need_kwh + reserve_kwh) / DEFAULT_BATTERY_CAPACITY_KWH * 100.0
     )
-    required_min_soc = max(min_soc_limit, min(max_soc_limit, required_min_soc))
+    required_min_soc = max(float(MIN_SOC_PERCENT), min(100.0, required_min_soc))
 
     price_rows: list[dict[str, Any]] = []
     for raw in forecast:
@@ -162,7 +156,7 @@ def build_planner_preview(
     free_capacity_kwh = None
     if soc is not None:
         free_capacity_kwh = (
-            battery_capacity * max(0.0, max_soc_limit - float(soc)) / 100.0
+            DEFAULT_BATTERY_CAPACITY_KWH * max(0.0, 100.0 - float(soc)) / 100.0
         )
 
     # Financial pair search: buy in an earlier hour, use/sell in a later

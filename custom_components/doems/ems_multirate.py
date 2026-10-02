@@ -13,11 +13,10 @@ from typing import Any
 
 from homeassistant.util import dt as dt_util
 
-from .ems_alpha76_adapter import planner_reference
-from .ems_policy_alpha20 import POLICY_VERSION, run_ems_chain
+from .ems_alpha76_adapter import SOURCE_TAG, planner_reference, run_ems_chain
 
 MULTIRATE_RUNTIME_VERSION = "alpha21_multirate_runtime_v1"
-PLANNER_POLICY_VERSION = "alpha20_cheapest_energy_safety_v1"
+PLANNER_POLICY_VERSION = SOURCE_TAG
 PLANNER_TRIGGERS = frozenset(
     {
         "startup",
@@ -80,7 +79,7 @@ def planner_input_signature(
     policy_reference = planner_reference(input_result, reference)
     payload = {
         "runtime": MULTIRATE_RUNTIME_VERSION,
-        "policy": POLICY_VERSION,
+        "policy": PLANNER_POLICY_VERSION,
         "cycle": planner_cycle_id(policy_reference),
         "soc_percent": float(soc_percent),
         "settings": settings_payload,
@@ -112,10 +111,6 @@ def run_planner_worker(
     reference: datetime,
 ) -> dict[str, Any]:
     """Run the unchanged Alpha20 policy in a worker thread."""
-    if POLICY_VERSION != PLANNER_POLICY_VERSION:
-        raise RuntimeError(
-            f"Planner policy drift: {POLICY_VERSION!r} != {PLANNER_POLICY_VERSION!r}"
-        )
     return run_ems_chain(
         input_result=input_result,
         settings=settings,

@@ -77,15 +77,30 @@ def test_alpha8_uses_existing_doems_forecast_and_independent_planning_runtime():
     assert '"service_calls_performed": False' in adapter
 
 
-def test_all_static_settings_are_consumed_by_frozen_decision_functions():
+def test_exact_anker_alpha61_76_planner_settings_contract():
     adapter=(INTEGRATION/"ems_alpha76_adapter.py").read_text(encoding="utf-8")
+    frozen_const=(INTEGRATION/"ems_alpha76"/"const.py").read_text(encoding="utf-8")
+
+    # Exact Anker Alpha61/76 policy inputs remain configurable where the source
+    # accepted them.
     for field in (
-        "battery_capacity_kwh","technical_min_soc_percent","max_soc_percent",
         "max_charge_power_w","max_discharge_power_w","software_reserve_percent",
         "charge_efficiency_percent","discharge_efficiency_percent",
         "minimum_trade_margin_eur_per_kwh",
     ):
         assert f"settings.{field}" in adapter
+
+    # The proven Anker source fixed these planner-policy constants at 7.2 kWh,
+    # 5% technical minimum and 100% maximum. The DOEMS config snapshot may
+    # retain the fields for compatibility, but the exact copied core must not
+    # receive later DOEMS overrides for them.
+    for field in (
+        "battery_capacity_kwh","technical_min_soc_percent","max_soc_percent",
+    ):
+        assert f"settings.{field}" not in adapter
+
+    assert "DEFAULT_BATTERY_CAPACITY_KWH = 7.2" in frozen_const
+    assert "MIN_SOC_PERCENT = 5" in frozen_const
     assert "settings.startup_delay_seconds" not in adapter
     assert '"startup_delay_runtime_gate_active": False' in adapter
 

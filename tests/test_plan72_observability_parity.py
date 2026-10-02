@@ -102,14 +102,17 @@ def test_plan72_solar_horizon_uses_clear_single_sensor_contract() -> None:
 
     assert '"solar_valid": solar_valid' in input_contract
     assert '"solar_forecast_valid": bool(raw.get("solar_valid"))' in adapter
-    assert '"auto_plan_72h_solar_horizon_status": solar_horizon_status' in planner
-    assert '"auto_plan_72h_solar_forecast_coverage_hours"' in planner
-    assert '"auto_plan_72h_next_usable_solar"' in planner
-    assert '"auto_plan_72h_hours_after_last_usable_solar"' in planner
-    assert '"auto_plan_72h_lookahead_limited_by_plan_end"' in planner
-    assert 'solar_horizon_status = "ready"' in planner
-    assert 'solar_horizon_status = "limited"' in planner
-    assert 'solar_horizon_status = "no_data"' in planner
+    # Alpha31 keeps these DOEMS-only diagnostics in the transport adapter so
+    # the copied Anker planner core remains byte-for-byte policy source.
+    assert '"auto_plan_72h_solar_horizon_status": status' in adapter
+    assert '"auto_plan_72h_solar_forecast_coverage_hours": coverage' in adapter
+    assert '"auto_plan_72h_next_usable_solar": next_usable' in adapter
+    assert '"auto_plan_72h_hours_after_last_usable_solar": hours_after_last' in adapter
+    assert '"auto_plan_72h_lookahead_limited_by_plan_end": limited_by_end' in adapter
+    assert 'status = "ready"' in adapter
+    assert 'status = "limited"' in adapter
+    assert 'status = "no_data"' in adapter
+    assert '"auto_plan_72h_solar_horizon_status"' not in planner
 
 
 def test_plan72_solar_horizon_keeps_physical_scope_unchanged() -> None:

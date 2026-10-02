@@ -1,4 +1,4 @@
-name: DOEMS CI and Alpha30 Safety + Trade Parity Restore Release
+name: DOEMS CI and Alpha31 Exact Anker Alpha61/76 Planner Parity Release
 
 on:
   pull_request:
@@ -19,12 +19,12 @@ jobs:
           python-version: "3.13"
       - run: python -m pip install --upgrade pip pytest
       - run: python -m compileall -q custom_components/doems
-      - name: Alpha30 safety+trade coexistence regression
-        run: pytest -q tests/test_alpha20_cheapest_energy_safety.py::test_alpha30_safety_and_profitable_trade_can_coexist
-      - name: Alpha30 safety-only regression
-        run: pytest -q tests/test_alpha20_cheapest_energy_safety.py::test_alpha30_safety_only_remains_when_trade_is_not_profitable
-      - name: Alpha20/30 planner policy suite
-        run: pytest -q tests/test_alpha20_cheapest_energy_safety.py
+      - name: Alpha31 exact adapter production path
+        run: pytest -q tests/test_alpha31_exact_anker_planner_parity.py::test_alpha31_production_worker_is_exact_adapter_path
+      - name: Alpha31 safety plus trade source parity
+        run: pytest -q tests/test_alpha31_exact_anker_planner_parity.py::test_alpha31_exact_source_allows_safety_and_profitable_trade_in_same_plan
+      - name: Alpha31 no DOEMS policy override
+        run: pytest -q tests/test_alpha31_exact_anker_planner_parity.py::test_alpha31_production_multirate_does_not_import_doems_policy_override
       - name: Version and carried-forward contract suite
         run: pytest -q tests/test_alpha5_1_hotfix_contract.py tests/test_alpha5_2_status_hotfix_contract.py tests/test_alpha6_solar_p31_release_contract.py tests/test_alpha7_prices_release_contract.py tests/test_energy_forecast_contract.py tests/test_foundation_contract.py
       - name: Alpha21 runtime regression
@@ -39,10 +39,24 @@ jobs:
         run: pytest -q tests/test_alpha29_signature_warning_physical_parity.py
       - name: Alpha8 plan foundation regression
         run: pytest -q tests/test_alpha8_ems_plans_foundation.py
-      - name: Plan72 and prestart regression suite
-        run: pytest -q tests/test_plan72_observability_parity.py tests/test_step11_safety_prestart_contract.py
-      - name: Step12-13 regression suite
-        run: pytest -q tests/test_step12_1_control_path_contract.py tests/test_step12_2_action_handoff_contract.py tests/test_step12_3_final_revalidation_mode_switch_preview.py tests/test_step12_4_automatic_execution_gate.py tests/test_step12_5_execution_controller.py tests/test_step12_6_restart_recovery_observability.py tests/test_step13_g5_frozen_live_parity.py
+      - name: Plan72 observability regression
+        run: pytest -q tests/test_plan72_observability_parity.py
+      - name: Prestart regression
+        run: pytest -q tests/test_step11_safety_prestart_contract.py
+      - name: Step12.1 control path regression
+        run: pytest -q tests/test_step12_1_control_path_contract.py
+      - name: Step12.2 action handoff regression
+        run: pytest -q tests/test_step12_2_action_handoff_contract.py
+      - name: Step12.3 revalidation regression
+        run: pytest -q tests/test_step12_3_final_revalidation_mode_switch_preview.py
+      - name: Step12.4 automatic gate regression
+        run: pytest -q tests/test_step12_4_automatic_execution_gate.py
+      - name: Step12.5 execution controller regression
+        run: pytest -q tests/test_step12_5_execution_controller.py
+      - name: Step12.6 restart recovery regression
+        run: pytest -q tests/test_step12_6_restart_recovery_observability.py
+      - name: Step13 G5 parity regression
+        run: pytest -q tests/test_step13_g5_frozen_live_parity.py
       - name: Forecast, prices and runtime regression suite
         run: pytest -q tests/test_alpha25_solar_array_performance.py tests/test_ems_config_validation.py tests/test_ems_settings_contract.py tests/test_presence_runtime_contract.py tests/test_prices_p4_contract.py tests/test_recorder_attribute_budget.py tests/test_solar_actual_quarter_validation.py tests/test_solar_forecast_model.py tests/test_solar_foundation_contract.py tests/test_solar_p31_runtime_contract.py tests/test_step5a_consumer_wiring_part1.py tests/test_step5a_forecast_diagnostics.py tests/test_step5a_prices_76h_window_fix.py
       - run: pytest -q
@@ -55,9 +69,9 @@ jobs:
               json.loads(path.read_text(encoding='utf-8'))
               print(f'valid: {path}')
           PY
-      - name: Validate Alpha30 release contract
+      - name: Validate Alpha31 release contract
         run: |
-          test -f RELEASE_NOTES_0.1.0-alpha.30.md
+          test -f RELEASE_NOTES_0.1.0-alpha.31.md
           test -f examples/prices_p4_forecast_card.yaml
           test -f custom_components/doems/prices.py
           test -f custom_components/doems/prices_model.py
@@ -67,8 +81,8 @@ jobs:
           test ! -f scripts/build_brand_assets.py
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
-          grep -F 'VERSION = "0.1.0-alpha.30"' custom_components/doems/const.py
-          grep -F '"version": "0.1.0-alpha.30"' custom_components/doems/manifest.json
+          grep -F 'VERSION = "0.1.0-alpha.31"' custom_components/doems/const.py
+          grep -F '"version": "0.1.0-alpha.31"' custom_components/doems/manifest.json
           grep -F 'CONF_EMS_ENABLED = "ems_enabled"' custom_components/doems/const.py
           grep -F 'CONF_BATTERY_CAPACITY_KWH = "battery_capacity_kwh"' custom_components/doems/const.py
           grep -F 'CONF_TECHNICAL_MIN_SOC_PERCENT = "technical_min_soc_percent"' custom_components/doems/const.py
@@ -108,18 +122,17 @@ jobs:
           test -f tests/test_alpha23_execution_naming_cleanup.py
           test -f tests/test_step12_6_restart_recovery_observability.py
           test -f tests/test_step13_g5_frozen_live_parity.py
-          test -f tests/test_alpha20_cheapest_energy_safety.py
-          grep -F 'test_alpha30_safety_and_profitable_trade_can_coexist' tests/test_alpha20_cheapest_energy_safety.py
-          grep -F 'test_alpha30_safety_only_remains_when_trade_is_not_profitable' tests/test_alpha20_cheapest_energy_safety.py
-          ! grep -F 'and not safety_needed' custom_components/doems/ems_policy_alpha20.py
-          ! grep -F 'if not safety_needed:' custom_components/doems/ems_policy_alpha20.py
-          test -f custom_components/doems/ems_policy_alpha20.py
+          test -f tests/test_alpha31_exact_anker_planner_parity.py
+          test -f custom_components/doems/ems_alpha76/energy_need.py
+          test -f custom_components/doems/ems_alpha76/planner_preview.py
+          test -f custom_components/doems/ems_alpha76/planner_72h.py
+          grep -F 'from .ems_alpha76_adapter import SOURCE_TAG, planner_reference, run_ems_chain' custom_components/doems/ems_multirate.py
+          ! grep -F 'ems_policy_alpha20' custom_components/doems/ems_multirate.py
           test -f custom_components/doems/ems_multirate.py
           test -f tests/test_alpha21_multirate_runtime.py
           grep -F 'from .ems_multirate import (' custom_components/doems/ems_runtime.py
           grep -F 'await self.hass.async_add_executor_job(worker)' custom_components/doems/ems_runtime.py
           grep -F 'self._request_fast_refresh("execution_monitor")' custom_components/doems/ems_runtime.py
-          grep -F 'POLICY_VERSION = "alpha20_cheapest_energy_safety_v1"' custom_components/doems/ems_policy_alpha20.py
           ! grep -R -F 'zelfconsumptie_bijladen' custom_components/doems
           ! grep -R -F 'charge_from_grid_support_kwh' custom_components/doems
           test -f custom_components/doems/ems_g5_live_parity.py
@@ -146,7 +159,8 @@ jobs:
           grep -F 'f"doems_ems_plan72_{suffix}"' custom_components/doems/sensor.py
           grep -F '"solar_valid": solar_valid' custom_components/doems/ems_input_contract.py
           grep -F '"solar_forecast_valid": bool(raw.get("solar_valid"))' custom_components/doems/ems_alpha76_adapter.py
-          grep -F '"auto_plan_72h_solar_horizon_status": solar_horizon_status' custom_components/doems/ems_alpha76/planner_72h.py
+          grep -F '"auto_plan_72h_solar_horizon_status": status' custom_components/doems/ems_alpha76_adapter.py
+          ! grep -F '"auto_plan_72h_solar_horizon_status"' custom_components/doems/ems_alpha76/planner_72h.py
           grep -F '"forecast_coverage_hours"' custom_components/doems/sensor.py
           grep -F '"hours_after_last_usable_solar"' custom_components/doems/sensor.py
           grep -F '"lookahead_limited_by_plan_end"' custom_components/doems/sensor.py
@@ -323,7 +337,7 @@ jobs:
           grep -F '"execution_store_key": f"{DOMAIN}.{self.entry.entry_id}.execution"' custom_components/doems/ems_runtime.py
           test "$(find custom_components/doems -type f -iname '*sha*dow*' | wc -l)" -eq 0
 
-  publish-alpha30:
+  publish-alpha31:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
@@ -333,7 +347,7 @@ jobs:
           fetch-depth: 0
       - name: Build release archive
         run: |
-          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.30.md
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.31.md
           sha256sum doems.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - name: Verify EMS settings, Presence and Prices runtime are packaged
@@ -342,7 +356,6 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_input_contract.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_live_input.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_alpha76_adapter.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_policy_alpha20.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_multirate.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_runtime.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_plan_store.py'
@@ -379,12 +392,12 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/icon.png'
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
-      - name: Publish Alpha30 Safety + Trade Parity Restore release
+      - name: Publish Alpha31 Exact Anker Alpha61/76 Planner Parity release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view 0.1.0-alpha.30 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.30 --title "DOEMS 0.1.0-alpha.30 - Safety + Trade Parity Restore" --notes-file RELEASE_NOTES_0.1.0-alpha.30.md --prerelease
+          if gh release view 0.1.0-alpha.31 >/dev/null 2>&1; then
+            gh release edit 0.1.0-alpha.31 --title "DOEMS 0.1.0-alpha.31 - Exact Anker Alpha61/76 Planner Parity" --notes-file RELEASE_NOTES_0.1.0-alpha.31.md --prerelease
           else
-            gh release create 0.1.0-alpha.30 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.30 - Safety + Trade Parity Restore" --notes-file RELEASE_NOTES_0.1.0-alpha.30.md --prerelease
+            gh release create 0.1.0-alpha.31 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.31 - Exact Anker Alpha61/76 Planner Parity" --notes-file RELEASE_NOTES_0.1.0-alpha.31.md --prerelease
           fi
