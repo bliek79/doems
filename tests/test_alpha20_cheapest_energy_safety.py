@@ -158,6 +158,49 @@ def test_alpha20_cheap_window_can_fill_for_later_expensive_period() -> None:
     assert any("veiligheidsladen" in row["action"] for row in plan)
 
 
+
+def test_alpha30_safety_and_profitable_trade_can_coexist() -> None:
+    home = [0.03] * 72
+    solar = [0.0] * 72
+    prices = [0.30] * 72
+    prices[0] = 0.05
+    prices[4] = 0.70
+
+    bundle = _run(soc=10.0, home=home, solar=solar, prices=prices)
+    preview = bundle["planner_preview"]
+    plan72 = bundle["plan72"]
+    plan = plan72["auto_plan_72h_plan"]
+
+    assert preview["planner_preview_safety_charge_needed"] is True
+    assert preview["planner_preview_trade_profitable"] is True
+    assert plan72["auto_plan_72h_grid_safety_charge_kwh"] > 0
+    assert plan72["auto_plan_72h_grid_trade_charge_kwh"] > 0
+    assert plan72["auto_plan_72h_grid_trade_discharge_kwh"] > 0
+    assert any(
+        "veiligheidsladen" in row["action"] and "handelsladen" in row["action"]
+        for row in plan
+    )
+    assert any(row["trade_reserved_kwh"] > 0 for row in plan)
+
+
+def test_alpha30_safety_only_remains_when_trade_is_not_profitable() -> None:
+    bundle = _run(
+        soc=10.0,
+        home=[0.03] * 72,
+        solar=[0.0] * 72,
+        prices=[0.20] * 72,
+    )
+    preview = bundle["planner_preview"]
+    plan72 = bundle["plan72"]
+
+    assert preview["planner_preview_safety_charge_needed"] is True
+    assert preview["planner_preview_trade_profitable"] is False
+    assert plan72["auto_plan_72h_grid_safety_charge_kwh"] > 0
+    assert plan72["auto_plan_72h_grid_trade_charge_kwh"] == 0.0
+    assert plan72["auto_plan_72h_grid_trade_discharge_kwh"] == 0.0
+
+
+
 def test_alpha20_keeps_public_contract_compact_and_g5_frozen() -> None:
     sensor = (INTEGRATION / "sensor.py").read_text(encoding="utf-8")
     bridge = (INTEGRATION / "ems_planner_bridge.py").read_text(encoding="utf-8")
