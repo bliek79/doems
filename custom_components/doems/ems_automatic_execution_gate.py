@@ -145,7 +145,7 @@ class DOEMSAutomaticExecutionGate:
                 "planner_signature_current",
                 signature_match,
                 "Planner signature is unchanged",
-                "planner_revision_changed",
+                warning="planner_revision_changed",
             )
 
             recovery = bool(
