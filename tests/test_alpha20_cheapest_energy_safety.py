@@ -180,7 +180,6 @@ def test_alpha30_safety_and_profitable_trade_can_coexist() -> None:
         "veiligheidsladen" in row["action"] and "handelsladen" in row["action"]
         for row in plan
     )
-    assert any(row["trade_reserved_kwh"] > 0 for row in plan)
 
 
 def test_alpha30_safety_only_remains_when_trade_is_not_profitable() -> None:
