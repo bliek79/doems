@@ -6,7 +6,8 @@ INTEGRATION=ROOT/"custom_components"/"doems"
 def test_identity_remains_leading_and_signature_is_warning_only() -> None:
     execution=(INTEGRATION/"ems_execution.py").read_text(encoding="utf-8")
     assert "planner_identity_match" in execution
-    assert "planner_signature_changed" in execution
+    assert 'add_check("planner_signature_match"' in execution
+    assert "warning_only=True" in execution
     assert "planner_signature" in execution
 
 def test_alpha76_gate_uses_source_status_names() -> None:
