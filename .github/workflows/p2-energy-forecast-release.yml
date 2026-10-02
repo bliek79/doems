@@ -27,8 +27,12 @@ jobs:
         run: pytest -q tests/test_alpha20_cheapest_energy_safety.py
       - name: Version and carried-forward contract suite
         run: pytest -q tests/test_alpha5_1_hotfix_contract.py tests/test_alpha5_2_status_hotfix_contract.py tests/test_alpha6_solar_p31_release_contract.py tests/test_alpha7_prices_release_contract.py tests/test_energy_forecast_contract.py tests/test_foundation_contract.py
-      - name: Execution and planner regression suite
-        run: pytest -q tests/test_alpha21_multirate_runtime.py tests/test_alpha23_execution_naming_cleanup.py tests/test_alpha26_step15a_manual_physical_execution.py tests/test_alpha27_beta2_automatic_plan72_cutover.py tests/test_alpha29_signature_warning_physical_parity.py tests/test_alpha8_ems_plans_foundation.py tests/test_plan72_observability_parity.py tests/test_step11_safety_prestart_contract.py tests/test_step12_1_control_path_contract.py tests/test_step12_2_action_handoff_contract.py tests/test_step12_3_final_revalidation_mode_switch_preview.py tests/test_step12_4_automatic_execution_gate.py tests/test_step12_5_execution_controller.py tests/test_step12_6_restart_recovery_observability.py tests/test_step13_g5_frozen_live_parity.py
+      - name: Execution structural regression suite
+        run: pytest -q tests/test_alpha21_multirate_runtime.py tests/test_alpha23_execution_naming_cleanup.py tests/test_alpha26_step15a_manual_physical_execution.py tests/test_alpha27_beta2_automatic_plan72_cutover.py tests/test_alpha29_signature_warning_physical_parity.py tests/test_alpha8_ems_plans_foundation.py
+      - name: Plan72 and prestart regression suite
+        run: pytest -q tests/test_plan72_observability_parity.py tests/test_step11_safety_prestart_contract.py
+      - name: Step12-13 regression suite
+        run: pytest -q tests/test_step12_1_control_path_contract.py tests/test_step12_2_action_handoff_contract.py tests/test_step12_3_final_revalidation_mode_switch_preview.py tests/test_step12_4_automatic_execution_gate.py tests/test_step12_5_execution_controller.py tests/test_step12_6_restart_recovery_observability.py tests/test_step13_g5_frozen_live_parity.py
       - name: Forecast, prices and runtime regression suite
         run: pytest -q tests/test_alpha25_solar_array_performance.py tests/test_ems_config_validation.py tests/test_ems_settings_contract.py tests/test_presence_runtime_contract.py tests/test_prices_p4_contract.py tests/test_recorder_attribute_budget.py tests/test_solar_actual_quarter_validation.py tests/test_solar_forecast_model.py tests/test_solar_foundation_contract.py tests/test_solar_p31_runtime_contract.py tests/test_step5a_consumer_wiring_part1.py tests/test_step5a_forecast_diagnostics.py tests/test_step5a_prices_76h_window_fix.py
       - run: pytest -q
