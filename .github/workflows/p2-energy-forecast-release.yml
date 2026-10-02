@@ -19,12 +19,8 @@ jobs:
           python-version: "3.13"
       - run: python -m pip install --upgrade pip pytest
       - run: python -m compileall -q custom_components/doems
-      - name: Alpha30 safety+trade coexistence regression
-        run: pytest -q tests/test_alpha20_cheapest_energy_safety.py::test_alpha30_safety_and_profitable_trade_can_coexist
-      - name: Alpha30 safety-only regression
-        run: pytest -q tests/test_alpha20_cheapest_energy_safety.py::test_alpha30_safety_only_remains_when_trade_is_not_profitable
-      - name: Alpha20/30 planner policy suite
-        run: pytest -q tests/test_alpha20_cheapest_energy_safety.py
+      - name: Alpha31 exact Anker planner parity regression
+        run: pytest -q tests/test_alpha31_exact_anker_planner_parity.py
       - name: Version and carried-forward contract suite
         run: pytest -q tests/test_alpha5_1_hotfix_contract.py tests/test_alpha5_2_status_hotfix_contract.py tests/test_alpha6_solar_p31_release_contract.py tests/test_alpha7_prices_release_contract.py tests/test_energy_forecast_contract.py tests/test_foundation_contract.py
       - name: Alpha21 runtime regression
@@ -108,18 +104,17 @@ jobs:
           test -f tests/test_alpha23_execution_naming_cleanup.py
           test -f tests/test_step12_6_restart_recovery_observability.py
           test -f tests/test_step13_g5_frozen_live_parity.py
-          test -f tests/test_alpha20_cheapest_energy_safety.py
-          grep -F 'test_alpha30_safety_and_profitable_trade_can_coexist' tests/test_alpha20_cheapest_energy_safety.py
-          grep -F 'test_alpha30_safety_only_remains_when_trade_is_not_profitable' tests/test_alpha20_cheapest_energy_safety.py
-          ! grep -F 'and not safety_needed' custom_components/doems/ems_policy_alpha20.py
-          ! grep -F 'if not safety_needed:' custom_components/doems/ems_policy_alpha20.py
-          test -f custom_components/doems/ems_policy_alpha20.py
+          test -f tests/test_alpha31_exact_anker_planner_parity.py
+          test -f custom_components/doems/ems_alpha76/energy_need.py
+          test -f custom_components/doems/ems_alpha76/planner_preview.py
+          test -f custom_components/doems/ems_alpha76/planner_72h.py
+          grep -F 'from .ems_alpha76_adapter import SOURCE_TAG, planner_reference, run_ems_chain' custom_components/doems/ems_multirate.py
+          ! grep -F 'ems_policy_alpha20' custom_components/doems/ems_multirate.py
           test -f custom_components/doems/ems_multirate.py
           test -f tests/test_alpha21_multirate_runtime.py
           grep -F 'from .ems_multirate import (' custom_components/doems/ems_runtime.py
           grep -F 'await self.hass.async_add_executor_job(worker)' custom_components/doems/ems_runtime.py
           grep -F 'self._request_fast_refresh("execution_monitor")' custom_components/doems/ems_runtime.py
-          grep -F 'POLICY_VERSION = "alpha20_cheapest_energy_safety_v1"' custom_components/doems/ems_policy_alpha20.py
           ! grep -R -F 'zelfconsumptie_bijladen' custom_components/doems
           ! grep -R -F 'charge_from_grid_support_kwh' custom_components/doems
           test -f custom_components/doems/ems_g5_live_parity.py
@@ -342,7 +337,6 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_input_contract.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_live_input.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_alpha76_adapter.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_policy_alpha20.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_multirate.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_runtime.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_plan_store.py'
@@ -384,7 +378,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view 0.1.0-alpha.31 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.31 --title "DOEMS 0.1.0-alpha.31 - Safety + Trade Parity Restore" --notes-file RELEASE_NOTES_0.1.0-alpha.31.md --prerelease
+            gh release edit 0.1.0-alpha.31 --title "DOEMS 0.1.0-alpha.31 - Exact Anker Alpha61/76 Planner Parity" --notes-file RELEASE_NOTES_0.1.0-alpha.31.md --prerelease
           else
-            gh release create 0.1.0-alpha.31 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.31 - Safety + Trade Parity Restore" --notes-file RELEASE_NOTES_0.1.0-alpha.31.md --prerelease
+            gh release create 0.1.0-alpha.31 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.31 - Exact Anker Alpha61/76 Planner Parity" --notes-file RELEASE_NOTES_0.1.0-alpha.31.md --prerelease
           fi
