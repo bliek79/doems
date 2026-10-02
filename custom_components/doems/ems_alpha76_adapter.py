@@ -74,6 +74,89 @@ def forecast_from_input(input_result: dict[str, Any]) -> list[dict[str, Any]]:
         })
     return forecast
 
+
+def _with_transport_observability(
+    plan72: dict[str, Any],
+    input_result: dict[str, Any],
+) -> dict[str, Any]:
+    """Add DOEMS transport diagnostics without changing Anker planner decisions."""
+    result = deepcopy(plan72)
+    plan = result.get("auto_plan_72h_plan") or []
+    rows = input_result.get("rows") or []
+
+    coverage = sum(
+        1
+        for row in rows
+        if isinstance(row, dict) and row.get("solar_valid") is True
+    )
+    missing = max(0, 72 - coverage)
+    complete = coverage == 72
+    coverage_percent = round(coverage / 72 * 100.0, 1)
+
+    next_usable = plan[0].get("next_usable_solar") if plan else None
+    next_usable_dt = _aware(next_usable)
+    first_row_dt = _aware(rows[0].get("start")) if rows and isinstance(rows[0], dict) else None
+    hours_until_next = (
+        round(max(0.0, (next_usable_dt - first_row_dt).total_seconds() / 3600.0), 2)
+        if next_usable_dt is not None and first_row_dt is not None
+        else None
+    )
+    last_usable = next(
+        (
+            item.get("next_usable_solar")
+            for item in reversed(plan)
+            if isinstance(item, dict) and item.get("next_usable_solar") is not None
+        ),
+        None,
+    )
+    hours_after_last = sum(
+        1
+        for item in plan
+        if isinstance(item, dict) and not item.get("solar_horizon_complete", False)
+    )
+    limited_by_end = bool(plan and complete and hours_after_last > 0)
+    next_available = next_usable is not None
+
+    if coverage == 0 or not plan:
+        status = "no_data"
+        reason = "Geen bruikbare solarforecast beschikbaar voor Plan72."
+    elif not complete:
+        status = "limited"
+        reason = (
+            f"Solarforecast dekt {coverage}/72 uur; "
+            f"{missing} uur ontbreekt."
+        )
+    elif not next_available:
+        status = "limited"
+        reason = (
+            "Solarforecast dekt 72 uur, maar vanaf Plan72-start is binnen "
+            "de huidige horizon geen bruikbaar zonneblok gevonden."
+        )
+    else:
+        status = "ready"
+        reason = (
+            "Solarforecast dekt 72 uur en het volgende bruikbare zonneblok "
+            "is vanaf Plan72-start beschikbaar."
+        )
+
+    result.update(
+        {
+            "auto_plan_72h_solar_horizon_status": status,
+            "auto_plan_72h_solar_horizon_reason": reason,
+            "auto_plan_72h_solar_forecast_coverage_hours": coverage,
+            "auto_plan_72h_solar_forecast_missing_hours": missing,
+            "auto_plan_72h_solar_forecast_coverage_percent": coverage_percent,
+            "auto_plan_72h_solar_forecast_complete": complete,
+            "auto_plan_72h_next_usable_solar_available": next_available,
+            "auto_plan_72h_next_usable_solar": next_usable,
+            "auto_plan_72h_hours_until_next_usable_solar": hours_until_next,
+            "auto_plan_72h_last_usable_solar": last_usable,
+            "auto_plan_72h_hours_after_last_usable_solar": hours_after_last,
+            "auto_plan_72h_lookahead_limited_by_plan_end": limited_by_end,
+        }
+    )
+    return result
+
 def run_energy_need(*, input_result: dict[str, Any], settings: EMSSettings, soc_percent: float | None, now: datetime | None = None) -> dict[str, Any]:
     reference = planner_reference(input_result, now)
     return build_energy_need_analysis(
@@ -98,7 +181,7 @@ def run_preview(*, input_result: dict[str, Any], settings: EMSSettings, energy_n
 
 def run_plan72(*, input_result: dict[str, Any], settings: EMSSettings, energy_need: dict[str, Any], planner_preview: dict[str, Any], soc_percent: float | None, now: datetime | None = None) -> dict[str, Any]:
     reference = planner_reference(input_result, now)
-    return build_72h_plan_preview(
+    raw = build_72h_plan_preview(
         forecast_from_input(input_result),
         energy_need,
         planner_preview,
@@ -110,6 +193,7 @@ def run_plan72(*, input_result: dict[str, Any], settings: EMSSettings, energy_ne
         max_discharge_power_w=settings.max_discharge_power_w,
         now=reference,
     )
+    return _with_transport_observability(raw, input_result)
 
 def run_ems_chain(*, input_result: dict[str, Any], settings: EMSSettings, soc_percent: float | None, now: datetime | None = None) -> dict[str, Any]:
     need = run_energy_need(input_result=input_result, settings=settings, soc_percent=soc_percent, now=now)
