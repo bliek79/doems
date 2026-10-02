@@ -39,8 +39,10 @@ jobs:
         run: pytest -q tests/test_alpha29_signature_warning_physical_parity.py
       - name: Alpha8 plan foundation regression
         run: pytest -q tests/test_alpha8_ems_plans_foundation.py
-      - name: Plan72 and prestart regression suite
-        run: pytest -q tests/test_plan72_observability_parity.py tests/test_step11_safety_prestart_contract.py
+      - name: Plan72 observability regression
+        run: pytest -q tests/test_plan72_observability_parity.py
+      - name: Prestart regression
+        run: pytest -q tests/test_step11_safety_prestart_contract.py
       - name: Step12-13 regression suite
         run: pytest -q tests/test_step12_1_control_path_contract.py tests/test_step12_2_action_handoff_contract.py tests/test_step12_3_final_revalidation_mode_switch_preview.py tests/test_step12_4_automatic_execution_gate.py tests/test_step12_5_execution_controller.py tests/test_step12_6_restart_recovery_observability.py tests/test_step13_g5_frozen_live_parity.py
       - name: Forecast, prices and runtime regression suite
