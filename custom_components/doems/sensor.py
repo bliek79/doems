@@ -641,6 +641,14 @@ class DOEMSEMSStatusSensor(_DOEMSEMSRuntimeSensor):
         "safe_return_steps",
         "execution_trace",
         "execution_run_history",
+        "auto_execution_gate_blockers",
+        "auto_execution_gate_warnings",
+        "prestart_reasons",
+        "prestart_warnings",
+        "safety_handoff_reasons",
+        "safety_handoff_warnings",
+        "execution_handoff_reasons",
+        "execution_handoff_warnings",
     })
     _attr_name = "DOEMS EMS"
     _attr_unique_id = "doems_ems"
