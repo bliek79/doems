@@ -307,8 +307,6 @@ class DOEMSManualPhysicalExecution:
                 raise HomeAssistantError("Automatic Execution Gate selecteert een ander planslot")
             if snapshot.get("auto_execution_gate_planner_identity") != planner_identity:
                 raise HomeAssistantError("Automatic planner_identity is niet stabiel")
-            if snapshot.get("prestart_signature_match") is not True:
-                raise HomeAssistantError("Automatic planner_signature is niet actueel/stabiel")
             if snapshot.get("auto_execution_gate_action") != action:
                 raise HomeAssistantError("Automatic gate-action wijkt af van Scheduler")
             try:
@@ -470,8 +468,6 @@ class DOEMSManualPhysicalExecution:
                     raise HomeAssistantError("Automatic gate-slot wijzigde tijdens arming")
                 if live_snapshot.get("auto_execution_gate_planner_identity") != planner_identity:
                     raise HomeAssistantError("Automatic planner_identity wijzigde tijdens arming")
-                if live_snapshot.get("prestart_signature_match") is not True:
-                    raise HomeAssistantError("Automatic planner_signature wijzigde tijdens arming")
                 if live_snapshot.get("auto_execution_gate_action") != action:
                     raise HomeAssistantError("Automatic gate-action wijzigde tijdens arming")
                 try:
