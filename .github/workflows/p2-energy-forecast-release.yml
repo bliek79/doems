@@ -83,6 +83,10 @@ jobs:
           test -f tests/test_step12_6_restart_recovery_observability.py
           test -f tests/test_step13_g5_frozen_live_parity.py
           test -f tests/test_alpha20_cheapest_energy_safety.py
+          grep -F 'test_alpha30_safety_and_profitable_trade_can_coexist' tests/test_alpha20_cheapest_energy_safety.py
+          grep -F 'test_alpha30_safety_only_remains_when_trade_is_not_profitable' tests/test_alpha20_cheapest_energy_safety.py
+          ! grep -F 'and not safety_needed' custom_components/doems/ems_policy_alpha20.py
+          ! grep -F 'if not safety_needed:' custom_components/doems/ems_policy_alpha20.py
           test -f custom_components/doems/ems_policy_alpha20.py
           test -f custom_components/doems/ems_multirate.py
           test -f tests/test_alpha21_multirate_runtime.py
@@ -354,7 +358,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view 0.1.0-alpha.30 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.30 --title "DOEMS 0.1.0-alpha.30 - Beta Phase 2 Signature Warning Physical Parity" --notes-file RELEASE_NOTES_0.1.0-alpha.30.md --prerelease
+            gh release edit 0.1.0-alpha.30 --title "DOEMS 0.1.0-alpha.30 - Safety + Trade Parity Restore" --notes-file RELEASE_NOTES_0.1.0-alpha.30.md --prerelease
           else
-            gh release create 0.1.0-alpha.30 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.30 - Beta Phase 2 Signature Warning Physical Parity" --notes-file RELEASE_NOTES_0.1.0-alpha.30.md --prerelease
+            gh release create 0.1.0-alpha.30 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.30 - Safety + Trade Parity Restore" --notes-file RELEASE_NOTES_0.1.0-alpha.30.md --prerelease
           fi
