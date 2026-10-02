@@ -433,8 +433,6 @@ def _physical_plan(
     )
     stored = min(max_stored, max(minimum_stored, capacity * float(soc_percent) / 100.0))
     start_soc = stored / capacity * 100.0
-    trade_energy_reserved_kwh = 0.0
-
     frozen_rows = {
         str(item.get("time")): item
         for item in (frozen.get("auto_plan_72h_plan") or [])
@@ -499,19 +497,12 @@ def _physical_plan(
             available_charge_input,
             max(0.0, max_stored - stored) / charge_eff,
         )
-        stored_trade_added = grid_trade_input * charge_eff
-        stored += stored_trade_added
-        trade_energy_reserved_kwh += stored_trade_added
+        stored += grid_trade_input * charge_eff
 
-        # Normal self_consumption may still use non-reserved battery energy down
-        # to the technical minimum. Energy explicitly bought for a future trade
-        # is protected above the existing execution reserve until the planned
-        # high-value discharge consumes it.
-        operational_floor = min(
-            max_stored,
-            max(minimum_stored, execution_floor + trade_energy_reserved_kwh),
-        )
-        available_output = max(0.0, (stored - operational_floor) * discharge_eff)
+        # Physical self_consumption: household demand can use the battery down
+        # to the technical device minimum. A 12% planning target is maintained
+        # by scheduling safety energy, not by pretending the battery stops here.
+        available_output = max(0.0, (stored - minimum_stored) * discharge_eff)
         discharge_to_home = min(home_deficit, discharge_limit, available_output)
         if discharge_to_home > _MIN_ENERGY_KWH:
             stored -= discharge_to_home / discharge_eff
@@ -527,11 +518,7 @@ def _physical_plan(
             requested_grid_discharge, remaining_output, available_trade_output
         )
         if discharge_to_grid > _MIN_ENERGY_KWH:
-            stored_used = discharge_to_grid / discharge_eff
-            stored -= stored_used
-            trade_energy_reserved_kwh = max(
-                0.0, trade_energy_reserved_kwh - stored_used
-            )
+            stored -= discharge_to_grid / discharge_eff
 
         stored = max(minimum_stored, min(max_stored, stored))
         soc_end = stored / capacity * 100.0
@@ -623,7 +610,7 @@ def _physical_plan(
                 "dynamic_need_after_hour_kwh": round(dynamic_after, 3),
                 "next_usable_solar": next_usable.isoformat() if next_usable else None,
                 "solar_horizon_complete": next_usable is not None,
-                "trade_reserved_kwh": round(trade_energy_reserved_kwh, 3),
+                "trade_reserved_kwh": 0.0,
                 "action": "+".join(actions),
                 "observational_only": True,
             }
