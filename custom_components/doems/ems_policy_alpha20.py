@@ -374,12 +374,11 @@ def _build_preview(
     result["planner_preview_safety_charge_hours"] = selected_hours
     result["planner_preview_safety_charge_hour_count"] = len(selected_hours)
     result["planner_preview_safety_schedule_sufficient"] = final_breaches == 0
-    # Household safety takes priority over optional trading.
+    # Household safety has priority, but it does not disable an independently
+    # profitable trade. Plan72 applies safety first and lets trade use only the
+    # remaining physical charge/capacity headroom.
     result["planner_preview_trade_profitable"] = bool(
-        result.get("planner_preview_trade_profitable") and not safety_needed
-    )
-    result["planner_preview_trade_charge_candidate"] = bool(
-        result.get("planner_preview_trade_charge_candidate") and not safety_needed
+        result.get("planner_preview_trade_profitable")
     )
 
     if safety_needed:
@@ -402,9 +401,9 @@ def _build_preview(
                 "maar de beschikbare laadvensters zijn technisch onvoldoende"
             )
     result["planner_preview_note"] = (
-        "Alpha20 gebruikt uitsluitend bestaand veiligheidsladen voor de "
-        "goedkoopste technisch haalbare energie om de rollende 72-uurs route "
-        "rond de 5%+7% planningsmarge te houden; er komt geen extra laadtype."
+        "Alpha20 houdt safety als eerste prioriteit en laat de bestaande "
+        "rendabele handelslogica daarna uitsluitend resterende fysieke laad- "
+        "en batterijheadroom gebruiken; er komt geen extra laadtype."
     )
     return result, schedule
 
@@ -434,8 +433,6 @@ def _physical_plan(
     )
     stored = min(max_stored, max(minimum_stored, capacity * float(soc_percent) / 100.0))
     start_soc = stored / capacity * 100.0
-    safety_needed = bool(planner_preview.get("planner_preview_safety_charge_needed"))
-
     frozen_rows = {
         str(item.get("time")): item
         for item in (frozen.get("auto_plan_72h_plan") or [])
@@ -492,17 +489,15 @@ def _physical_plan(
         available_charge_input -= grid_safety_input
 
         frozen_row = frozen_rows.get(hour.isoformat(), {})
-        grid_trade_input = 0.0
-        if not safety_needed:
-            requested_trade = max(
-                0.0, _as_float(frozen_row.get("charge_from_grid_trade_kwh")) or 0.0
-            )
-            grid_trade_input = min(
-                requested_trade,
-                available_charge_input,
-                max(0.0, max_stored - stored) / charge_eff,
-            )
-            stored += grid_trade_input * charge_eff
+        requested_trade = max(
+            0.0, _as_float(frozen_row.get("charge_from_grid_trade_kwh")) or 0.0
+        )
+        grid_trade_input = min(
+            requested_trade,
+            available_charge_input,
+            max(0.0, max_stored - stored) / charge_eff,
+        )
+        stored += grid_trade_input * charge_eff
 
         # Physical self_consumption: household demand can use the battery down
         # to the technical device minimum. A 12% planning target is maintained
@@ -514,18 +509,16 @@ def _physical_plan(
             home_deficit -= discharge_to_home
 
         grid_home = max(0.0, home_deficit)
-        discharge_to_grid = 0.0
-        if not safety_needed:
-            requested_grid_discharge = max(
-                0.0, _as_float(frozen_row.get("discharge_to_grid_kwh")) or 0.0
-            )
-            remaining_output = max(0.0, discharge_limit - discharge_to_home)
-            available_trade_output = max(0.0, (stored - execution_floor) * discharge_eff)
-            discharge_to_grid = min(
-                requested_grid_discharge, remaining_output, available_trade_output
-            )
-            if discharge_to_grid > _MIN_ENERGY_KWH:
-                stored -= discharge_to_grid / discharge_eff
+        requested_grid_discharge = max(
+            0.0, _as_float(frozen_row.get("discharge_to_grid_kwh")) or 0.0
+        )
+        remaining_output = max(0.0, discharge_limit - discharge_to_home)
+        available_trade_output = max(0.0, (stored - execution_floor) * discharge_eff)
+        discharge_to_grid = min(
+            requested_grid_discharge, remaining_output, available_trade_output
+        )
+        if discharge_to_grid > _MIN_ENERGY_KWH:
+            stored -= discharge_to_grid / discharge_eff
 
         stored = max(minimum_stored, min(max_stored, stored))
         soc_end = stored / capacity * 100.0

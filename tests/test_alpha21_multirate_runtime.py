@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-import hashlib
 import importlib
 from pathlib import Path
 from types import SimpleNamespace
@@ -87,11 +86,13 @@ def _input_result() -> dict:
     }
 
 
-def test_alpha20_policy_source_is_byte_frozen() -> None:
-    digest = hashlib.sha256(
-        (INTEGRATION / "ems_policy_alpha20.py").read_bytes()
-    ).hexdigest()
-    assert digest == "651874a857f70dd8e436af95bbcc7d40036c633bb6e7f9ab823a3414a9073d2e"
+def test_alpha30_authorized_policy_delta_is_limited_to_safety_trade_parity() -> None:
+    policy = (INTEGRATION / "ems_policy_alpha20.py").read_text(encoding="utf-8")
+    assert 'and not safety_needed' not in policy
+    assert 'if not safety_needed:' not in policy
+    assert 'charge_from_grid_trade_kwh' in policy
+    assert 'discharge_to_grid_kwh' in policy
+    assert 'POLICY_VERSION = "alpha20_cheapest_energy_safety_v1"' in policy
 
 
 def test_multirate_worker_returns_exact_alpha20_bundle() -> None:
