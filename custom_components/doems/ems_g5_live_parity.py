@@ -28,6 +28,7 @@ from .ems_alpha76.planner_preview import build_planner_preview
 from .ems_alpha76_adapter import (
     EXECUTION_BUFFER_PERCENT,
     SOURCE_TAG,
+    _with_transport_observability,
     forecast_from_input,
     planner_reference,
     run_energy_need,
@@ -252,6 +253,7 @@ def _golden_chain(
         max_discharge_power_w=settings.max_discharge_power_w,
         now=reference,
     )
+    plan72 = _with_transport_observability(plan72, input_result)
     bridge = _bridge(
         plan72,
         settings=settings,
