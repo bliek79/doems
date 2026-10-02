@@ -1,13 +1,14 @@
-name: DOEMS CI and Alpha31 Exact Anker Alpha61/76 Planner Parity Release
+name: DOEMS CI - Alpha32 Full Anker Alpha76 EMS Parity Candidate
 
 on:
   pull_request:
   push:
-    branches: [main]
+    branches:
+      - alpha32-full-anker-alpha76-parity-reconstruction
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
@@ -18,386 +19,41 @@ jobs:
         with:
           python-version: "3.13"
       - run: python -m pip install --upgrade pip pytest
-      - run: python -m compileall -q custom_components/doems
-      - name: Alpha31 exact adapter production path
-        run: pytest -q tests/test_alpha31_exact_anker_planner_parity.py::test_alpha31_production_worker_is_exact_adapter_path
-      - name: Alpha31 safety plus trade source parity
-        run: pytest -q tests/test_alpha31_exact_anker_planner_parity.py::test_alpha31_exact_source_allows_safety_and_profitable_trade_in_same_plan
-      - name: Alpha31 no DOEMS policy override
-        run: pytest -q tests/test_alpha31_exact_anker_planner_parity.py::test_alpha31_production_multirate_does_not_import_doems_policy_override
-      - name: Version and carried-forward contract suite
-        run: pytest -q tests/test_alpha5_1_hotfix_contract.py tests/test_alpha5_2_status_hotfix_contract.py tests/test_alpha6_solar_p31_release_contract.py tests/test_alpha7_prices_release_contract.py tests/test_energy_forecast_contract.py tests/test_foundation_contract.py
-      - name: Alpha21 runtime regression
-        run: pytest -q tests/test_alpha21_multirate_runtime.py
-      - name: Alpha23 naming regression
-        run: pytest -q tests/test_alpha23_execution_naming_cleanup.py
-      - name: Alpha26 physical regression
-        run: pytest -q tests/test_alpha26_step15a_manual_physical_execution.py
-      - name: Alpha27 cutover regression
-        run: pytest -q tests/test_alpha27_beta2_automatic_plan72_cutover.py
-      - name: Alpha29 signature regression
-        run: pytest -q tests/test_alpha29_signature_warning_physical_parity.py
-      - name: Alpha8 plan foundation regression
-        run: pytest -q tests/test_alpha8_ems_plans_foundation.py
-      - name: Plan72 observability regression
-        run: pytest -q tests/test_plan72_observability_parity.py
-      - name: Prestart regression
-        run: pytest -q tests/test_step11_safety_prestart_contract.py
-      - name: Step12.1 control path regression
-        run: pytest -q tests/test_step12_1_control_path_contract.py
-      - name: Step12.2 action handoff regression
-        run: pytest -q tests/test_step12_2_action_handoff_contract.py
-      - name: Step12.3 revalidation regression
-        run: pytest -q tests/test_step12_3_final_revalidation_mode_switch_preview.py
-      - name: Step12.4 automatic gate regression
-        run: pytest -q tests/test_step12_4_automatic_execution_gate.py
-      - name: Step12.5 execution controller regression
-        run: pytest -q tests/test_step12_5_execution_controller.py
-      - name: Step12.6 restart recovery regression
-        run: pytest -q tests/test_step12_6_restart_recovery_observability.py
-      - name: Step13 G5 parity regression
-        run: pytest -q tests/test_step13_g5_frozen_live_parity.py
-      - name: Forecast, prices and runtime regression suite
-        run: pytest -q tests/test_alpha25_solar_array_performance.py tests/test_ems_config_validation.py tests/test_ems_settings_contract.py tests/test_presence_runtime_contract.py tests/test_prices_p4_contract.py tests/test_recorder_attribute_budget.py tests/test_solar_actual_quarter_validation.py tests/test_solar_forecast_model.py tests/test_solar_foundation_contract.py tests/test_solar_p31_runtime_contract.py tests/test_step5a_consumer_wiring_part1.py tests/test_step5a_forecast_diagnostics.py tests/test_step5a_prices_76h_window_fix.py
-      - run: pytest -q
+      - name: Compile integration
+        run: python -m compileall -q custom_components/doems
+      - name: Alpha32 full source parity guard
+        run: pytest -q tests/test_alpha32_full_anker_alpha76_parity.py
+      - name: Exact planner parity
+        run: pytest -q tests/test_alpha31_exact_anker_planner_parity.py
+      - name: Execution and restart parity
+        run: pytest -q tests/test_alpha23_execution_naming_cleanup.py tests/test_alpha26_step15a_manual_physical_execution.py tests/test_alpha27_beta2_automatic_plan72_cutover.py tests/test_alpha29_signature_warning_physical_parity.py tests/test_step12_3_final_revalidation_mode_switch_preview.py tests/test_step12_4_automatic_execution_gate.py tests/test_step12_5_execution_controller.py tests/test_step12_6_restart_recovery_observability.py
+      - name: Planner Scheduler Safety regression
+        run: pytest -q tests/test_alpha8_ems_plans_foundation.py tests/test_step11_safety_prestart_contract.py tests/test_step12_1_control_path_contract.py tests/test_step12_2_action_handoff_contract.py tests/test_plan72_observability_parity.py
+      - name: Forecast Prices Foundation regression
+        run: pytest -q tests/test_alpha5_1_hotfix_contract.py tests/test_alpha5_2_status_hotfix_contract.py tests/test_alpha6_solar_p31_release_contract.py tests/test_alpha7_prices_release_contract.py tests/test_energy_forecast_contract.py tests/test_foundation_contract.py tests/test_alpha21_multirate_runtime.py tests/test_alpha25_solar_array_performance.py tests/test_ems_config_validation.py tests/test_ems_settings_contract.py tests/test_presence_runtime_contract.py tests/test_prices_p4_contract.py tests/test_recorder_attribute_budget.py tests/test_solar_actual_quarter_validation.py tests/test_solar_forecast_model.py tests/test_solar_foundation_contract.py tests/test_solar_p31_runtime_contract.py tests/test_step5a_consumer_wiring_part1.py tests/test_step5a_forecast_diagnostics.py tests/test_step5a_prices_76h_window_fix.py
+      - name: Full pytest
+        run: pytest -q
       - name: Validate JSON files
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          for path in Path('custom_components/doems').rglob('*.json'):
-              json.loads(path.read_text(encoding='utf-8'))
-              print(f'valid: {path}')
+          for path in Path("custom_components/doems").rglob("*.json"):
+              json.loads(path.read_text(encoding="utf-8"))
+              print(f"valid: {path}")
           PY
-      - name: Validate Alpha31 release contract
+      - name: Validate Alpha32 candidate contract
         run: |
-          test -f RELEASE_NOTES_0.1.0-alpha.31.md
-          test -f examples/prices_p4_forecast_card.yaml
-          test -f custom_components/doems/prices.py
-          test -f custom_components/doems/prices_model.py
-          test -f custom_components/doems/prices_sensor.py
-          test -f custom_components/doems/prices_runtime.py
-          test -f custom_components/doems/brand/icon.png
-          test ! -f scripts/build_brand_assets.py
-          test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
+          test -f RELEASE_NOTES_0.1.0-alpha.32.md
+          grep -F 'VERSION = "0.1.0-alpha.32"' custom_components/doems/const.py
+          grep -F '"version": "0.1.0-alpha.32"' custom_components/doems/manifest.json
+          grep -F 'RestoreEntity' custom_components/doems/switch.py
+          grep -F 'previous.attributes.get("mode") == "live_guarded"' custom_components/doems/switch.py
+          grep -F 'planned_energy_reached' custom_components/doems/ems_execution.py
+          grep -F 'abs(actual_setpoint - expected_power) > 10' custom_components/doems/ems_execution.py
+          grep -F 'self.execution.evaluate_final_revalidation(' custom_components/doems/ems_runtime.py
+          grep -F 'self.execution.evaluate_mode_switch_transaction(' custom_components/doems/ems_runtime.py
+          ! grep -F 'DOEMSManualPhysicalExecution' custom_components/doems/ems_runtime.py
+          test -f custom_components/doems/ems_physical_test.py
+          test -f tests/test_alpha32_full_anker_alpha76_parity.py
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
-          grep -F 'VERSION = "0.1.0-alpha.31"' custom_components/doems/const.py
-          grep -F '"version": "0.1.0-alpha.31"' custom_components/doems/manifest.json
-          grep -F 'CONF_EMS_ENABLED = "ems_enabled"' custom_components/doems/const.py
-          grep -F 'CONF_BATTERY_CAPACITY_KWH = "battery_capacity_kwh"' custom_components/doems/const.py
-          grep -F 'CONF_TECHNICAL_MIN_SOC_PERCENT = "technical_min_soc_percent"' custom_components/doems/const.py
-          grep -F 'CONF_MAX_SOC_PERCENT = "max_soc_percent"' custom_components/doems/const.py
-          grep -F 'CONF_MAX_CHARGE_POWER_W = "max_charge_power_w"' custom_components/doems/const.py
-          grep -F 'CONF_MAX_DISCHARGE_POWER_W = "max_discharge_power_w"' custom_components/doems/const.py
-          grep -F 'CONF_SOFTWARE_RESERVE_PERCENT = "software_reserve_percent"' custom_components/doems/const.py
-          grep -F 'CONF_CHARGE_EFFICIENCY_PERCENT = "charge_efficiency_percent"' custom_components/doems/const.py
-          grep -F 'CONF_DISCHARGE_EFFICIENCY_PERCENT = "discharge_efficiency_percent"' custom_components/doems/const.py
-          grep -F 'CONF_MINIMUM_TRADE_MARGIN_EUR_PER_KWH = "minimum_trade_margin_eur_per_kwh"' custom_components/doems/const.py
-          grep -F 'CONF_STARTUP_DELAY_SECONDS = "startup_delay_seconds"' custom_components/doems/const.py
-          test -f custom_components/doems/ems_settings.py
-          test -f custom_components/doems/ems_input_contract.py
-          test -f custom_components/doems/ems_live_input.py
-          test -f custom_components/doems/ems_alpha76_adapter.py
-          test -f custom_components/doems/ems_runtime.py
-          test -f custom_components/doems/ems_plan_store.py
-          test -f custom_components/doems/ems_scheduler.py
-          test -f custom_components/doems/ems_planner_bridge.py
-          test -f custom_components/doems/ems_prestart_validator.py
-          test -f custom_components/doems/ems_safety_guard.py
-          test -f custom_components/doems/ems_control_path.py
-          test -f custom_components/doems/ems_action_controller.py
-          test -f custom_components/doems/ems_execution_handoff.py
-          test -f custom_components/doems/ems_final_revalidation.py
-          test -f custom_components/doems/ems_mode_switch_preview.py
-          test -f custom_components/doems/ems_automatic_execution_gate.py
-          test -f custom_components/doems/ems_execution.py
-          test -f custom_components/doems/solar_actual.py
-          test -f tests/test_solar_actual_quarter_validation.py
-          test -f tests/test_alpha25_solar_array_performance.py
-          grep -F 'SOLAR_DEFAULT_PERFORMANCE_FACTOR = 0.90' custom_components/doems/const.py
-          grep -F 'performance_factor_percent' custom_components/doems/config_flow.py
-          grep -F 'array_performance_factors' custom_components/doems/solar_forecast.py
-          test -f tests/test_step12_2_action_handoff_contract.py
-          test -f tests/test_step12_5_execution_controller.py
-          test -f tests/test_alpha23_execution_naming_cleanup.py
-          test -f tests/test_step12_6_restart_recovery_observability.py
-          test -f tests/test_step13_g5_frozen_live_parity.py
-          test -f tests/test_alpha31_exact_anker_planner_parity.py
-          test -f custom_components/doems/ems_alpha76/energy_need.py
-          test -f custom_components/doems/ems_alpha76/planner_preview.py
-          test -f custom_components/doems/ems_alpha76/planner_72h.py
-          grep -F 'from .ems_alpha76_adapter import SOURCE_TAG, planner_reference, run_ems_chain' custom_components/doems/ems_multirate.py
-          ! grep -F 'ems_policy_alpha20' custom_components/doems/ems_multirate.py
-          test -f custom_components/doems/ems_multirate.py
-          test -f tests/test_alpha21_multirate_runtime.py
-          grep -F 'from .ems_multirate import (' custom_components/doems/ems_runtime.py
-          grep -F 'await self.hass.async_add_executor_job(worker)' custom_components/doems/ems_runtime.py
-          grep -F 'self._request_fast_refresh("execution_monitor")' custom_components/doems/ems_runtime.py
-          ! grep -R -F 'zelfconsumptie_bijladen' custom_components/doems
-          ! grep -R -F 'charge_from_grid_support_kwh' custom_components/doems
-          test -f custom_components/doems/ems_g5_live_parity.py
-          test -f custom_components/doems/ems_g5_live_parity_runtime.py
-          test -f custom_components/doems/ems_g5_live_parity_sensor.py
-          test -f custom_components/doems/button.py
-          grep -F 'POLICY_VERSION = "alpha76_baseline_v1"' custom_components/doems/ems_g5_live_parity.py
-          grep -F 'class DOEMSG5LiveParityRuntime' custom_components/doems/ems_g5_live_parity_runtime.py
-          grep -F 'class DOEMSG5LiveParitySensor' custom_components/doems/ems_g5_live_parity_sensor.py
-          grep -F 'class DOEMSG5FrozenLiveParityCaptureButton' custom_components/doems/button.py
-          grep -F '"service_calls_performed": False' custom_components/doems/ems_g5_live_parity.py
-          grep -F '"physical_execution_authority": False' custom_components/doems/ems_g5_live_parity.py
-          grep -F '"cutover_permitted": False' custom_components/doems/ems_g5_live_parity.py
-          ! grep -F '.services.async_call(' custom_components/doems/ems_g5_live_parity.py
-          ! grep -F '.services.async_call(' custom_components/doems/ems_g5_live_parity_runtime.py
-          ! grep -F '.services.async_call(' custom_components/doems/button.py
-          test -f tests/test_step12_4_automatic_execution_gate.py
-          test -f tests/test_step12_3_final_revalidation_mode_switch_preview.py
-          test -f tests/test_plan72_observability_parity.py
-          grep -F 'class DOEMSEMSPlan72Sensor' custom_components/doems/sensor.py
-          grep -F 'attrs["plan"] = data.get("auto_plan_72h_plan", [])' custom_components/doems/sensor.py
-          grep -F '_unrecorded_attributes = frozenset({"plan"})' custom_components/doems/sensor.py
-          grep -F '("hours", "DOEMS EMS Plan72 Hours"' custom_components/doems/sensor.py
-          grep -F 'f"doems_ems_plan72_{suffix}"' custom_components/doems/sensor.py
-          grep -F '"solar_valid": solar_valid' custom_components/doems/ems_input_contract.py
-          grep -F '"solar_forecast_valid": bool(raw.get("solar_valid"))' custom_components/doems/ems_alpha76_adapter.py
-          grep -F '"auto_plan_72h_solar_horizon_status": status' custom_components/doems/ems_alpha76_adapter.py
-          ! grep -F '"auto_plan_72h_solar_horizon_status"' custom_components/doems/ems_alpha76/planner_72h.py
-          grep -F '"forecast_coverage_hours"' custom_components/doems/sensor.py
-          grep -F '"hours_after_last_usable_solar"' custom_components/doems/sensor.py
-          grep -F '"lookahead_limited_by_plan_end"' custom_components/doems/sensor.py
-          grep -F 'class DOEMSActionController' custom_components/doems/ems_action_controller.py
-          grep -F 'class DOEMSExecutionHandoff' custom_components/doems/ems_execution_handoff.py
-          grep -F '"controller_physical_control": False' custom_components/doems/ems_action_controller.py
-          grep -F '"auto_execution_handoff_execution_permitted": False' custom_components/doems/ems_execution_handoff.py
-          grep -F '"auto_execution_handoff_physical_control": False' custom_components/doems/ems_execution_handoff.py
-          ! grep -F '.services.async_call(' custom_components/doems/ems_action_controller.py
-          ! grep -F '.services.async_call(' custom_components/doems/ems_execution_handoff.py
-          ! grep -F 'select_option' custom_components/doems/ems_action_controller.py
-          ! grep -F 'set_value' custom_components/doems/ems_action_controller.py
-          ! grep -F 'select_option' custom_components/doems/ems_execution_handoff.py
-          ! grep -F 'set_value' custom_components/doems/ems_execution_handoff.py
-          ! grep -F '.services.async_call(' custom_components/doems/ems_final_revalidation.py
-          ! grep -F '.services.async_call(' custom_components/doems/ems_mode_switch_preview.py
-          grep -F '"auto_final_revalidation_execution_permitted": False' custom_components/doems/ems_final_revalidation.py
-          grep -F '"auto_mode_switch_preview_execution_permitted": False' custom_components/doems/ems_mode_switch_preview.py
-          grep -F '"auto_mode_switch_preview_transaction_started": False' custom_components/doems/ems_mode_switch_preview.py
-          test -f custom_components/doems/ems_automatic_execution_gate.py
-          grep -F 'class DOEMSAutomaticExecutionGate' custom_components/doems/ems_automatic_execution_gate.py
-          grep -F '"execution_controller_invoked": False' custom_components/doems/ems_automatic_execution_gate.py
-          grep -F '"service_calls_performed": False' custom_components/doems/ems_automatic_execution_gate.py
-          grep -F '"physical_execution_authority": False' custom_components/doems/ems_automatic_execution_gate.py
-          ! grep -F '.services.async_call(' custom_components/doems/ems_automatic_execution_gate.py
-          grep -F 'class DOEMSExecutionController' custom_components/doems/ems_execution.py
-          grep -F '"execution_controller_invoked": False' custom_components/doems/ems_execution.py
-          grep -F '"service_calls_performed": False' custom_components/doems/ems_execution.py
-          grep -F '"physical_execution_authority": False' custom_components/doems/ems_execution.py
-          grep -F '"safe_return_performed": False' custom_components/doems/ems_execution.py
-          ! grep -F '.services.async_call(' custom_components/doems/ems_execution.py
-          ! grep -F 'select.select_option' custom_components/doems/ems_execution.py
-          ! grep -F 'number.set_value' custom_components/doems/ems_execution.py
-          grep -F 'self.execution.evaluate(' custom_components/doems/ems_runtime.py
-          grep -F 'execution_monitor' custom_components/doems/ems_runtime.py
-          grep -F 'execution_run_history' custom_components/doems/sensor.py
-          grep -F 'Store[dict[str, Any]]' custom_components/doems/ems_runtime.py
-          grep -F '.execution"' custom_components/doems/ems_runtime.py
-          grep -F 'restore_persistence(' custom_components/doems/ems_runtime.py
-          grep -F 'export_persistence(' custom_components/doems/ems_runtime.py
-          grep -F 'fail_safe_off_no_resume' custom_components/doems/ems_runtime.py
-          grep -F 'recovered_interrupted' custom_components/doems/ems_execution.py
-          grep -F 'restart_recovery' custom_components/doems/ems_execution.py
-          grep -F 'self._automatic_execution_armed = False' custom_components/doems/ems_runtime.py
-          grep -F '"automatic_execution_armed": self._automatic_execution_armed' custom_components/doems/ems_runtime.py
-          grep -F 'class DOEMSAutomaticExecutionSwitch' custom_components/doems/switch.py
-          grep -F '"physical_execution_enabled": True' custom_components/doems/switch.py
-          ! grep -F 'RestoreEntity' custom_components/doems/switch.py
-          grep -F 'manual_physical_execution_enabled' custom_components/doems/ems_runtime.py
-          grep -F 'automatic_planner_physical_execution_enabled' custom_components/doems/ems_runtime.py
-          grep -F 'physical_execution_authority' custom_components/doems/ems_runtime.py
-          test -f custom_components/doems/ems_manual_physical_execution.py
-          test -f tests/test_alpha26_step15a_manual_physical_execution.py
-          grep -F '.services.async_call(' custom_components/doems/ems_manual_physical_execution.py
-          grep -F 'origin == "automatic_72h_planner"' custom_components/doems/ems_manual_physical_execution.py
-          grep -F 'automatic_planner_execution_enabled": True' custom_components/doems/switch.py
-          grep -F 'automatic_planner_physical_execution_enabled": True' custom_components/doems/ems_runtime.py
-          test -f tests/test_alpha27_beta2_automatic_plan72_cutover.py
-          test -f tests/test_alpha29_signature_warning_physical_parity.py
-          test -f examples/beta2_automatic_plan72_cutover_card.yaml
-          test -f tests/test_step12_1_control_path_contract.py
-          grep -F 'CONF_OPERATING_MODE_ENTITY = "operating_mode_entity"' custom_components/doems/const.py
-          grep -F 'CONF_ACTION_DIRECTION_ENTITY = "action_direction_entity"' custom_components/doems/const.py
-          grep -F 'CONF_POWER_SETPOINT_ENTITY = "power_setpoint_entity"' custom_components/doems/const.py
-          grep -F 'CONTROL_PATH_STABLE_SECONDS = 60' custom_components/doems/const.py
-          grep -F 'class DOEMSControlPathObserver' custom_components/doems/ems_control_path.py
-          grep -F '"read_only": True' custom_components/doems/ems_control_path.py
-          grep -F '"service_calls_performed": False' custom_components/doems/ems_control_path.py
-          grep -F '"physical_execution_authority": False' custom_components/doems/ems_control_path.py
-          ! grep -F '.services.async_call(' custom_components/doems/ems_control_path.py
-          test -f tests/test_step11_safety_prestart_contract.py
-          test -f custom_components/doems/ems_soc.py
-          test -f custom_components/doems/number.py
-          test -f tests/test_alpha8_ems_plans_foundation.py
-          grep -F 'PLAN_SLOT_COUNT = 3' custom_components/doems/const.py
-          grep -F 'class DOEMSPlanStore' custom_components/doems/ems_plan_store.py
-          grep -F 'f"{DOMAIN}.{entry_id}.plans"' custom_components/doems/ems_plan_store.py
-          grep -F 'class DOEMSScheduler' custom_components/doems/ems_scheduler.py
-          grep -F 'class DOEMSEMSRuntime' custom_components/doems/ems_runtime.py
-          grep -F 'run_ems_chain' custom_components/doems/ems_alpha76_adapter.py
-          grep -F 'doems_plan_{slot}_{field}' custom_components/doems/select.py
-          grep -F 'doems_plan_{slot}_{definition.object_suffix}' custom_components/doems/number.py
-          grep -F 'doems_plan_{slot}_start_time' custom_components/doems/datetime.py
-          grep -F 'doems_plan_{slot}_status' custom_components/doems/sensor.py
-          grep -F 'doems_scheduler' custom_components/doems/sensor.py
-          grep -F 'doems_ems' custom_components/doems/sensor.py
-          test ! -f custom_components/doems/ems_step5c.py
-          ! grep -R -F 'legacy_authority_entity' custom_components/doems
-          ! grep -R -F 'legacy_automatic_execution_entity' custom_components/doems
-          test -f custom_components/doems/ems_alpha76/energy_need.py
-          test -f custom_components/doems/ems_alpha76/planner_preview.py
-          test -f custom_components/doems/ems_alpha76/planner_72h.py
-          grep -F 'alpha41_rolling_quarter_start_no_clock_hour_rounding' custom_components/doems/ems_input_contract.py
-          grep -F 'existing_doems_forecast' custom_components/doems/ems_live_input.py
-          grep -F 'planner_runtime_active": True' custom_components/doems/ems_alpha76_adapter.py
-          grep -F 'plan_store_write": True' custom_components/doems/ems_alpha76_adapter.py
-          grep -F 'scheduler_invoked": True' custom_components/doems/ems_alpha76_adapter.py
-          grep -F 'service_calls_performed": False' custom_components/doems/ems_alpha76_adapter.py
-          grep -F 'physical_execution_authority": False' custom_components/doems/ems_alpha76_adapter.py
-          grep -F 'class EMSSettings' custom_components/doems/ems_settings.py
-          grep -F 'EMSSettings.from_options(entry.options)' custom_components/doems/__init__.py
-          grep -F 'doems_ems_settings' custom_components/doems/sensor.py
-          grep -F '"settings_source": "config_entry_options"' custom_components/doems/sensor.py
-          grep -F '"settings_snapshot_immutable": True' custom_components/doems/sensor.py
-          grep -F '"startup_delay_runtime_gate_active": False' custom_components/doems/sensor.py
-          grep -F '"planner_logic_active": self.runtime is not None' custom_components/doems/sensor.py
-          grep -F '"physical_execution_authority": False' custom_components/doems/sensor.py
-          grep -F 'CONF_AWAY_SCHEDULE_ENABLED = "away_schedule_enabled"' custom_components/doems/const.py
-          grep -F 'CONF_AWAY_START = "away_start"' custom_components/doems/const.py
-          grep -F 'CONF_AWAY_END = "away_end"' custom_components/doems/const.py
-          grep -F 'PRESENCE_STORAGE_KEY = f"{DOMAIN}.presence"' custom_components/doems/const.py
-          grep -F 'PLATFORMS = ["sensor", "select", "number", "binary_sensor", "switch", "datetime", "button"]' custom_components/doems/const.py
-          test -f custom_components/doems/presence.py
-          test -f custom_components/doems/switch.py
-          test -f custom_components/doems/datetime.py
-          grep -F 'class DOEMSPresenceStore' custom_components/doems/presence.py
-          grep -F 'doems_presence_profile' custom_components/doems/select.py
-          grep -F 'doems_away_schedule_enabled' custom_components/doems/switch.py
-          grep -F 'doems_away_start' custom_components/doems/datetime.py
-          grep -F 'doems_away_end' custom_components/doems/datetime.py
-          grep -F 'doems_away_active' custom_components/doems/binary_sensor.py
-          grep -F 'doems_away_schedule_valid' custom_components/doems/binary_sensor.py
-          grep -F 'doems_presence_context' custom_components/doems/sensor.py
-          grep -F 'PROFILE_UNCLASSIFIED' custom_components/doems/presence.py
-          grep -F 'manual_override_active' custom_components/doems/presence.py
-          grep -F 'physical_execution_authority": False' custom_components/doems/presence.py
-          test -f custom_components/doems/ems_config_validation.py
-          grep -F 'EMS_VALIDATED_FIELDS' custom_components/doems/ems_config_validation.py
-          grep -F 'ERR_INVALID_NUMBER = "ems_invalid_number"' custom_components/doems/ems_config_validation.py
-          grep -F 'ERR_SOC_RANGE_INVALID = "ems_soc_range_invalid"' custom_components/doems/ems_config_validation.py
-          ! grep -F 'CONF_AWAY_START' custom_components/doems/ems_config_validation.py
-          ! grep -F 'CONF_AWAY_END' custom_components/doems/ems_config_validation.py
-          ! grep -F 'CONF_AWAY_SCHEDULE_ENABLED' custom_components/doems/ems_config_validation.py
-          grep -F 'validate_ems_combination(normalized)' custom_components/doems/config_flow.py
-          grep -F 'validate_ems_field' custom_components/doems/config_flow.py
-          grep -F 'errors=errors' custom_components/doems/config_flow.py
-          grep -F 'DEFAULT_STARTUP_DELAY_SECONDS = 30' custom_components/doems/const.py
-          grep -F 'EMS_MIN_STARTUP_DELAY_SECONDS = 30' custom_components/doems/const.py
-          grep -F 'EMS_MAX_STARTUP_DELAY_SECONDS = 300' custom_components/doems/const.py
-          grep -F 'EMS_MAX_POWER_W = 3500' custom_components/doems/const.py
-          grep -F 'async def async_step_ems' custom_components/doems/config_flow.py
-          grep -F 'build_prices_sensors' custom_components/doems/sensor.py
-          grep -F 'DOEMSRegisteredPricesManager' custom_components/doems/__init__.py
-          grep -F 'GAS_SOURCE_ENERGYZERO_MARKET_ACTION' custom_components/doems/const.py
-          grep -F '"get_gas_prices"' custom_components/doems/prices.py
-          grep -F '"incl_vat": True' custom_components/doems/prices.py
-          grep -F 'CONF_GAS_ENERGYZERO_CONFIG_ENTRY' custom_components/doems/config_flow.py
-          grep -F 'GAS_HIGHER_HEATING_VALUE_KWH_M3 = 9.77' custom_components/doems/const.py
-          grep -F 'doems_prices_gas_vs_electricity' custom_components/doems/prices_sensor.py
-          grep -F 'energy_carrier_price_only' custom_components/doems/prices.py
-          grep -F 'sensor.doems_prices_timeline' examples/prices_p4_forecast_card.yaml
-          grep -F 'import_all_in' examples/prices_p4_forecast_card.yaml
-          grep -F 'export_all_in' examples/prices_p4_forecast_card.yaml
-          test ! -f custom_components/doems/solar_reference_freeze.py
-          test ! -f custom_components/doems/solar_reference_freeze_runtime.py
-          test -f custom_components/doems/button.py
-          test ! -f tests/test_solar_reference_freeze_contract.py
-          test ! -f examples/alpha41_solar_freeze_dashboard.yaml
-          ! grep -R -F 'doems_capture_alpha41_solar_freeze' custom_components/doems
-          ! grep -R -F 'doems_alpha41_solar_freeze_captured' custom_components/doems
-          grep -F 'SOLAR_PUBLISH_MINUTES = (0, 15, 30, 45)' custom_components/doems/solar_forecast.py
-          grep -F 'SOLAR_PUBLISH_SECOND = 30' custom_components/doems/solar_forecast.py
-          grep -F 'self._publish_quarter_roll' custom_components/doems/solar_forecast.py
-          grep -F 'def test_runtime_republishes_rolling_window_each_native_quarter_without_provider_fetch' tests/test_solar_p31_runtime_contract.py
-          grep -F 'class SolarActualQuarterManager' custom_components/doems/solar_actual.py
-          grep -F 'doems_solar_actual_quarter' custom_components/doems/solar_sensor.py
-          grep -F 'forecast_locked_at_start' custom_components/doems/solar_actual.py
-          grep -F 'forecast_point_for_start' custom_components/doems/solar_forecast.py
-          grep -F 'class DOEMSExecutionController' custom_components/doems/ems_execution.py
-          grep -F '"execution_status": self._status' custom_components/doems/ems_execution.py
-          grep -F '"execution_active": self._active' custom_components/doems/ems_execution.py
-          grep -F '"execution_reason": self._reason' custom_components/doems/ems_execution.py
-          grep -F 'self._request_fast_refresh("execution_monitor")' custom_components/doems/ems_runtime.py
-          grep -F '"execution_store_key": f"{DOMAIN}.{self.entry.entry_id}.execution"' custom_components/doems/ems_runtime.py
-          test "$(find custom_components/doems -type f -iname '*sha*dow*' | wc -l)" -eq 0
-
-  publish-alpha31:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: validate
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Build release archive
-        run: |
-          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.31.md
-          sha256sum doems.zip > SHA256SUMS.txt
-          cat SHA256SUMS.txt
-      - name: Verify EMS settings, Presence and Prices runtime are packaged
-        run: |
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_settings.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_input_contract.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_live_input.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_alpha76_adapter.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_multirate.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_runtime.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_plan_store.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_scheduler.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_planner_bridge.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_prestart_validator.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_safety_guard.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_control_path.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_action_controller.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_execution_handoff.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_final_revalidation.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_mode_switch_preview.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_automatic_execution_gate.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_execution.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_manual_physical_execution.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/solar_actual.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_g5_live_parity.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_g5_live_parity_runtime.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_g5_live_parity_sensor.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/button.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/number.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/ems_alpha76/planner_72h.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/presence.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/switch.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/datetime.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/prices.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/prices_model.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/prices_sensor.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/prices_runtime.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/config_flow.py'
-          unzip -l doems.zip | grep -F 'examples/prices_p4_forecast_card.yaml'
-      - name: Verify exact existing DOEMS brand icon is packaged
-        run: |
-          unzip -l doems.zip | grep -F 'custom_components/doems/brand/icon.png'
-          test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
-          test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
-      - name: Publish Alpha31 Exact Anker Alpha61/76 Planner Parity release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if gh release view 0.1.0-alpha.31 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.31 --title "DOEMS 0.1.0-alpha.31 - Exact Anker Alpha61/76 Planner Parity" --notes-file RELEASE_NOTES_0.1.0-alpha.31.md --prerelease
-          else
-            gh release create 0.1.0-alpha.31 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.31 - Exact Anker Alpha61/76 Planner Parity" --notes-file RELEASE_NOTES_0.1.0-alpha.31.md --prerelease
-          fi
