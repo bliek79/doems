@@ -228,9 +228,6 @@ def _golden_chain(
         forecast,
         soc_percent,
         settings.software_reserve_percent,
-        battery_capacity_kwh=settings.battery_capacity_kwh,
-        technical_min_soc_percent=settings.technical_min_soc_percent,
-        max_soc_percent=settings.max_soc_percent,
         now=reference,
     )
     preview = build_planner_preview(
@@ -241,9 +238,6 @@ def _golden_chain(
         settings.discharge_efficiency_percent,
         settings.minimum_trade_margin_eur_per_kwh,
         max_charge_power_w=settings.max_charge_power_w,
-        battery_capacity_kwh=settings.battery_capacity_kwh,
-        technical_min_soc_percent=settings.technical_min_soc_percent,
-        max_soc_percent=settings.max_soc_percent,
         now=reference,
     )
     plan72 = build_72h_plan_preview(
@@ -256,9 +250,6 @@ def _golden_chain(
         execution_buffer_percent=EXECUTION_BUFFER_PERCENT,
         max_charge_power_w=settings.max_charge_power_w,
         max_discharge_power_w=settings.max_discharge_power_w,
-        battery_capacity_kwh=settings.battery_capacity_kwh,
-        technical_min_soc_percent=settings.technical_min_soc_percent,
-        max_soc_percent=settings.max_soc_percent,
         now=reference,
     )
     bridge = _bridge(
