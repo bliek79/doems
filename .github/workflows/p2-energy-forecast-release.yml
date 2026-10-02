@@ -1,4 +1,4 @@
-name: DOEMS CI and Alpha27 Beta Phase 2 Automatic Plan72 Physical Cutover Release
+name: DOEMS CI and Alpha28 Beta Phase 2 Signature Gate Fail-Closed Hotfix Release
 
 on:
   pull_request:
@@ -29,9 +29,9 @@ jobs:
               json.loads(path.read_text(encoding='utf-8'))
               print(f'valid: {path}')
           PY
-      - name: Validate Alpha27 release contract
+      - name: Validate Alpha28 release contract
         run: |
-          test -f RELEASE_NOTES_0.1.0-alpha.27.md
+          test -f RELEASE_NOTES_0.1.0-alpha.28.md
           test -f examples/prices_p4_forecast_card.yaml
           test -f custom_components/doems/prices.py
           test -f custom_components/doems/prices_model.py
@@ -41,8 +41,8 @@ jobs:
           test ! -f scripts/build_brand_assets.py
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
-          grep -F 'VERSION = "0.1.0-alpha.27"' custom_components/doems/const.py
-          grep -F '"version": "0.1.0-alpha.27"' custom_components/doems/manifest.json
+          grep -F 'VERSION = "0.1.0-alpha.28"' custom_components/doems/const.py
+          grep -F '"version": "0.1.0-alpha.28"' custom_components/doems/manifest.json
           grep -F 'CONF_EMS_ENABLED = "ems_enabled"' custom_components/doems/const.py
           grep -F 'CONF_BATTERY_CAPACITY_KWH = "battery_capacity_kwh"' custom_components/doems/const.py
           grep -F 'CONF_TECHNICAL_MIN_SOC_PERCENT = "technical_min_soc_percent"' custom_components/doems/const.py
@@ -175,6 +175,7 @@ jobs:
           grep -F 'automatic_planner_execution_enabled": True' custom_components/doems/switch.py
           grep -F 'automatic_planner_physical_execution_enabled": True' custom_components/doems/ems_runtime.py
           test -f tests/test_alpha27_beta2_automatic_plan72_cutover.py
+          test -f tests/test_alpha28_signature_gate_fail_closed.py
           test -f examples/beta2_automatic_plan72_cutover_card.yaml
           test -f tests/test_step12_1_control_path_contract.py
           grep -F 'CONF_OPERATING_MODE_ENTITY = "operating_mode_entity"' custom_components/doems/const.py
@@ -292,7 +293,7 @@ jobs:
           grep -F '"execution_store_key": f"{DOMAIN}.{self.entry.entry_id}.execution"' custom_components/doems/ems_runtime.py
           test "$(find custom_components/doems -type f -iname '*sha*dow*' | wc -l)" -eq 0
 
-  publish-alpha27:
+  publish-alpha28:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
@@ -302,7 +303,7 @@ jobs:
           fetch-depth: 0
       - name: Build release archive
         run: |
-          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.27.md
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.28.md
           sha256sum doems.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - name: Verify EMS settings, Presence and Prices runtime are packaged
@@ -348,12 +349,12 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/icon.png'
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
-      - name: Publish Alpha27 Beta Phase 2 Automatic Plan72 Physical Cutover release
+      - name: Publish Alpha28 Beta Phase 2 Signature Gate Fail-Closed Hotfix release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view 0.1.0-alpha.27 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.27 --title "DOEMS 0.1.0-alpha.27 - Beta Phase 2 Automatic Plan72 Physical Cutover" --notes-file RELEASE_NOTES_0.1.0-alpha.27.md --prerelease
+          if gh release view 0.1.0-alpha.28 >/dev/null 2>&1; then
+            gh release edit 0.1.0-alpha.28 --title "DOEMS 0.1.0-alpha.28 - Beta Phase 2 Signature Gate Fail-Closed Hotfix" --notes-file RELEASE_NOTES_0.1.0-alpha.28.md --prerelease
           else
-            gh release create 0.1.0-alpha.27 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.27 - Beta Phase 2 Automatic Plan72 Physical Cutover" --notes-file RELEASE_NOTES_0.1.0-alpha.27.md --prerelease
+            gh release create 0.1.0-alpha.28 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.28 - Beta Phase 2 Signature Gate Fail-Closed Hotfix" --notes-file RELEASE_NOTES_0.1.0-alpha.28.md --prerelease
           fi
