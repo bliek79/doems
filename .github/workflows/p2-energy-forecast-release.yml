@@ -25,6 +25,8 @@ jobs:
         run: pytest -q tests/test_alpha20_cheapest_energy_safety.py::test_alpha30_safety_only_remains_when_trade_is_not_profitable
       - name: Alpha20/30 planner policy suite
         run: pytest -q tests/test_alpha20_cheapest_energy_safety.py
+      - name: Version and carried-forward contract suite
+        run: pytest -q tests/test_alpha5_1_hotfix_contract.py tests/test_alpha5_2_status_hotfix_contract.py tests/test_alpha6_solar_p31_release_contract.py tests/test_alpha7_prices_release_contract.py tests/test_energy_forecast_contract.py tests/test_foundation_contract.py
       - run: pytest -q
       - name: Validate JSON files
         run: |
