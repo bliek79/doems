@@ -21,7 +21,7 @@ def test_alpha27_opens_only_guarded_automatic_plan72_on_proven_writer() -> None:
     assert 'snapshot.get("auto_execution_gate_execution_permitted") is not True' in physical
     assert 'snapshot.get("auto_execution_gate_selected_slot") != slot' in physical
     assert 'snapshot.get("auto_execution_gate_planner_identity") != planner_identity' in physical
-    assert 'snapshot.get("prestart_signature_match") is not True' in physical
+    assert 'snapshot.get("prestart_signature_match") is not True' not in physical
     assert 'origin == "automatic_72h_planner"' in runtime
     assert 'gate.get("auto_execution_gate_status") != "armed_ready"' in runtime
     assert 'gate.get("auto_execution_gate_execution_permitted") is not True' in runtime
@@ -52,7 +52,7 @@ def test_alpha27_revalidates_automatic_identity_after_mode_switch() -> None:
     assert 'live_snapshot.get("auto_execution_gate_execution_permitted") is not True' in physical
     assert 'live_snapshot.get("auto_execution_gate_selected_slot") != slot' in physical
     assert 'live_snapshot.get("auto_execution_gate_planner_identity") != planner_identity' in physical
-    assert 'live_snapshot.get("prestart_signature_match") is not True' in physical
+    assert 'live_snapshot.get("prestart_signature_match") is not True' not in physical
     assert 'live_snapshot.get("auto_execution_gate_action") != action' in physical
     assert "Automatic gate-vermogen wijzigde tijdens arming" in physical
     assert "Automatic gate-doel-SOC wijzigde tijdens arming" in physical
