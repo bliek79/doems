@@ -20,8 +20,21 @@ from .const import (
     DOMAIN,
     PLATFORMS,
     PLAN_SLOT_COUNT,
-    SERVICE_CANCEL_PLAN,
+    SERVICE_START_CHARGE_TEST,
+    SERVICE_START_DISCHARGE_TEST,
+    SERVICE_STOP_PHYSICAL_TEST,
+    SERVICE_EXECUTE_SELECTED_PLAN,
+    SERVICE_STOP_EXECUTION,
     SERVICE_SCHEDULE_PLAN,
+    SERVICE_START_PLAN_NOW,
+    SERVICE_CANCEL_PLAN,
+    SERVICE_STOP_ALL,
+    TEST_DEFAULT_DURATION_S,
+    TEST_DEFAULT_POWER_W,
+    TEST_MAX_DURATION_S,
+    TEST_MAX_POWER_W,
+    TEST_MIN_DURATION_S,
+    TEST_MIN_POWER_W,
 )
 from .ems_settings import EMSSettings
 from .ems_runtime import DOEMSEMSRuntime
@@ -70,7 +83,39 @@ def _single_ems_runtime(hass: HomeAssistant) -> DOEMSEMSRuntime:
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    """Register non-actuating Alpha8 manual plan lifecycle services."""
+    """Register the frozen Anker alpha76 EMS service surface under doems."""
+
+    async def _start_charge_test(call: ServiceCall) -> None:
+        if call.data.get("confirm") is not True:
+            raise HomeAssistantError("Bevestiging ontbreekt: zet confirm op true")
+        runtime = _single_ems_runtime(hass)
+        await runtime.physical_test.async_start_charge_test(
+            power_w=int(call.data.get("power_w", TEST_DEFAULT_POWER_W)),
+            duration_s=int(call.data.get("duration_s", TEST_DEFAULT_DURATION_S)),
+        )
+
+    async def _start_discharge_test(call: ServiceCall) -> None:
+        if call.data.get("confirm") is not True:
+            raise HomeAssistantError("Bevestiging ontbreekt: zet confirm op true")
+        runtime = _single_ems_runtime(hass)
+        await runtime.physical_test.async_start_discharge_test(
+            power_w=int(call.data.get("power_w", TEST_DEFAULT_POWER_W)),
+            duration_s=int(call.data.get("duration_s", TEST_DEFAULT_DURATION_S)),
+        )
+
+    async def _stop_physical_test(call: ServiceCall) -> None:
+        runtime = _single_ems_runtime(hass)
+        await runtime.physical_test.async_stop("manual_stop", emergency=False)
+
+    async def _execute_selected_plan(call: ServiceCall) -> None:
+        if call.data.get("confirm") is not True:
+            raise HomeAssistantError("Bevestiging ontbreekt: zet confirm op true")
+        runtime = _single_ems_runtime(hass)
+        await runtime.execution.async_execute_selected_plan()
+
+    async def _stop_execution(call: ServiceCall) -> None:
+        runtime = _single_ems_runtime(hass)
+        await runtime.execution.async_stop("manual_stop", emergency=False)
 
     def _slot_from_call(call: ServiceCall) -> int:
         slot = int(call.data.get("slot", 0))
@@ -92,20 +137,150 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             start = start.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
         if start <= dt_util.now():
             raise HomeAssistantError(f"Plan {slot} starttijd moet in de toekomst liggen")
-
         await runtime.plan_store.async_set_value(slot, "execution_mode", "gepland")
         await runtime.plan_store.async_mark_lifecycle(
             slot, "pending", "scheduled_by_user"
         )
         await runtime.async_refresh("manual_schedule_plan")
 
+    async def _start_plan_now(call: ServiceCall) -> None:
+        if call.data.get("confirm") is not True:
+            raise HomeAssistantError("Bevestiging ontbreekt: zet confirm op true")
+        runtime = _single_ems_runtime(hass)
+        slot = _slot_from_call(call)
+        current = runtime.plan_store.get_plan(slot)
+        if current.get("action") == "geen":
+            raise HomeAssistantError(f"Plan {slot} heeft nog geen actie")
+        await runtime.plan_store.async_set_value(slot, "execution_mode", "direct")
+        await runtime.plan_store.async_mark_lifecycle(
+            slot, "pending", "start_now_by_user"
+        )
+        await runtime.async_refresh("manual_start_plan_now")
+        data = runtime.data
+        if data.get("scheduler_selected_slot") != slot or not data.get("scheduler_ready"):
+            raise HomeAssistantError(f"Plan {slot} is niet startklaar")
+        await runtime.execution.async_execute_selected_plan()
+
     async def _cancel_plan(call: ServiceCall) -> None:
         runtime = _single_ems_runtime(hass)
         slot = _slot_from_call(call)
+        execution = runtime.execution.data
+        if execution.get("active") and int(execution.get("slot") or 0) == slot:
+            await runtime.execution.async_stop("manual_stop", emergency=False)
+            return
         await runtime.plan_store.async_mark_lifecycle(
             slot, "geannuleerd", "manual_cancel"
         )
         await runtime.async_refresh("manual_cancel_plan")
+
+    async def _stop_all(call: ServiceCall) -> None:
+        runtime = _single_ems_runtime(hass)
+        errors: list[str] = []
+        if runtime.physical_test.data.get("active"):
+            try:
+                await runtime.physical_test.async_stop("manual_stop", emergency=False)
+            except Exception as err:
+                errors.append(f"physical_test: {err}")
+        if runtime.execution.data.get("active") or runtime.execution.data.get(
+            "auto_mode_switch_active"
+        ):
+            try:
+                await runtime.execution.async_stop("manual_stop", emergency=False)
+            except Exception as err:
+                errors.append(f"execution: {err}")
+
+        ids = runtime.control_entity_ids
+        power_entity = ids.get("power_setpoint")
+        mode_entity = ids.get("operating_mode")
+        if power_entity:
+            state = hass.states.get(power_entity)
+            if state is not None and state.state not in {"unknown", "unavailable"}:
+                try:
+                    await hass.services.async_call(
+                        "number",
+                        "set_value",
+                        {"value": 0},
+                        target={"entity_id": power_entity},
+                        blocking=True,
+                    )
+                except Exception as err:
+                    errors.append(f"power_zero: {err}")
+        if mode_entity:
+            state = hass.states.get(mode_entity)
+            if (
+                state is not None
+                and state.state not in {"unknown", "unavailable", "self_consumption"}
+            ):
+                try:
+                    await hass.services.async_call(
+                        "select",
+                        "select_option",
+                        {"option": "self_consumption"},
+                        target={"entity_id": mode_entity},
+                        blocking=True,
+                    )
+                except Exception as err:
+                    errors.append(f"self_consumption: {err}")
+        await runtime.async_refresh("manual_stop_all")
+        if errors:
+            raise HomeAssistantError(
+                "Alles stoppen deels mislukt: " + "; ".join(errors)
+            )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_START_CHARGE_TEST,
+        _start_charge_test,
+        schema=vol.Schema(
+            {
+                vol.Required("confirm"): bool,
+                vol.Optional("power_w", default=TEST_DEFAULT_POWER_W): vol.All(
+                    vol.Coerce(int),
+                    vol.Range(min=TEST_MIN_POWER_W, max=TEST_MAX_POWER_W),
+                ),
+                vol.Optional("duration_s", default=TEST_DEFAULT_DURATION_S): vol.All(
+                    vol.Coerce(int),
+                    vol.Range(min=TEST_MIN_DURATION_S, max=TEST_MAX_DURATION_S),
+                ),
+            }
+        ),
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_START_DISCHARGE_TEST,
+        _start_discharge_test,
+        schema=vol.Schema(
+            {
+                vol.Required("confirm"): bool,
+                vol.Optional("power_w", default=TEST_DEFAULT_POWER_W): vol.All(
+                    vol.Coerce(int),
+                    vol.Range(min=TEST_MIN_POWER_W, max=TEST_MAX_POWER_W),
+                ),
+                vol.Optional("duration_s", default=TEST_DEFAULT_DURATION_S): vol.All(
+                    vol.Coerce(int),
+                    vol.Range(min=TEST_MIN_DURATION_S, max=TEST_MAX_DURATION_S),
+                ),
+            }
+        ),
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_STOP_PHYSICAL_TEST,
+        _stop_physical_test,
+        schema=vol.Schema({}),
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_EXECUTE_SELECTED_PLAN,
+        _execute_selected_plan,
+        schema=vol.Schema({vol.Required("confirm"): bool}),
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_STOP_EXECUTION,
+        _stop_execution,
+        schema=vol.Schema({}),
+    )
 
     slot_schema = vol.All(vol.Coerce(int), vol.Range(min=1, max=PLAN_SLOT_COUNT))
     hass.services.async_register(
@@ -116,9 +291,26 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     )
     hass.services.async_register(
         DOMAIN,
+        SERVICE_START_PLAN_NOW,
+        _start_plan_now,
+        schema=vol.Schema(
+            {
+                vol.Required("slot"): slot_schema,
+                vol.Required("confirm"): bool,
+            }
+        ),
+    )
+    hass.services.async_register(
+        DOMAIN,
         SERVICE_CANCEL_PLAN,
         _cancel_plan,
         schema=vol.Schema({vol.Required("slot"): slot_schema}),
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_STOP_ALL,
+        _stop_all,
+        schema=vol.Schema({}),
     )
     return True
 
