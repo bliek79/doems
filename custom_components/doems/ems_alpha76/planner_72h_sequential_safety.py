@@ -822,7 +822,8 @@ def build_72h_plan_preview_sequential_safety(
         "auto_plan_72h_status": "ready" if execution_buffer_safe else "infeasible",
         "auto_plan_72h_valid": execution_buffer_safe,
         "auto_plan_72h_reason": (
-            "72-uurs planpreview sequentieel safety-gevalideerd"
+            "72-uurs planpreview berekend; veiligheidslading heeft voorrang, "
+            "daarna solar, woningdekking en observerende handel"
             if execution_buffer_safe
             else "sequentiele safety-replay kan execution-reserve niet halen"
         ),
