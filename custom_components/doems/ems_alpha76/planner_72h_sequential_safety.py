@@ -879,9 +879,8 @@ def build_72h_plan_preview_sequential_safety(
         "auto_plan_72h_observational_only": True,
         "auto_plan_72h_execution_enabled": False,
         "auto_plan_72h_note": (
-            "DOEMS Plan72 gebruikt de Alpha76-plannerbasis met de expliciet "
-            "geautoriseerde sequentiele safety-uitzondering. Dynamische reserve, "
-            "2 procentpunt execution buffer en overige Alpha76-plannersemantiek "
-            "blijven behouden."
+            "Dummy OS EMS Plan72 gebruikt de 2 procentpunt uitvoeringsbuffer, "
+            "dynamische reserve en vooruitkijkende reserveplanning. Automatische "
+            "laad/ontlaaduitvoering blijft buiten de huidige fysieke alpha-scope."
         ),
     }
