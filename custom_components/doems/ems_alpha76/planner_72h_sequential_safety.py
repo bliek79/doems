@@ -12,6 +12,7 @@ from .const import (
 )
 
 _MIN_ENERGY_KWH = 0.01
+_SAFETY_TOL_KWH = 1e-6
 
 
 def _as_float(value: Any) -> float | None:
@@ -255,125 +256,265 @@ def build_72h_plan_preview_sequential_safety(
 
     trade_energy_reserved_kwh = 0.0
 
-    def _planned_dynamic_safety_charge_by_hour() -> dict[str, float]:
-        """Pre-plan safety energy before each future execution-reserve deadline.
+    def _build_sequential_safety_plan() -> dict[str, Any]:
+        """Replay one authoritative safety plan against the actual SOC path.
 
-        Alpha27 fixes the timing edge found in alpha26: the reserve that applies
-        *after* an hour must already be achievable by the end of that same hour.
-        The previous implementation looked at the reserve at the start of the
-        following hour, which could make a sharp reserve increase arrive one
-        hour too late.
-
-        For every local end-of-hour reserve peak we estimate how much stored
-        energy will be available from the starting SOC and free solar. Only the
-        remaining deficit is bought from the grid, allocated to the cheapest
-        technically feasible hour(s) at or before the deadline.
+        This is the second explicitly authorized DOEMS exception to Alpha76.
+        The original Alpha76 pre-estimator restarts each future deadline from
+        the original start SOC and therefore can forget intervening home
+        discharge. The replay below uses the same hour sequence continuously,
+        protects accepted safety energy until its deadline and chooses the
+        cheapest technically useful charge hours at or before each deadline.
         """
         planned: dict[str, float] = {}
-        if not rows:
-            return planned
+        commitments: list[dict[str, Any]] = []
+        replay_count = 0
 
-        # A row's execution_floor_end is the requirement that must be met when
-        # that row finishes. Therefore requirement index N uses reserve(N + 1),
-        # but its charging deadline remains row N. This is the core alpha27 fix.
-        reserve_requirements: list[tuple[int, float, datetime | None]] = []
-        for idx, _row in enumerate(rows):
-            execution_floor_end_kwh, _, _, next_solar = _execution_reserve(idx + 1)
-            reserve_requirements.append((idx, execution_floor_end_kwh, next_solar))
+        precharge_floors: list[float] = []
+        for reserve_index in range(len(rows) + 1):
+            execution_floor, _, _, _ = _execution_reserve(reserve_index)
+            precharge_floors.append(execution_floor)
 
-        # Detect local end-of-hour reserve peaks tied to a demonstrable future
-        # usable-solar block. Horizon-fallback hours deliberately do not create
-        # artificial precharge demand.
-        peaks: list[tuple[int, float, datetime]] = []
-        for idx, floor_kwh, next_solar in reserve_requirements:
-            if next_solar is None:
-                continue
-            prev_floor = reserve_requirements[idx - 1][1] if idx > 0 else base_reserve_floor_kwh
-            next_floor = (
-                reserve_requirements[idx + 1][1]
-                if idx + 1 < len(reserve_requirements)
-                else base_reserve_floor_kwh
+        # Backward reachability: existing energy may not be spent when maximum
+        # charging power would no longer restore the coming execution reserve.
+        for reserve_index in range(len(rows) - 1, -1, -1):
+            fraction = _hour_fraction(rows[reserve_index]["time"], now_utc)
+            max_stored = max_charge_power_w / 1000.0 * fraction * charge_eff
+            precharge_floors[reserve_index] = max(
+                precharge_floors[reserve_index],
+                precharge_floors[reserve_index + 1] - max_stored,
             )
-            if floor_kwh > prev_floor + _MIN_ENERGY_KWH and floor_kwh >= next_floor - _MIN_ENERGY_KWH:
-                peaks.append((idx, floor_kwh, next_solar))
 
-        for deadline_idx, required_floor_kwh, _next_solar in peaks:
-            # Estimate stored energy available at the end of the deadline hour
-            # from initial SOC + solar surplus + safety energy already allocated
-            # for an earlier reserve peak. Discretionary discharge is ignored
-            # here; the sequential planner later prevents discharge below the
-            # execution reserve itself.
-            estimated_stored = capacity * start_soc / 100.0
-            for sim_idx in range(0, deadline_idx + 1):
-                sim_row = rows[sim_idx]
-                frac = _hour_fraction(sim_row["time"], now_utc)
-                solar_surplus = max(
-                    0.0,
-                    (sim_row["solar_kwh"] - sim_row["home_kwh"]) * frac,
+        def replay(length: int | None = None) -> dict[str, Any]:
+            nonlocal replay_count
+            replay_count += 1
+            limit = len(rows) if length is None else max(0, min(len(rows), length))
+            stored = capacity * start_soc / 100.0
+            held_safety: list[tuple[int, float]] = []
+            output: list[dict[str, Any]] = []
+
+            commitments_by_time: dict[str, list[dict[str, Any]]] = {}
+            for item in commitments:
+                commitments_by_time.setdefault(str(item["time"]), []).append(item)
+
+            for sim_index, sim_row in enumerate(rows[:limit]):
+                held_safety = [
+                    (deadline, energy)
+                    for deadline, energy in held_safety
+                    if deadline > sim_index
+                ]
+                fraction = _hour_fraction(sim_row["time"], now_utc)
+                charge_input_limit = max_charge_power_w / 1000.0 * fraction
+                discharge_output_limit = max_discharge_power_w / 1000.0 * fraction
+                execution_floor_end, _, _, _ = _execution_reserve(sim_index + 1)
+                protected_floor = max(
+                    execution_floor_end,
+                    precharge_floors[sim_index + 1],
                 )
-                estimated_stored = min(
-                    capacity,
-                    estimated_stored + solar_surplus * charge_eff,
+
+                solar = sim_row["solar_kwh"] * fraction
+                home = sim_row["home_kwh"] * fraction
+                solar_to_home = min(solar, home)
+                solar_surplus = max(0.0, solar - solar_to_home)
+                home_deficit = max(0.0, home - solar_to_home)
+
+                available_charge_input = charge_input_limit
+                solar_charge_input = min(
+                    solar_surplus,
+                    available_charge_input,
+                    max(0.0, (capacity - stored) / charge_eff),
                 )
+                stored += solar_charge_input * charge_eff
+                available_charge_input -= solar_charge_input
+
                 key = sim_row["time"].isoformat()
-                if key in planned:
-                    estimated_stored = min(capacity, estimated_stored + planned[key])
+                wanted_safety_stored = max(0.0, planned.get(key, 0.0))
+                grid_safety_input = 0.0
+                if wanted_safety_stored > _SAFETY_TOL_KWH and available_charge_input > _SAFETY_TOL_KWH:
+                    grid_safety_input = min(
+                        wanted_safety_stored / charge_eff,
+                        available_charge_input,
+                        max(0.0, (capacity - stored) / charge_eff),
+                    )
+                    stored += grid_safety_input * charge_eff
+                    available_charge_input -= grid_safety_input
 
-            deficit_stored = max(0.0, required_floor_kwh - estimated_stored)
-            if deficit_stored <= _MIN_ENERGY_KWH:
+                for commitment in commitments_by_time.get(key, []):
+                    deadline = int(commitment["deadline_index"])
+                    if deadline > sim_index and wanted_safety_stored > _SAFETY_TOL_KWH:
+                        accepted = (
+                            grid_safety_input
+                            * charge_eff
+                            * float(commitment["stored_battery_kwh"])
+                            / wanted_safety_stored
+                        )
+                        held_safety.append((deadline, accepted))
+
+                safety_reserved_kwh = sum(energy for _, energy in held_safety)
+                remaining_safety_headroom = min(
+                    available_charge_input * charge_eff,
+                    max(0.0, capacity - stored),
+                )
+
+                operational_floor = min(
+                    capacity,
+                    protected_floor + safety_reserved_kwh,
+                )
+                available_stored_above_floor = max(0.0, stored - operational_floor)
+                max_output_from_storage = available_stored_above_floor * discharge_eff
+                discharge_to_home = min(
+                    home_deficit,
+                    discharge_output_limit,
+                    max_output_from_storage,
+                )
+                if discharge_to_home > _SAFETY_TOL_KWH:
+                    stored -= discharge_to_home / discharge_eff
+
+                stored = max(
+                    capacity * float(MIN_SOC_PERCENT) / 100.0,
+                    min(capacity, stored),
+                )
+                output.append(
+                    {
+                        "time": key,
+                        "end_stored_kwh": stored,
+                        "accepted_safety_stored_kwh": grid_safety_input * charge_eff,
+                        "grid_safety_input_kwh": grid_safety_input,
+                        "remaining_safety_charge_stored_kwh": remaining_safety_headroom,
+                    }
+                )
+            return {"rows": output}
+
+        result = replay()
+        for deadline_index in range(len(rows)):
+            required_floor, _, _, _ = _execution_reserve(deadline_index + 1)
+            if (
+                result["rows"][deadline_index]["end_stored_kwh"] + _SAFETY_TOL_KWH
+                >= required_floor
+            ):
                 continue
 
-            # Choose only hours that can physically contribute before the
-            # deadline, ordered by price and then time. Planned values are stored
-            # battery energy (after charge efficiency), matching the rest of the
-            # planner's safety-allocation model.
-            candidates: list[tuple[float, datetime, float]] = []
-            for cand_idx in range(0, deadline_idx + 1):
-                cand = rows[cand_idx]
-                price = cand["import_price"]
-                if price is None:
-                    continue
-                fraction = _hour_fraction(cand["time"], now_utc)
-
-                # Safety precharge and solar charging share the same physical
-                # charge-input ceiling.  The earlier alpha52 pre-planner used
-                # the complete inverter charge limit for grid safety charging
-                # and then the sequential planner correctly gave solar first
-                # priority.  During a partially elapsed hour this could make the
-                # pre-planner overestimate how much grid energy would actually
-                # fit, leaving the final SOC just below the execution reserve.
-                # Reserve only the grid-input headroom that remains after the
-                # forecast solar surplus for this hour has taken its share.
-                charge_input_limit = max_charge_power_w / 1000.0 * fraction
-                solar_surplus_input = max(
-                    0.0,
-                    (cand["solar_kwh"] - cand["home_kwh"]) * fraction,
-                )
-                available_grid_input = max(0.0, charge_input_limit - solar_surplus_input)
-                max_stored = available_grid_input * charge_eff
-                if max_stored <= _MIN_ENERGY_KWH:
-                    continue
-                candidates.append((price, cand["time"], max_stored))
-
-            candidates.sort(key=lambda item: (item[0], item[1]))
-            remaining = deficit_stored
-            for _price, cand_time, max_stored in candidates:
-                if remaining <= _MIN_ENERGY_KWH:
+            candidates = sorted(
+                range(deadline_index + 1),
+                key=lambda idx: (rows[idx]["import_price"], rows[idx]["time"]),
+            )
+            changed = False
+            for candidate_index in candidates:
+                current = result["rows"][deadline_index]["end_stored_kwh"]
+                deficit = required_floor - current
+                if deficit <= _SAFETY_TOL_KWH:
                     break
-                key = cand_time.isoformat()
-                already = planned.get(key, 0.0)
-                available = max(0.0, max_stored - already)
-                if available <= _MIN_ENERGY_KWH:
+                available = result["rows"][candidate_index][
+                    "remaining_safety_charge_stored_kwh"
+                ]
+                if available <= _SAFETY_TOL_KWH:
                     continue
-                add = min(available, remaining)
-                planned[key] = already + add
-                remaining -= add
 
-        return planned
+                key = rows[candidate_index]["time"].isoformat()
+                previous = planned.get(key, 0.0)
+                addition = min(deficit, available)
+                planned[key] = previous + addition
+                commitment = {
+                    "time": key,
+                    "deadline_index": deadline_index,
+                    "deadline": (
+                        rows[deadline_index]["time"] + timedelta(hours=1)
+                    ).isoformat(),
+                    "stored_battery_kwh": addition,
+                }
+                commitments.append(commitment)
 
-    dynamic_safety_by_time = _planned_dynamic_safety_charge_by_hour()
+                trial = replay(deadline_index + 1)
+                achieved = trial["rows"][deadline_index]["end_stored_kwh"]
+                if achieved <= current + _SAFETY_TOL_KWH:
+                    commitments.pop()
+                    if previous > 0.0:
+                        planned[key] = previous
+                    else:
+                        planned.pop(key, None)
+                    continue
+
+                result = trial
+                changed = True
+
+            if changed:
+                result = replay()
+
+        # Normalize requested schedule to energy the replay actually accepted.
+        actual_by_time = {
+            item["time"]: item["accepted_safety_stored_kwh"]
+            for item in result["rows"]
+        }
+        for commitment in commitments:
+            key = str(commitment["time"])
+            requested = planned.get(key, 0.0)
+            ratio = (
+                min(1.0, actual_by_time.get(key, 0.0) / requested)
+                if requested > _SAFETY_TOL_KWH
+                else 0.0
+            )
+            commitment["stored_battery_kwh"] *= ratio
+        planned = {
+            key: min(value, actual_by_time.get(key, 0.0))
+            for key, value in planned.items()
+            if actual_by_time.get(key, 0.0) > _SAFETY_TOL_KWH
+        }
+        result = replay()
+
+        breaches: list[dict[str, Any]] = []
+        for breach_index, item in enumerate(result["rows"]):
+            required_floor, _, _, _ = _execution_reserve(breach_index + 1)
+            shortfall = required_floor - item["end_stored_kwh"]
+            if shortfall > _SAFETY_TOL_KWH:
+                breaches.append(
+                    {
+                        "index": breach_index,
+                        "time": rows[breach_index]["time"].isoformat(),
+                        "required_soc_percent": round(
+                            required_floor / capacity * 100.0, 1
+                        ),
+                        "projected_soc_percent": round(
+                            item["end_stored_kwh"] / capacity * 100.0, 1
+                        ),
+                        "shortfall_battery_kwh": round(shortfall, 6),
+                    }
+                )
+
+        return {
+            "schedule": planned,
+            "commitments": commitments,
+            "precharge_floors": precharge_floors,
+            "simulation": result,
+            "replay_count": replay_count,
+            "requested_stored_kwh": round(sum(planned.values()), 6),
+            "accepted_stored_kwh": round(
+                sum(item["accepted_safety_stored_kwh"] for item in result["rows"]),
+                6,
+            ),
+            "accepted_grid_input_kwh": round(
+                sum(item["grid_safety_input_kwh"] for item in result["rows"]),
+                6,
+            ),
+            "breaches": breaches,
+        }
+
+    sequential_safety = _build_sequential_safety_plan()
+    dynamic_safety_by_time = sequential_safety["schedule"]
+    precharge_floors = sequential_safety["precharge_floors"]
+    safety_commitments_by_time: dict[str, list[dict[str, Any]]] = {}
+    for commitment in sequential_safety["commitments"]:
+        safety_commitments_by_time.setdefault(str(commitment["time"]), []).append(
+            commitment
+        )
+    held_safety: list[tuple[int, float]] = []
+    upstream_safety_advice_stored_kwh = round(sum(safety_by_time.values()), 6)
 
     for index, row in enumerate(rows):
+        held_safety = [
+            (deadline, energy)
+            for deadline, energy in held_safety
+            if deadline > index
+        ]
         hour = row["time"]
         fraction = _hour_fraction(hour, now_utc)
 
@@ -425,10 +566,7 @@ def build_72h_plan_preview_sequential_safety(
         # until the next usable solar block.
         planned_safety_target_stored = safety_by_time.get(hour.isoformat(), 0.0)
         dynamic_safety_target_stored = dynamic_safety_by_time.get(hour.isoformat(), 0.0)
-        safety_target_stored = max(
-            planned_safety_target_stored,
-            dynamic_safety_target_stored,
-        )
+        safety_target_stored = dynamic_safety_target_stored
 
         if safety_target_stored > _MIN_ENERGY_KWH and stored_kwh < capacity - _MIN_ENERGY_KWH:
             max_input_by_capacity = (capacity - stored_kwh) / charge_eff
@@ -440,6 +578,18 @@ def build_72h_plan_preview_sequential_safety(
             )
             stored_kwh += grid_safety_input * charge_eff
             available_charge_input -= grid_safety_input
+
+        for commitment in safety_commitments_by_time.get(hour.isoformat(), []):
+            deadline = int(commitment["deadline_index"])
+            if deadline > index and safety_target_stored > _SAFETY_TOL_KWH:
+                accepted = (
+                    grid_safety_input
+                    * charge_eff
+                    * float(commitment["stored_battery_kwh"])
+                    / safety_target_stored
+                )
+                held_safety.append((deadline, accepted))
+        safety_reserved_kwh = sum(energy for _, energy in held_safety)
 
         # 3) Trade charging is blocked when expected solar can fill the same
         # free capacity before the selected sell hour (Solar Charge Delay).
@@ -487,10 +637,13 @@ def build_72h_plan_preview_sequential_safety(
 
         # 4) Home deficit uses battery only when doing so does not consume
         # energy reserved for a later, more valuable trade discharge.
-        operational_floor = execution_floor_end_kwh + trade_energy_reserved_kwh
+        protected_floor = max(
+            execution_floor_end_kwh,
+            precharge_floors[index + 1],
+        )
         operational_floor = min(
             capacity,
-            max(execution_floor_end_kwh, operational_floor),
+            protected_floor + safety_reserved_kwh + trade_energy_reserved_kwh,
         )
 
         available_stored_above_floor = max(0.0, stored_kwh - operational_floor)
@@ -544,7 +697,7 @@ def build_72h_plan_preview_sequential_safety(
             remaining_output_limit = max(0.0, discharge_output_limit - discharge_to_home)
             available_stored_above_reserve = max(
                 0.0,
-                stored_kwh - execution_floor_end_kwh,
+                stored_kwh - protected_floor - safety_reserved_kwh,
             )
             max_trade_output = available_stored_above_reserve * discharge_eff
             discharge_to_grid = min(remaining_output_limit, max_trade_output)
@@ -628,6 +781,10 @@ def build_72h_plan_preview_sequential_safety(
                 ),
                 "solar_horizon_complete": next_usable_solar is not None,
                 "trade_reserved_kwh": round(trade_energy_reserved_kwh, 3),
+                "safety_reserved_kwh": round(safety_reserved_kwh, 3),
+                "precharge_protection_soc": round(
+                    protected_floor / capacity * 100.0, 1
+                ),
                 "action": "+".join(action_parts),
                 "observational_only": True,
             }
@@ -635,12 +792,39 @@ def build_72h_plan_preview_sequential_safety(
 
     end_soc = plan[-1]["soc_end"] if plan else start_soc
 
+    execution_buffer_safe = execution_buffer_breach_hours == 0
+    first_execution_breach = next(
+        (
+            {
+                "index": idx,
+                "time": item["time"],
+                "soc_percent": item["soc_end"],
+                "required_soc_percent": item["execution_reserve_floor_soc"],
+                "shortfall_battery_kwh": round(
+                    max(
+                        0.0,
+                        (
+                            item["execution_reserve_floor_soc"] - item["soc_end"]
+                        )
+                        / 100.0
+                        * capacity,
+                    ),
+                    6,
+                ),
+            }
+            for idx, item in enumerate(plan)
+            if item["soc_end"] + 0.05 < item["execution_reserve_floor_soc"]
+        ),
+        None,
+    )
+
     return {
-        "auto_plan_72h_status": "ready",
-        "auto_plan_72h_valid": True,
+        "auto_plan_72h_status": "ready" if execution_buffer_safe else "infeasible",
+        "auto_plan_72h_valid": execution_buffer_safe,
         "auto_plan_72h_reason": (
-            "72-uurs planpreview berekend; veiligheidslading heeft voorrang, "
-            "daarna solar, woningdekking en observerende handel"
+            "72-uurs planpreview sequentieel safety-gevalideerd"
+            if execution_buffer_safe
+            else "sequentiele safety-replay kan execution-reserve niet halen"
         ),
         "auto_plan_72h_plan": plan,
         "auto_plan_72h_count": len(plan),
@@ -665,7 +849,16 @@ def build_72h_plan_preview_sequential_safety(
         "auto_plan_72h_execution_reserve_max_soc": round(execution_reserve_max_soc, 1),
         "auto_plan_72h_min_execution_headroom_soc": round(minimum_execution_headroom_soc, 1),
         "auto_plan_72h_execution_buffer_breach_hours": execution_buffer_breach_hours,
-        "auto_plan_72h_execution_buffer_safe": execution_buffer_breach_hours == 0,
+        "auto_plan_72h_execution_buffer_safe": execution_buffer_safe,
+        "auto_plan_72h_first_execution_breach": first_execution_breach,
+        "auto_plan_72h_safety_plan_authority": "doems_sequential_safety_exception_v1",
+        "auto_plan_72h_upstream_safety_advice_only": True,
+        "auto_plan_72h_upstream_safety_advice_stored_kwh": upstream_safety_advice_stored_kwh,
+        "auto_plan_72h_safety_plan_replay_count": sequential_safety["replay_count"],
+        "auto_plan_72h_safety_plan_requested_stored_kwh": sequential_safety["requested_stored_kwh"],
+        "auto_plan_72h_safety_plan_accepted_stored_kwh": sequential_safety["accepted_stored_kwh"],
+        "auto_plan_72h_safety_plan_accepted_grid_input_kwh": sequential_safety["accepted_grid_input_kwh"],
+        "auto_plan_72h_safety_plan_unmet_deadlines": sequential_safety["breaches"],
         "auto_plan_72h_solar_horizon_complete": all(
             item.get("solar_horizon_complete", False) for item in plan
         ),
@@ -685,8 +878,9 @@ def build_72h_plan_preview_sequential_safety(
         "auto_plan_72h_observational_only": True,
         "auto_plan_72h_execution_enabled": False,
         "auto_plan_72h_note": (
-            "Dummy OS EMS Plan72 gebruikt de 2 procentpunt uitvoeringsbuffer, "
-            "dynamische reserve en vooruitkijkende reserveplanning. Automatische "
-            "laad/ontlaaduitvoering blijft buiten de huidige fysieke alpha-scope."
+            "DOEMS Plan72 gebruikt de Alpha76-plannerbasis met de expliciet "
+            "geautoriseerde sequentiele safety-uitzondering. Dynamische reserve, "
+            "2 procentpunt execution buffer en overige Alpha76-plannersemantiek "
+            "blijven behouden."
         ),
     }
