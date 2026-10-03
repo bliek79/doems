@@ -133,8 +133,9 @@ def test_step13_same_frozen_input_is_exact_policy_baseline_match() -> None:
     assert result["exact_match"] is True
     assert result["difference_count"] == 0
     assert result["differences"] == []
-    assert result["policy_version"] == "alpha76_baseline_v1"
+    assert result["policy_version"] == "alpha76_plus_authorized_exceptions_v2"
     assert result["golden_decision"] == result["doems_decision"]
+    assert "alpha35_sequential_safety_exception_v1" in result["authorized_exceptions"]
     assert result["non_actuating_only"] is True
     assert result["service_calls_performed"] is False
     assert result["plan_store_mutated"] is False
@@ -187,7 +188,7 @@ def test_step13_runtime_surface_is_persistent_and_non_actuating() -> None:
     button = (INTEGRATION / "button.py").read_text(encoding="utf-8")
     const = (INTEGRATION / "const.py").read_text(encoding="utf-8")
 
-    assert "POLICY_VERSION = \"alpha76_baseline_v1\"" in parity
+    assert "POLICY_VERSION = \"alpha76_plus_authorized_exceptions_v2\"" in parity
     assert "g5_frozen_live_parity" in runtime
     assert "Store[dict[str, Any]]" in runtime
     assert "DOEMS G5 Frozen Live Parity" in sensor

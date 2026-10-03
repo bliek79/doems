@@ -1,11 +1,11 @@
-name: DOEMS CI and Alpha34 Alpha76 Runtime Adapter Release
+name: DOEMS CI and Alpha35 Sequential Safety Release
 
 on:
   pull_request:
   push:
     branches:
       - main
-      - alpha34-verified-setpoint-handoff-adapter
+      - alpha35-sequential-safety-exception
   workflow_dispatch:
 
 permissions:
@@ -24,11 +24,13 @@ jobs:
         run: python -m compileall -q custom_components/doems
       - name: Frozen Alpha76 source parity guard
         run: pytest -q tests/test_alpha32_full_anker_alpha76_parity.py
-      - name: Alpha34 runtime serialization adapter regression
+      - name: Alpha33 runtime serialization adapter regression
         run: pytest -q tests/test_alpha33_runtime_serialization_adapter.py
       - name: Alpha34 verified setpoint handoff regression
         run: pytest -q tests/test_alpha34_verified_setpoint_handoff_adapter.py
-      - name: Exact planner parity
+      - name: Alpha35 sequential safety exception regression
+        run: pytest -q tests/test_alpha35_sequential_safety_exception.py
+      - name: Alpha76 planner foundation and Alpha35 exception
         run: pytest -q tests/test_alpha31_exact_anker_planner_parity.py
       - name: Execution and restart parity
         run: pytest -q tests/test_alpha23_execution_naming_cleanup.py tests/test_alpha26_step15a_manual_physical_execution.py tests/test_alpha27_beta2_automatic_plan72_cutover.py tests/test_alpha29_signature_warning_physical_parity.py tests/test_step12_3_final_revalidation_mode_switch_preview.py tests/test_step12_4_automatic_execution_gate.py tests/test_step12_5_execution_controller.py tests/test_step12_6_restart_recovery_observability.py
@@ -47,11 +49,11 @@ jobs:
               json.loads(path.read_text(encoding="utf-8"))
               print(f"valid: {path}")
           PY
-      - name: Validate Alpha34 candidate contract
+      - name: Validate Alpha35 candidate contract
         run: |
-          test -f RELEASE_NOTES_0.1.0-alpha.34.md
-          grep -F 'VERSION = "0.1.0-alpha.34"' custom_components/doems/const.py
-          grep -F '"version": "0.1.0-alpha.34"' custom_components/doems/manifest.json
+          test -f RELEASE_NOTES_0.1.0-alpha.35.md
+          grep -F 'VERSION = "0.1.0-alpha.35"' custom_components/doems/const.py
+          grep -F '"version": "0.1.0-alpha.35"' custom_components/doems/manifest.json
           grep -F 'RestoreEntity' custom_components/doems/switch.py
           grep -F 'previous.attributes.get("mode") == "live_guarded"' custom_components/doems/switch.py
           grep -F 'planned_energy_reached' custom_components/doems/ems_execution.py
@@ -63,14 +65,18 @@ jobs:
           test -f tests/test_alpha32_full_anker_alpha76_parity.py
           test -f tests/test_alpha33_runtime_serialization_adapter.py
           test -f tests/test_alpha34_verified_setpoint_handoff_adapter.py
+          test -f tests/test_alpha35_sequential_safety_exception.py
+          test -f custom_components/doems/ems_alpha76/planner_72h_sequential_safety.py
           grep -F 'alpha34_verified_physical_setpoint_handoff_v1' custom_components/doems/ems_runtime.py
+          grep -F 'alpha35_sequential_safety_exception_v1' custom_components/doems/ems_alpha76_adapter.py
+          grep -F 'doems_sequential_safety_exception_v1' custom_components/doems/ems_alpha76/planner_72h_sequential_safety.py
           grep -F '_PLATFORM_SETPOINT_HANDOFF_TOLERANCE_W = 10.0' custom_components/doems/ems_runtime.py
           grep -F 'self._state_publish_lock = asyncio.Lock()' custom_components/doems/ems_runtime.py
           grep -F 'alpha33_alpha76_serialized_coordinator_v1' custom_components/doems/ems_runtime.py
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
 
 
-  publish-alpha34:
+  publish-alpha35:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
@@ -78,16 +84,17 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Build Alpha34 release archive
+      - name: Build Alpha35 release archive
         run: |
-          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.34.md
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.35.md
           sha256sum doems.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
-      - name: Verify Alpha34 parity files are packaged
+      - name: Verify Alpha35 parity files are packaged
         run: |
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_alpha76/energy_need.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_alpha76/planner_preview.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_alpha76/planner_72h.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_alpha76/planner_72h_sequential_safety.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_planner_bridge.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_scheduler.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_prestart_validator.py'
@@ -100,14 +107,14 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/switch.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/services.yaml'
           unzip -l doems.zip | grep -F 'custom_components/doems/manifest.json'
-          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.1.0-alpha.34.md'
-      - name: Publish Alpha34 Verified Physical Setpoint Handoff Adapter prerelease
+          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.1.0-alpha.35.md'
+      - name: Publish Alpha35 Sequential Plan72 Safety Exception prerelease
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view 0.1.0-alpha.34 >/dev/null 2>&1; then
-            gh release edit 0.1.0-alpha.34 --title "DOEMS 0.1.0-alpha.34 - Verified Physical Setpoint Handoff Adapter" --notes-file RELEASE_NOTES_0.1.0-alpha.34.md --prerelease
-            gh release upload 0.1.0-alpha.34 doems.zip SHA256SUMS.txt --clobber
+          if gh release view 0.1.0-alpha.35 >/dev/null 2>&1; then
+            gh release edit 0.1.0-alpha.35 --title "DOEMS 0.1.0-alpha.35 - Sequential Plan72 Safety Exception" --notes-file RELEASE_NOTES_0.1.0-alpha.35.md --prerelease
+            gh release upload 0.1.0-alpha.35 doems.zip SHA256SUMS.txt --clobber
           else
-            gh release create 0.1.0-alpha.34 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.34 - Verified Physical Setpoint Handoff Adapter" --notes-file RELEASE_NOTES_0.1.0-alpha.34.md --prerelease
+            gh release create 0.1.0-alpha.35 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.35 - Sequential Plan72 Safety Exception" --notes-file RELEASE_NOTES_0.1.0-alpha.35.md --prerelease
           fi
