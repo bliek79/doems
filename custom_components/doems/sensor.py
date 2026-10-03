@@ -649,6 +649,8 @@ class DOEMSEMSStatusSensor(_DOEMSEMSRuntimeSensor):
         "safety_handoff_warnings",
         "execution_handoff_reasons",
         "execution_handoff_warnings",
+        "setpoint_handoff_adapter",
+        "setpoint_handoff_status",
         "setpoint_handoff_expected_w",
         "setpoint_handoff_observed_w",
         "setpoint_handoff_samples",
