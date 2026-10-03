@@ -65,5 +65,6 @@ def test_manual_scheduled_execution_remains_independent_of_automatic_arm() -> No
     block = runtime[start:end]
     manual = block[block.index('        if origin != "manual":'):]
     assert "_automatic_execution_armed" not in manual
-    assert "await self.execution.async_execute_selected_plan()" in manual
+    assert "await self.async_execute_selected_plan_verified_handoff()" in manual
+    assert "platform_setpoint_handoff_not_confirmed" in manual
     assert "retry_wait:" in manual
