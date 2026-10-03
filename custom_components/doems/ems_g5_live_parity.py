@@ -43,7 +43,20 @@ EXPECTED_TRANSPORT_ROWS = 72
 EXPECTED_NATIVE_SLOTS = 288
 EXPECTED_NATIVE_RESOLUTION_MINUTES = 15
 EXPECTED_TRANSPORT_RESOLUTION_MINUTES = 60
-POLICY_VERSION = "alpha76_baseline_v1"
+POLICY_VERSION = "alpha76_plus_authorized_exceptions_v2"
+_ALPHA35_AUTHORIZED_METADATA_KEYS = {
+    "auto_plan_72h_first_execution_breach",
+    "auto_plan_72h_safety_plan_authority",
+    "auto_plan_72h_upstream_safety_advice_only",
+    "auto_plan_72h_upstream_safety_advice_stored_kwh",
+    "auto_plan_72h_safety_plan_replay_count",
+    "auto_plan_72h_safety_plan_requested_stored_kwh",
+    "auto_plan_72h_safety_plan_accepted_stored_kwh",
+    "auto_plan_72h_safety_plan_accepted_grid_input_kwh",
+    "auto_plan_72h_safety_plan_unmet_deadlines",
+    "safety_reserved_kwh",
+    "precharge_protection_soc",
+}
 
 
 def _jsonable(value: Any) -> Any:
@@ -311,6 +324,21 @@ def _doems_chain(
     }
 
 
+def _strip_authorized_alpha35_metadata(value: Any) -> Any:
+    """Remove observability-only fields added by the authorized Alpha35 exception."""
+    if isinstance(value, dict):
+        return {
+            key: _strip_authorized_alpha35_metadata(item)
+            for key, item in value.items()
+            if key not in _ALPHA35_AUTHORIZED_METADATA_KEYS
+        }
+    if isinstance(value, list):
+        return [_strip_authorized_alpha35_metadata(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_strip_authorized_alpha35_metadata(item) for item in value)
+    return value
+
+
 def _difference_report(
     left: Any,
     right: Any,
@@ -457,7 +485,12 @@ def compare_frozen_live_snapshot(frozen_snapshot: dict[str, Any]) -> dict[str, A
         settings,
         scheduler_slots,
     )
-    difference_count, differences = _difference_report(golden, doems)
+    comparable_golden = _strip_authorized_alpha35_metadata(golden)
+    comparable_doems = _strip_authorized_alpha35_metadata(doems)
+    difference_count, differences = _difference_report(
+        comparable_golden,
+        comparable_doems,
+    )
     exact = difference_count == 0
 
     return {
@@ -470,7 +503,15 @@ def compare_frozen_live_snapshot(frozen_snapshot: dict[str, Any]) -> dict[str, A
         "differences": differences,
         "differences_capped_at": MAX_REPORTED_DIFFERENCES,
         "golden_source": f"anker_ems {SOURCE_TAG} vendored decision baseline",
-        "doems_path": "DOEMS 288x15m -> Alpha41 72x60m adapter -> Alpha76 core",
+        "doems_path": (
+            "DOEMS 288x15m -> Alpha41 72x60m adapter -> Alpha76 foundation "
+            "+ authorized Alpha35 sequential safety exception"
+        ),
+        "authorized_exceptions": [
+            "alpha33_alpha76_serialized_coordinator_v1",
+            "alpha34_verified_physical_setpoint_handoff_v1",
+            "alpha35_sequential_safety_exception_v1",
+        ],
         "golden_decision": _decision_summary(golden),
         "doems_decision": _decision_summary(doems),
         "golden_raw": deepcopy(golden),
