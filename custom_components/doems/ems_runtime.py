@@ -1,8 +1,10 @@
 """DOEMS EMS planning/runtime orchestration.
 
-The native planner remains 15 minutes / 72 hours / 288 slots. Step 15A adds a
-narrow, explicitly armed physical path for manually scheduled plan slots only;
-automatic Plan72 actions remain non-actuating.
+The native planner remains 15 minutes / 72 hours / 288 slots. The runtime keeps
+the frozen Alpha76 EMS decision/execution semantics while adapting transport and
+scheduling to native DOEMS data. Alpha33 serializes coordinator-state publication
+so the copied Alpha76 execution controller always observes one consistent
+Scheduler/Safety snapshot during mode transitions.
 """
 from __future__ import annotations
 
@@ -116,6 +118,11 @@ class DOEMSEMSRuntime:
         self._listeners: list[Callable[[], None]] = []
         self._unsubs: list[Callable[[], None]] = []
         self._fast_refresh_pending = False
+        # Behavior-preserving platform adapter: Anker alpha76 gets one serialized
+        # DataUpdateCoordinator snapshot. DOEMS keeps its native multi-rate runtime,
+        # but all planner publication and fast execution-state refreshes cross this
+        # single lock before publishing shared Scheduler/Safety/Execution state.
+        self._state_publish_lock = asyncio.Lock()
         self._shutdown = False
         self._planner_task: asyncio.Task[None] | None = None
         self._planner_pending_triggers: set[str] = set()
@@ -552,21 +559,30 @@ class DOEMSEMSRuntime:
                 self._planner_stale_discard_count += 1
                 return
 
-            self.input_result = input_result
-            self.planner_result = planner_result
-            self._planner_last_input_signature = signature
-            self._planner_last_cycle_id = cycle_id
-            self._planner_published_generation = generation
-            self._planner_publish_active = True
-            try:
-                await self._async_run_bridge_planstore_scheduler()
-            finally:
-                self._planner_publish_active = False
-                deferred_trigger = self._deferred_fast_trigger
-                self._deferred_fast_trigger = None
-                if deferred_trigger:
-                    self._request_fast_refresh(deferred_trigger)
-            self.status = "ready"
+            # Alpha33 platform adapter: heavy planner compute remains off-loop,
+            # but publishing its Plan Store/Scheduler snapshot is serialized with
+            # every fast execution/control-path refresh. This mirrors the source
+            # DataUpdateCoordinator transaction boundary without changing planner
+            # or execution semantics.
+            async with self._state_publish_lock:
+                if generation != self._planner_generation:
+                    self._planner_stale_discard_count += 1
+                    return
+                self.input_result = input_result
+                self.planner_result = planner_result
+                self._planner_last_input_signature = signature
+                self._planner_last_cycle_id = cycle_id
+                self._planner_published_generation = generation
+                self._planner_publish_active = True
+                try:
+                    await self._async_run_bridge_planstore_scheduler()
+                finally:
+                    self._planner_publish_active = False
+                    deferred_trigger = self._deferred_fast_trigger
+                    self._deferred_fast_trigger = None
+                    if deferred_trigger:
+                        self._request_fast_refresh(deferred_trigger)
+                self.status = "ready"
         except Exception as err:
             self.status = "error"
             self.last_error = f"{type(err).__name__}: {err}"
@@ -799,7 +815,12 @@ class DOEMSEMSRuntime:
         self._schedule_manual_physical_start()
 
     async def _async_fast_execution_refresh(self, trigger: str) -> None:
-        """Run Scheduler/Safety/Execution against the cached plan only."""
+        """Serialize one fast Alpha76-equivalent coordinator snapshot refresh."""
+        async with self._state_publish_lock:
+            await self._async_fast_execution_refresh_locked(trigger)
+
+    async def _async_fast_execution_refresh_locked(self, trigger: str) -> None:
+        """Run Scheduler/Safety/Execution against cached data under the state lock."""
         if self._shutdown:
             return
         self.last_trigger = trigger
@@ -1216,6 +1237,7 @@ class DOEMSEMSRuntime:
             "refresh_count": self.refresh_count,
             "last_error": self.last_error,
             "multirate_runtime_version": "alpha21_multirate_runtime_v1",
+            "runtime_snapshot_adapter": "alpha33_alpha76_serialized_coordinator_v1",
             "planner_generation": getattr(self, "_planner_generation", 0),
             "planner_published_generation": getattr(
                 self, "_planner_published_generation", 0
