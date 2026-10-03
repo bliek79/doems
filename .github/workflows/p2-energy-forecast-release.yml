@@ -1,14 +1,15 @@
-name: DOEMS CI - Alpha32 Full Anker Alpha76 EMS Parity Candidate
+name: DOEMS CI and Alpha32 Full Anker Alpha76 EMS Parity Release
 
 on:
   pull_request:
   push:
     branches:
+      - main
       - alpha32-full-anker-alpha76-parity-reconstruction
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   validate:
@@ -57,3 +58,46 @@ jobs:
           test -f custom_components/doems/ems_physical_test.py
           test -f tests/test_alpha32_full_anker_alpha76_parity.py
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
+
+
+  publish-alpha32:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build Alpha32 release archive
+        run: |
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.1.0-alpha.32.md
+          sha256sum doems.zip > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - name: Verify Alpha32 parity files are packaged
+        run: |
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_alpha76/energy_need.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_alpha76/planner_preview.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_alpha76/planner_72h.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_planner_bridge.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_scheduler.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_prestart_validator.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_safety_guard.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_action_controller.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_execution.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_physical_test.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_automatic_execution_gate.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_runtime.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/switch.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/services.yaml'
+          unzip -l doems.zip | grep -F 'custom_components/doems/manifest.json'
+          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.1.0-alpha.32.md'
+      - name: Publish Alpha32 Full Anker Alpha76 EMS Parity prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view 0.1.0-alpha.32 >/dev/null 2>&1; then
+            gh release edit 0.1.0-alpha.32 --title "DOEMS 0.1.0-alpha.32 - Full Anker Alpha76 EMS Parity Reconstruction" --notes-file RELEASE_NOTES_0.1.0-alpha.32.md --prerelease
+            gh release upload 0.1.0-alpha.32 doems.zip SHA256SUMS.txt --clobber
+          else
+            gh release create 0.1.0-alpha.32 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.32 - Full Anker Alpha76 EMS Parity Reconstruction" --notes-file RELEASE_NOTES_0.1.0-alpha.32.md --prerelease
+          fi
