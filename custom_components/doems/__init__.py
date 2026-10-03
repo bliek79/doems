@@ -111,7 +111,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         if call.data.get("confirm") is not True:
             raise HomeAssistantError("Bevestiging ontbreekt: zet confirm op true")
         runtime = _single_ems_runtime(hass)
-        await runtime.execution.async_execute_selected_plan()
+        await runtime.async_execute_selected_plan_verified_handoff()
 
     async def _stop_execution(call: ServiceCall) -> None:
         runtime = _single_ems_runtime(hass)
@@ -159,7 +159,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         data = runtime.data
         if data.get("scheduler_selected_slot") != slot or not data.get("scheduler_ready"):
             raise HomeAssistantError(f"Plan {slot} is niet startklaar")
-        await runtime.execution.async_execute_selected_plan()
+        await runtime.async_execute_selected_plan_verified_handoff()
 
     async def _cancel_plan(call: ServiceCall) -> None:
         runtime = _single_ems_runtime(hass)

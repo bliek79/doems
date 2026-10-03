@@ -4,7 +4,9 @@ The native planner remains 15 minutes / 72 hours / 288 slots. The runtime keeps
 the frozen Alpha76 EMS decision/execution semantics while adapting transport and
 scheduling to native DOEMS data. Alpha33 serializes coordinator-state publication
 so the copied Alpha76 execution controller always observes one consistent
-Scheduler/Safety snapshot during mode transitions.
+Scheduler/Safety snapshot during mode transitions. Alpha34 adds a narrow host
+verification of physical setpoint acceptance without changing Alpha76 execution
+or monitor semantics.
 """
 from __future__ import annotations
 
@@ -53,6 +55,13 @@ from .ems_soc import UNAVAILABLE_SOC_STATES, parse_soc_percent
 from .energy_sources import normalize_power_w
 
 _LOGGER = logging.getLogger(__name__)
+
+# Alpha34 host-adapter constants. The tolerance deliberately matches the frozen
+# Alpha76 execution monitor and therefore does not relax source safety semantics.
+_PLATFORM_SETPOINT_HANDOFF_TOLERANCE_W = 10.0
+_PLATFORM_SETPOINT_HANDOFF_SETTLE_SECONDS = 0.25
+_PLATFORM_SETPOINT_HANDOFF_SAMPLE_SECONDS = 0.20
+_PLATFORM_SETPOINT_HANDOFF_SAMPLE_COUNT = 3
 
 
 class DOEMSEMSRuntime:
@@ -114,6 +123,15 @@ class DOEMSEMSRuntime:
         self.execution_store_status = "alpha76_native_store"
         self.execution_store_error: str | None = None
         self.execution_store_last_saved_at: str | None = None
+        # Canonical Alpha34 platform adapter diagnostics. These fields confirm
+        # whether the Home Assistant control entity retained the setpoint after
+        # the frozen Alpha76 controller handed it to the host integration.
+        self._setpoint_handoff_status = "idle"
+        self._setpoint_handoff_expected_w: float | None = None
+        self._setpoint_handoff_observed_w: float | None = None
+        self._setpoint_handoff_samples: list[float | None] = []
+        self._setpoint_handoff_last_checked_at: str | None = None
+        self._setpoint_handoff_failure_count = 0
 
         self._listeners: list[Callable[[], None]] = []
         self._unsubs: list[Callable[[], None]] = []
@@ -951,6 +969,84 @@ class DOEMSEMSRuntime:
         )
         return result
 
+    def _read_control_power_setpoint(self) -> float | None:
+        """Read the HA control-state used by the frozen Alpha76 power monitor."""
+        entity_id = self.control_entity_ids.get("power_setpoint")
+        if not entity_id:
+            return None
+        state = self.hass.states.get(entity_id)
+        if state is None or state.state in UNAVAILABLE_SOC_STATES:
+            return None
+        try:
+            return float(state.state)
+        except (TypeError, ValueError):
+            return None
+
+    async def _async_verify_platform_setpoint_handoff(
+        self, expected_power_w: float
+    ) -> bool:
+        """Verify that the host integration retained the Alpha76 setpoint write.
+
+        The official Anker control entity may revert a failed write shortly after
+        number.set_value returns without surfacing an exception to the caller.
+        Alpha76 itself remains unchanged; this DOEMS host adapter only verifies
+        that the HA control-state still matches the already-issued source command
+        before the normal Alpha76 monitor takes over.
+        """
+        self._setpoint_handoff_status = "checking"
+        self._setpoint_handoff_expected_w = float(expected_power_w)
+        self._setpoint_handoff_observed_w = None
+        self._setpoint_handoff_samples = []
+        self._setpoint_handoff_last_checked_at = dt_util.now().isoformat()
+
+        await asyncio.sleep(_PLATFORM_SETPOINT_HANDOFF_SETTLE_SECONDS)
+        all_samples_ok = True
+        for index in range(_PLATFORM_SETPOINT_HANDOFF_SAMPLE_COUNT):
+            observed = self._read_control_power_setpoint()
+            self._setpoint_handoff_samples.append(observed)
+            self._setpoint_handoff_observed_w = observed
+            if (
+                observed is None
+                or abs(observed - expected_power_w)
+                > _PLATFORM_SETPOINT_HANDOFF_TOLERANCE_W
+            ):
+                all_samples_ok = False
+            if index + 1 < _PLATFORM_SETPOINT_HANDOFF_SAMPLE_COUNT:
+                await asyncio.sleep(_PLATFORM_SETPOINT_HANDOFF_SAMPLE_SECONDS)
+
+        self._setpoint_handoff_last_checked_at = dt_util.now().isoformat()
+        if all_samples_ok:
+            self._setpoint_handoff_status = "confirmed"
+            return True
+
+        self._setpoint_handoff_status = "rejected"
+        self._setpoint_handoff_failure_count += 1
+        return False
+
+    async def async_execute_selected_plan_verified_handoff(self) -> None:
+        """Run frozen Alpha76 manual execution plus the canonical host handoff check."""
+        data = self.data
+        slot = data.get("scheduler_selected_slot")
+        detail = ((data.get("scheduler_slots") or {}).get(slot) or
+                  (data.get("scheduler_slots") or {}).get(str(slot)) or {})
+        try:
+            expected_power_w = float(detail.get("power_w"))
+        except (TypeError, ValueError) as err:
+            raise HomeAssistantError("platform_setpoint_handoff_expected_power_invalid") from err
+
+        await self.execution.async_execute_selected_plan()
+        if await self._async_verify_platform_setpoint_handoff(expected_power_w):
+            return
+
+        observed = self._setpoint_handoff_observed_w
+        reason = (
+            "platform_setpoint_handoff_not_confirmed: "
+            f"expected={expected_power_w:g}W observed="
+            f"{'unavailable' if observed is None else f'{observed:g}W'}"
+        )
+        await self.execution.async_stop(reason, emergency=True)
+        raise HomeAssistantError(reason)
+
     def _schedule_manual_physical_start(self) -> None:
         """Mirror Alpha76 scheduled-manual and automatic execution listeners."""
         if self._shutdown:
@@ -1037,13 +1133,14 @@ class DOEMSEMSRuntime:
             "Batterij laadt momenteel; ontladen wordt niet gestart",
             "Batterij ontlaadt momenteel; laden wordt niet gestart",
             "Action Controller niet gereed",
+            "platform_setpoint_handoff_not_confirmed",
         )
 
         async def _run_manual_scheduled() -> None:
             try:
                 while True:
                     try:
-                        await self.execution.async_execute_selected_plan()
+                        await self.async_execute_selected_plan_verified_handoff()
                         return
                     except HomeAssistantError as err:
                         message = str(err)
@@ -1238,6 +1335,13 @@ class DOEMSEMSRuntime:
             "last_error": self.last_error,
             "multirate_runtime_version": "alpha21_multirate_runtime_v1",
             "runtime_snapshot_adapter": "alpha33_alpha76_serialized_coordinator_v1",
+            "setpoint_handoff_adapter": "alpha34_verified_physical_setpoint_handoff_v1",
+            "setpoint_handoff_status": getattr(self, "_setpoint_handoff_status", "idle"),
+            "setpoint_handoff_expected_w": getattr(self, "_setpoint_handoff_expected_w", None),
+            "setpoint_handoff_observed_w": getattr(self, "_setpoint_handoff_observed_w", None),
+            "setpoint_handoff_samples": list(getattr(self, "_setpoint_handoff_samples", [])),
+            "setpoint_handoff_last_checked_at": getattr(self, "_setpoint_handoff_last_checked_at", None),
+            "setpoint_handoff_failure_count": getattr(self, "_setpoint_handoff_failure_count", 0),
             "planner_generation": getattr(self, "_planner_generation", 0),
             "planner_published_generation": getattr(
                 self, "_planner_published_generation", 0
