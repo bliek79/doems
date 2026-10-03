@@ -1,4 +1,4 @@
-name: DOEMS CI and Alpha35 Alpha76 Runtime Adapter Release
+name: DOEMS CI and Alpha35 Sequential Safety Release
 
 on:
   pull_request:
@@ -24,7 +24,7 @@ jobs:
         run: python -m compileall -q custom_components/doems
       - name: Frozen Alpha76 source parity guard
         run: pytest -q tests/test_alpha32_full_anker_alpha76_parity.py
-      - name: Alpha35 runtime serialization adapter regression
+      - name: Alpha33 runtime serialization adapter regression
         run: pytest -q tests/test_alpha33_runtime_serialization_adapter.py
       - name: Alpha34 verified setpoint handoff regression
         run: pytest -q tests/test_alpha34_verified_setpoint_handoff_adapter.py
@@ -94,6 +94,7 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_alpha76/energy_need.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_alpha76/planner_preview.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_alpha76/planner_72h.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_alpha76/planner_72h_sequential_safety.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_planner_bridge.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_scheduler.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/ems_prestart_validator.py'
