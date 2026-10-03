@@ -17,7 +17,8 @@ def test_manual_scheduled_execution_is_independent_of_automatic_arm() -> None:
     manual=runtime[start:end]
     manual=manual[manual.index('        if origin != "manual":'):]
     assert "_automatic_execution_armed" not in manual
-    assert "await self.execution.async_execute_selected_plan()" in manual
+    assert "await self.async_execute_selected_plan_verified_handoff()" in manual
+    assert "platform_setpoint_handoff_not_confirmed" in manual
     assert "retry_wait:" in manual
 
 def test_alpha76_safe_return_is_fixed_zero_wait_self_consumption() -> None:
