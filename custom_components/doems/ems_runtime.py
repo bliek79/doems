@@ -1335,6 +1335,13 @@ class DOEMSEMSRuntime:
             "last_error": self.last_error,
             "multirate_runtime_version": "alpha21_multirate_runtime_v1",
             "runtime_snapshot_adapter": "alpha33_alpha76_serialized_coordinator_v1",
+            "setpoint_handoff_adapter": "alpha34_verified_physical_setpoint_handoff_v1",
+            "setpoint_handoff_status": self._setpoint_handoff_status,
+            "setpoint_handoff_expected_w": self._setpoint_handoff_expected_w,
+            "setpoint_handoff_observed_w": self._setpoint_handoff_observed_w,
+            "setpoint_handoff_samples": list(self._setpoint_handoff_samples),
+            "setpoint_handoff_last_checked_at": self._setpoint_handoff_last_checked_at,
+            "setpoint_handoff_failure_count": self._setpoint_handoff_failure_count,
             "planner_generation": getattr(self, "_planner_generation", 0),
             "planner_published_generation": getattr(
                 self, "_planner_published_generation", 0
