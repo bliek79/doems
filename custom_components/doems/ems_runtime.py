@@ -38,17 +38,14 @@ from .ems_multirate import (
 from .ems_action_controller import DOEMSActionController
 from .ems_automatic_execution_gate import DOEMSAutomaticExecutionGate
 from .ems_control_path import DOEMSControlPathObserver
-from .ems_execution_handoff import DOEMSExecutionHandoff
 from .ems_execution import DOEMSExecutionController
-from .ems_final_revalidation import DOEMSFinalRevalidation
-from .ems_mode_switch_preview import DOEMSModeSwitchPreview
+from .ems_physical_test import DOEMSPhysicalTestController
 from .ems_plan_store import DOEMSPlanStore
 from .ems_prestart_validator import DOEMSPreStartValidator
 from .ems_safety_guard import DOEMSSafetyGuard
 from .ems_scheduler import DOEMSScheduler
 from .ems_planner_bridge import build_planner_action_bridge
 from .ems_live_input import build_live_ems_input
-from .ems_manual_physical_execution import DOEMSManualPhysicalExecution
 from .ems_settings import EMSSettings
 from .ems_soc import UNAVAILABLE_SOC_STATES, parse_soc_percent
 from .energy_sources import normalize_power_w
@@ -91,25 +88,8 @@ class DOEMSEMSRuntime:
         self.safety_guard = DOEMSSafetyGuard()
         self.action_controller = DOEMSActionController()
         self.automatic_execution_gate = DOEMSAutomaticExecutionGate()
-        self.manual_physical_execution = DOEMSManualPhysicalExecution(
-            hass,
-            entry,
-            self.plan_store,
-            settings,
-        )
-        self.execution_handoff = DOEMSExecutionHandoff()
-        self.execution = DOEMSExecutionController()
-        self._execution_store: Store[dict[str, Any]] = Store(
-            hass,
-            1,
-            f"{DOMAIN}.{entry.entry_id}.execution",
-        )
-        self.execution_store_status = "not_loaded"
-        self.execution_store_error: str | None = None
-        self.execution_store_last_saved_at: str | None = None
-        self._execution_saved_revision = 0
-        self.final_revalidation = DOEMSFinalRevalidation()
-        self.mode_switch_preview = DOEMSModeSwitchPreview()
+        self.execution = DOEMSExecutionController(hass, entry.entry_id)
+        self.physical_test = DOEMSPhysicalTestController(hass, entry.entry_id)
         self.control_path = DOEMSControlPathObserver(hass, entry)
         self.bridge_result: dict[str, Any] = {}
         self.scheduler_result: dict[str, Any] = {}
@@ -126,6 +106,12 @@ class DOEMSEMSRuntime:
         self.legacy_safety_result: dict[str, Any] = {}
         self.action_controller_result: dict[str, Any] = {}
         self.control_path_result: dict[str, Any] = self.control_path.evaluate()
+        self._source_data_result: dict[str, Any] = {}
+        # Compatibility diagnostics: the real Alpha76 controller owns its own
+        # Store exactly as in the source integration.
+        self.execution_store_status = "alpha76_native_store"
+        self.execution_store_error: str | None = None
+        self.execution_store_last_saved_at: str | None = None
 
         self._listeners: list[Callable[[], None]] = []
         self._unsubs: list[Callable[[], None]] = []
@@ -144,10 +130,10 @@ class DOEMSEMSRuntime:
         self._planner_debounce_seconds = 2.0
         self._planner_publish_active = False
         self._deferred_fast_trigger: str | None = None
-        self._manual_physical_start_task: asyncio.Task[None] | None = None
-        # Step 12.4 fail-safe arm: always starts OFF after integration setup/reload.
-        # No restore-state path exists in this phase, so a restart requires an
-        # explicit new user arm and can never silently permit physical execution.
+        self._scheduled_manual_start_task: asyncio.Task[None] | None = None
+        self._automatic_execution_task: asyncio.Task[None] | None = None
+        # Runtime starts false; the Home Assistant RestoreEntity switch restores
+        # the saved Alpha76 live_guarded state after platform setup.
         self._automatic_execution_armed = False
         self._control_path_timer_unsub: Callable[[], None] | None = None
         self._execution_timer_unsub: Callable[[], None] | None = None
@@ -158,20 +144,8 @@ class DOEMSEMSRuntime:
         return self._automatic_execution_armed
 
     async def async_set_automatic_execution_armed(self, armed: bool) -> None:
-        """Set the fail-safe physical arm for guarded manual/Plan72 execution."""
+        """Set the frozen Alpha76 arm for automatic planner execution only."""
         self._automatic_execution_armed = bool(armed)
-        if not self._automatic_execution_armed:
-            if (
-                self._manual_physical_start_task is not None
-                and not self._manual_physical_start_task.done()
-            ):
-                self._manual_physical_start_task.cancel()
-                self._manual_physical_start_task = None
-            if self.manual_physical_execution.busy:
-                await self.manual_physical_execution.async_stop(
-                    "automatic_execution_disarmed",
-                    emergency=False,
-                )
         await self._async_fast_execution_refresh("automatic_execution_arm_change")
 
     @property
@@ -181,9 +155,11 @@ class DOEMSEMSRuntime:
 
     async def async_setup(self) -> None:
         """Load DOEMS plans, execution audit state, listeners and first refresh."""
-        await self._async_load_execution()
         await self.plan_store.async_load()
-        await self.manual_physical_execution.async_load_and_recover()
+        await self.physical_test.async_load()
+        await self.execution.async_load()
+        self.physical_test.attach_coordinator(self)
+        self.execution.attach_coordinator(self)
         self._unsubs.append(
             self.plan_store.add_listener(
                 lambda: self._request_fast_refresh("plan_store_change")
@@ -226,21 +202,31 @@ class DOEMSEMSRuntime:
             self._schedule_control_path_tick()
 
         await self.async_refresh("startup")
+        # Source-parity restart recovery: an interrupted physical transaction is
+        # safe-stopped; the Automatic Execution arm itself is restored separately
+        # by the switch RestoreEntity path.
+        await self.physical_test.async_recover_if_needed()
+        await self.execution.async_recover_if_needed()
         self._schedule_planner_quarter_tick()
         self._schedule_execution_tick()
 
     async def async_shutdown(self) -> None:
-        # Step 15A is fail-safe: never leave a DOEMS-owned physical transaction
-        # active across integration unload or Home Assistant shutdown.
-        self._automatic_execution_armed = False
+        """Safe-stop Alpha76 physical controllers and stop DOEMS runtime tasks."""
         if (
-            self._manual_physical_start_task is not None
-            and not self._manual_physical_start_task.done()
+            self._scheduled_manual_start_task is not None
+            and not self._scheduled_manual_start_task.done()
         ):
-            self._manual_physical_start_task.cancel()
-            self._manual_physical_start_task = None
-        await self.manual_physical_execution.async_shutdown_stop()
-        await self._async_persist_execution_if_changed()
+            self._scheduled_manual_start_task.cancel()
+            self._scheduled_manual_start_task = None
+        if (
+            self._automatic_execution_task is not None
+            and not self._automatic_execution_task.done()
+        ):
+            self._automatic_execution_task.cancel()
+            self._automatic_execution_task = None
+
+        await self.physical_test.async_shutdown_stop()
+        await self.execution.async_shutdown_stop()
         self._shutdown = True
         if self._control_path_timer_unsub is not None:
             self._control_path_timer_unsub()
@@ -260,48 +246,13 @@ class DOEMSEMSRuntime:
         self._listeners.clear()
 
     async def _async_load_execution(self) -> None:
-        """Load Step 12.6 execution audit/recovery state without restoring authority."""
-        try:
-            stored = await self._execution_store.async_load()
-            migrated = False
-            if stored is None:
-                legacy_suffix = "execution_" + "sha" + "dow"
-                legacy_store: Store[dict[str, Any]] = Store(
-                    self.hass,
-                    1,
-                    f"{DOMAIN}.{self.entry.entry_id}.{legacy_suffix}",
-                )
-                stored = await legacy_store.async_load()
-                migrated = stored is not None
-            self.execution_store_status = self.execution.restore_persistence(stored)
-            self.execution_store_error = None
-            self._execution_saved_revision = self.execution.persistence_revision
-            if migrated:
-                await self._execution_store.async_save(self.execution.export_persistence())
-                await legacy_store.async_remove()
-                self.execution_store_status = "migrated_legacy"
-                self.execution_store_last_saved_at = dt_util.utcnow().isoformat()
-        except Exception as err:
-            self.execution_store_status = "load_error"
-            self.execution_store_error = f"{type(err).__name__}: {err}"
-            self._execution_saved_revision = self.execution.persistence_revision
+        """Compatibility no-op: Alpha76 execution owns its native Store."""
+        self.execution_store_status = "alpha76_native_store"
+        self.execution_store_error = None
 
     async def _async_persist_execution_if_changed(self) -> None:
-        """Persist lifecycle/audit transitions, never physical execution state."""
-        revision = self.execution.persistence_revision
-        if revision == self._execution_saved_revision:
-            return
-        try:
-            await self._execution_store.async_save(
-                self.execution.export_persistence()
-            )
-            self._execution_saved_revision = revision
-            self.execution_store_status = "saved"
-            self.execution_store_error = None
-            self.execution_store_last_saved_at = dt_util.utcnow().isoformat()
-        except Exception as err:
-            self.execution_store_status = "save_error"
-            self.execution_store_error = f"{type(err).__name__}: {err}"
+        """Compatibility no-op retained for old diagnostics only."""
+        return
 
     def async_add_listener(self, listener: Callable[[], None]) -> Callable[[], None]:
         self._listeners.append(listener)
@@ -502,7 +453,7 @@ class DOEMSEMSRuntime:
             allow_negative=False,
         )
 
-    async def async_refresh(self, trigger: str) -> None:
+    async def async_refresh(self, trigger: str = "execution_refresh") -> None:
         """Refresh planner only for planner triggers; otherwise run the fast path."""
         if is_planner_trigger(trigger):
             self._planner_generation += 1
@@ -642,8 +593,6 @@ class DOEMSEMSRuntime:
             self.settings.max_charge_power_w,
             self.settings.max_discharge_power_w,
             now=self.last_refresh,
-            technical_min_soc_percent=self.settings.technical_min_soc_percent,
-            max_soc_percent=self.settings.max_soc_percent,
         )
         expired_slots = {
             int(slot)
@@ -658,8 +607,6 @@ class DOEMSEMSRuntime:
             self.settings.max_charge_power_w,
             self.settings.max_discharge_power_w,
             now=self.last_refresh,
-            technical_min_soc_percent=self.settings.technical_min_soc_percent,
-            max_soc_percent=self.settings.max_soc_percent,
         )
         data.update(scheduler_snapshot)
 
@@ -712,8 +659,6 @@ class DOEMSEMSRuntime:
             self.settings.max_charge_power_w,
             self.settings.max_discharge_power_w,
             now=self.last_refresh,
-            technical_min_soc_percent=self.settings.technical_min_soc_percent,
-            max_soc_percent=self.settings.max_soc_percent,
         )
         refreshed_data = {**data, **self.scheduler_result}
         refreshed_bridge = build_planner_action_bridge(
@@ -788,73 +733,58 @@ class DOEMSEMSRuntime:
             "operating_mode": control_entities.get("operating_mode", {}).get("state"),
             "action_direction": control_entities.get("action_direction", {}).get("state"),
             "power_setpoint_w": control_entities.get("power_setpoint", {}).get("state"),
-            "physical_test_active": False,
-            "execution_active": False,
+            "physical_test_active": bool(self.physical_test.data.get("active")),
+            "execution_active": bool(self.execution.data.get("active")),
+            "execution_origin": self.execution.data.get("origin"),
         }
         self.prestart_result = self.prestart_validator.evaluate(step11_data)
         step11_data.update(self.prestart_result)
         self.safety_result = self.safety_guard.evaluate_automatic_handoff(step11_data)
 
-        # Step 12.2 automatic path: Safety -> Execution Handoff directly.
-        # It deliberately does not consume Action Controller output and stops
-        # before Final Revalidation, mode-switching or any physical service call.
+        # Frozen Alpha76 downstream path. Handoff, final revalidation and
+        # mode-switch preview are evaluated by the same Execution Controller
+        # that owns the physical transaction.
         execution_data: dict[str, Any] = {
             **step11_data,
             **self.safety_result,
         }
-        self.execution_handoff_result = self.execution_handoff.evaluate(execution_data)
+        self.execution_handoff_result = self.execution.evaluate_automatic_handoff(
+            execution_data
+        )
 
-        # Step 12.3 remains strictly non-actuating: the latest automatic handoff
-        # is revalidated, then converted into a guarded mode-switch transaction
-        # preview. No Home Assistant control service is called here.
         final_data: dict[str, Any] = {
             **execution_data,
             **self.execution_handoff_result,
         }
-        self.final_revalidation_result = self.final_revalidation.evaluate(final_data)
+        self.final_revalidation_result = self.execution.evaluate_final_revalidation(
+            final_data
+        )
         preview_data: dict[str, Any] = {
             **final_data,
             **self.final_revalidation_result,
         }
-        self.mode_switch_preview_result = self.mode_switch_preview.evaluate(preview_data)
+        self.mode_switch_preview_result = self.execution.evaluate_mode_switch_transaction(
+            preview_data
+        )
 
-        # Step 12.4: collapse the complete automatic safety chain into one
-        # explicit permission gate. Even when armed_ready, this phase never
-        # invokes the Execution Controller and never calls Home Assistant services.
         gate_data: dict[str, Any] = {
             **preview_data,
             **self.mode_switch_preview_result,
-            "control_path_ready": control_path.get("ready"),
-            "control_path_stable_seconds": control_path.get("stable_seconds", 0),
-            "control_path_required_stable_seconds": control_path.get(
-                "required_stable_seconds", 60
-            ),
-            "execution_origin": None,
+            "physical_test_active": bool(self.physical_test.data.get("active")),
+            "execution_active": bool(self.execution.data.get("active")),
+            "execution_origin": self.execution.data.get("origin"),
         }
+        readiness = self.execution.control_path_readiness()
         self.automatic_execution_gate_result = self.automatic_execution_gate.evaluate(
             gate_data,
             armed=self._automatic_execution_armed,
+            readiness=readiness,
         )
-
-        # Step 12.5 remains non-actuating. It freezes the Step 12.4 execution
-        # identity, follows runtime safety from live read-only sources and
-        # previews safe-return/audit without any Home Assistant control call.
-        execution_data: dict[str, Any] = {
-            **gate_data,
-            **self.automatic_execution_gate_result,
-            "scheduler_slots": self.scheduler_result.get("scheduler_slots", {}),
-            "soc": self.soc_percent,
-            "charge_power_w": step11_data.get("charge_power_w"),
-            "discharge_power_w": step11_data.get("discharge_power_w"),
-            "operating_mode": step11_data.get("operating_mode"),
-            "action_direction": step11_data.get("action_direction"),
-            "power_setpoint_w": step11_data.get("power_setpoint_w"),
+        live_execution = self.execution.data
+        self.execution_result = {
+            **{f"execution_{key}": value for key, value in live_execution.items()},
+            "execution_remaining_s": self.execution.remaining_seconds,
         }
-        self.execution_result = self.execution.evaluate(
-            execution_data,
-            now=self.last_refresh,
-        )
-        await self._async_persist_execution_if_changed()
 
         # Step 12.2 manual/legacy observer path. This mirrors the source's
         # separate legacy Safety -> Action Controller evaluation and remains
@@ -865,6 +795,7 @@ class DOEMSEMSRuntime:
             **self.legacy_safety_result,
         }
         self.action_controller_result = self.action_controller.evaluate(action_data)
+        self._publish_source_data(plan72=plan72, step11_data=step11_data)
         self._schedule_manual_physical_start()
 
     async def _async_fast_execution_refresh(self, trigger: str) -> None:
@@ -886,8 +817,6 @@ class DOEMSEMSRuntime:
             self.settings.max_charge_power_w,
             self.settings.max_discharge_power_w,
             now=self.last_refresh,
-            technical_min_soc_percent=self.settings.technical_min_soc_percent,
-            max_soc_percent=self.settings.max_soc_percent,
         )
         planner = self.planner_result or {}
         plan72 = dict(planner.get("plan72") or {})
@@ -926,73 +855,58 @@ class DOEMSEMSRuntime:
             "operating_mode": control_entities.get("operating_mode", {}).get("state"),
             "action_direction": control_entities.get("action_direction", {}).get("state"),
             "power_setpoint_w": control_entities.get("power_setpoint", {}).get("state"),
-            "physical_test_active": False,
-            "execution_active": False,
+            "physical_test_active": bool(self.physical_test.data.get("active")),
+            "execution_active": bool(self.execution.data.get("active")),
+            "execution_origin": self.execution.data.get("origin"),
         }
         self.prestart_result = self.prestart_validator.evaluate(step11_data)
         step11_data.update(self.prestart_result)
         self.safety_result = self.safety_guard.evaluate_automatic_handoff(step11_data)
 
-        # Step 12.2 automatic path: Safety -> Execution Handoff directly.
-        # It deliberately does not consume Action Controller output and stops
-        # before Final Revalidation, mode-switching or any physical service call.
+        # Frozen Alpha76 downstream path. Handoff, final revalidation and
+        # mode-switch preview are evaluated by the same Execution Controller
+        # that owns the physical transaction.
         execution_data: dict[str, Any] = {
             **step11_data,
             **self.safety_result,
         }
-        self.execution_handoff_result = self.execution_handoff.evaluate(execution_data)
+        self.execution_handoff_result = self.execution.evaluate_automatic_handoff(
+            execution_data
+        )
 
-        # Step 12.3 remains strictly non-actuating: the latest automatic handoff
-        # is revalidated, then converted into a guarded mode-switch transaction
-        # preview. No Home Assistant control service is called here.
         final_data: dict[str, Any] = {
             **execution_data,
             **self.execution_handoff_result,
         }
-        self.final_revalidation_result = self.final_revalidation.evaluate(final_data)
+        self.final_revalidation_result = self.execution.evaluate_final_revalidation(
+            final_data
+        )
         preview_data: dict[str, Any] = {
             **final_data,
             **self.final_revalidation_result,
         }
-        self.mode_switch_preview_result = self.mode_switch_preview.evaluate(preview_data)
+        self.mode_switch_preview_result = self.execution.evaluate_mode_switch_transaction(
+            preview_data
+        )
 
-        # Step 12.4: collapse the complete automatic safety chain into one
-        # explicit permission gate. Even when armed_ready, this phase never
-        # invokes the Execution Controller and never calls Home Assistant services.
         gate_data: dict[str, Any] = {
             **preview_data,
             **self.mode_switch_preview_result,
-            "control_path_ready": control_path.get("ready"),
-            "control_path_stable_seconds": control_path.get("stable_seconds", 0),
-            "control_path_required_stable_seconds": control_path.get(
-                "required_stable_seconds", 60
-            ),
-            "execution_origin": None,
+            "physical_test_active": bool(self.physical_test.data.get("active")),
+            "execution_active": bool(self.execution.data.get("active")),
+            "execution_origin": self.execution.data.get("origin"),
         }
+        readiness = self.execution.control_path_readiness()
         self.automatic_execution_gate_result = self.automatic_execution_gate.evaluate(
             gate_data,
             armed=self._automatic_execution_armed,
+            readiness=readiness,
         )
-
-        # Step 12.5 remains non-actuating. It freezes the Step 12.4 execution
-        # identity, follows runtime safety from live read-only sources and
-        # previews safe-return/audit without any Home Assistant control call.
-        execution_data: dict[str, Any] = {
-            **gate_data,
-            **self.automatic_execution_gate_result,
-            "scheduler_slots": self.scheduler_result.get("scheduler_slots", {}),
-            "soc": self.soc_percent,
-            "charge_power_w": step11_data.get("charge_power_w"),
-            "discharge_power_w": step11_data.get("discharge_power_w"),
-            "operating_mode": step11_data.get("operating_mode"),
-            "action_direction": step11_data.get("action_direction"),
-            "power_setpoint_w": step11_data.get("power_setpoint_w"),
+        live_execution = self.execution.data
+        self.execution_result = {
+            **{f"execution_{key}": value for key, value in live_execution.items()},
+            "execution_remaining_s": self.execution.remaining_seconds,
         }
-        self.execution_result = self.execution.evaluate(
-            execution_data,
-            now=self.last_refresh,
-        )
-        await self._async_persist_execution_if_changed()
 
         # Step 12.2 manual/legacy observer path. This mirrors the source's
         # separate legacy Safety -> Action Controller evaluation and remains
@@ -1003,6 +917,7 @@ class DOEMSEMSRuntime:
             **self.legacy_safety_result,
         }
         self.action_controller_result = self.action_controller.evaluate(action_data)
+        self._publish_source_data(plan72=plan72, step11_data=step11_data)
         self._schedule_manual_physical_start()
 
         self._notify()
@@ -1016,75 +931,240 @@ class DOEMSEMSRuntime:
         return result
 
     def _schedule_manual_physical_start(self) -> None:
-        """Start one due guarded Scheduler action while the explicit arm is ON.
+        """Mirror Alpha76 scheduled-manual and automatic execution listeners."""
+        if self._shutdown:
+            return
+        data = self.data
+        if data.get("scheduler_ready") is not True:
+            return
+        if data.get("scheduler_selected_execution_mode") != "gepland":
+            return
+        if data.get("scheduler_selected_action") not in {"laden", "ontladen"}:
+            return
 
-        The historic method name is retained for storage/API stability until the
-        later cleanup phase. Beta phase 2 opens automatic_72h_planner only when
-        the existing automatic execution gate is armed_ready and permitted.
-        """
-        if self._shutdown or not self._automatic_execution_armed:
-            return
-        if self.manual_physical_execution.busy:
-            return
+        slot = data.get("scheduler_selected_slot")
+        detail = ((data.get("scheduler_slots") or {}).get(slot) or
+                  (data.get("scheduler_slots") or {}).get(str(slot)) or {})
+        origin = str(detail.get("origin") or "manual")
+
         if (
-            self._manual_physical_start_task is not None
-            and not self._manual_physical_start_task.done()
+            self.execution.data.get("active")
+            or self.execution.data.get("auto_mode_switch_active")
+            or self.physical_test.data.get("active")
         ):
             return
 
-        scheduler = self.scheduler_result or {}
-        if scheduler.get("scheduler_ready") is not True:
-            return
-        if scheduler.get("scheduler_selected_execution_mode") != "gepland":
-            return
-        slot = scheduler.get("scheduler_selected_slot")
-        slots = scheduler.get("scheduler_slots") or {}
-        detail = slots.get(slot) or slots.get(str(slot)) or {}
-        origin = str(detail.get("origin") or "manual")
         if origin == "automatic_72h_planner":
-            gate = self.automatic_execution_gate_result or {}
-            if gate.get("auto_execution_gate_status") != "armed_ready":
+            if data.get("auto_shadow_execution_permitted") is not True:
                 return
-            if gate.get("auto_execution_gate_execution_permitted") is not True:
+            identity = detail.get("planner_identity")
+            if not identity:
                 return
-            if gate.get("auto_execution_gate_selected_slot") != slot:
-                return
-            if gate.get("auto_execution_gate_planner_identity") != detail.get(
-                "planner_identity"
+            if (
+                self._automatic_execution_task is not None
+                and not self._automatic_execution_task.done()
             ):
                 return
-        elif origin != "manual":
-            return
-        if detail.get("action") not in {"laden", "ontladen"}:
+
+            async def _run_automatic() -> None:
+                try:
+                    await self.execution.async_execute_automatic_plan(str(identity))
+                except asyncio.CancelledError:
+                    raise
+                except HomeAssistantError as err:
+                    _LOGGER.warning(
+                        "Automatic physical DOEMS execution blocked/failed: %s", err
+                    )
+                except Exception:
+                    _LOGGER.exception(
+                        "Unexpected automatic physical DOEMS execution error"
+                    )
+                finally:
+                    self._automatic_execution_task = None
+                    if not self._shutdown:
+                        self._request_fast_refresh("automatic_execution_terminal")
+
+            self._automatic_execution_task = self.hass.async_create_task(
+                _run_automatic(), "DOEMS Alpha76 automatic physical execution"
+            )
             return
 
-        async def _runner() -> None:
+        if origin != "manual":
+            return
+        if (
+            self._scheduled_manual_start_task is not None
+            and not self._scheduled_manual_start_task.done()
+        ):
+            return
+
+        start_window_end_raw = detail.get("start_window_end")
+        start_window_end = (
+            dt_util.parse_datetime(str(start_window_end_raw))
+            if start_window_end_raw
+            else None
+        )
+        if start_window_end is not None and start_window_end.tzinfo is None:
+            start_window_end = start_window_end.replace(
+                tzinfo=dt_util.DEFAULT_TIME_ZONE
+            )
+
+        retryable_fragments = (
+            "Externe modus werd niet tijdig beschikbaar",
+            "control_sources_missing",
+            "not_in_external_mode",
+            "observation_sources_missing",
+            "Batterij laadt momenteel; ontladen wordt niet gestart",
+            "Batterij ontlaadt momenteel; laden wordt niet gestart",
+            "Action Controller niet gereed",
+        )
+
+        async def _run_manual_scheduled() -> None:
             try:
-                await self.manual_physical_execution.async_start(
-                    self._manual_physical_snapshot(),
-                    refresh=self.async_refresh,
-                    snapshot_provider=self._manual_physical_snapshot,
-                    armed_provider=lambda: self._automatic_execution_armed,
-                )
+                while True:
+                    try:
+                        await self.execution.async_execute_selected_plan()
+                        return
+                    except HomeAssistantError as err:
+                        message = str(err)
+                        retryable = any(
+                            fragment in message for fragment in retryable_fragments
+                        )
+                        within_window = bool(
+                            start_window_end is not None
+                            and dt_util.now() < start_window_end
+                        )
+                        if not retryable or not within_window:
+                            _LOGGER.warning(
+                                "Scheduled DOEMS plan %s could not start: %s",
+                                slot,
+                                err,
+                            )
+                            return
+
+                        await self.plan_store.async_mark_lifecycle(
+                            int(slot),
+                            "pending",
+                            f"retry_wait: {message}",
+                        )
+                        await self.async_refresh("scheduled_manual_retry")
+                        remaining = max(
+                            0.0,
+                            (start_window_end - dt_util.now()).total_seconds(),
+                        )
+                        delay = min(10.0, remaining)
+                        if delay <= 0:
+                            return
+                        await asyncio.sleep(delay)
+                        await self.async_refresh("scheduled_manual_retry")
+                        current = self.data
+                        if (
+                            current.get("scheduler_selected_slot") != slot
+                            or not current.get("scheduler_ready")
+                            or current.get("scheduler_selected_execution_mode") != "gepland"
+                        ):
+                            return
             except asyncio.CancelledError:
                 raise
-            except HomeAssistantError as err:
-                # A failed physical start is fail-safe and requires an explicit
-                # new user arm before another write attempt.
-                self._automatic_execution_armed = False
-                _LOGGER.warning("Step15A manual physical execution blocked: %s", err)
             except Exception:
-                self._automatic_execution_armed = False
-                _LOGGER.exception("Step15A manual physical execution failed")
+                _LOGGER.exception(
+                    "Unexpected error while starting scheduled DOEMS plan %s", slot
+                )
             finally:
-                self._manual_physical_start_task = None
+                self._scheduled_manual_start_task = None
                 if not self._shutdown:
-                    self._request_fast_refresh("manual_physical_execution_terminal")
+                    self._request_fast_refresh("scheduled_manual_terminal")
 
-        self._manual_physical_start_task = self.hass.async_create_task(
-            _runner(),
-            "DOEMS Step15A manual physical start",
+        self._scheduled_manual_start_task = self.hass.async_create_task(
+            _run_manual_scheduled(), "DOEMS Alpha76 scheduled plan auto-start"
         )
+
+    @property
+    def control_entity_ids(self) -> dict[str, str | None]:
+        """Expose the source controller mapping expected by Alpha76 execution."""
+        return dict(self.control_path.entity_ids)
+
+    @property
+    def data(self) -> dict[str, Any]:
+        """Expose the frozen Alpha76 coordinator data contract."""
+        return dict(self._source_data_result)
+
+    @property
+    def simulation_mode(self) -> bool:
+        """Alpha76 manual/test execution requires the normal EMS simulation flag."""
+        return True
+
+    @property
+    def max_charge_power_w(self) -> int:
+        return int(self.settings.max_charge_power_w)
+
+    @property
+    def max_discharge_power_w(self) -> int:
+        return int(self.settings.max_discharge_power_w)
+
+    def _publish_source_data(
+        self,
+        *,
+        plan72: dict[str, Any],
+        step11_data: dict[str, Any],
+    ) -> None:
+        """Publish the Alpha76 coordinator contract from native DOEMS sources."""
+        physical = self.physical_test.data
+        execution = self.execution.data
+        planner_bundle = self.planner_result or {}
+        energy_need = planner_bundle.get("energy_need") or {}
+        planner_preview = planner_bundle.get("planner_preview") or {}
+        input_result = self.input_result or {}
+        forecast_ready = input_result.get("status") == "ready"
+        self._source_data_result = {
+            **step11_data,
+            **energy_need,
+            **planner_preview,
+            **plan72,
+            **self.bridge_result,
+            **self.scheduler_result,
+            **self.prestart_result,
+            **self.safety_result,
+            **self.execution_handoff_result,
+            **self.final_revalidation_result,
+            **self.mode_switch_preview_result,
+            **self.automatic_execution_gate_result,
+            **self.legacy_safety_result,
+            **self.action_controller_result,
+            "simulation_mode": True,
+            "forecast_ready": forecast_ready,
+            "forecast_status": input_result.get("status"),
+            "forecast_complete_hours": (
+                72 if forecast_ready else sum(
+                    1 for row in (input_result.get("rows") or [])
+                    if isinstance(row, dict) and row.get("fully_valid")
+                )
+            ),
+            "forecast_home_hours": len(input_result.get("rows") or []),
+            "forecast_solar_hours": sum(
+                1 for row in (input_result.get("rows") or [])
+                if isinstance(row, dict) and row.get("solar_valid")
+            ),
+            "forecast_price_hours": sum(
+                1 for row in (input_result.get("rows") or [])
+                if isinstance(row, dict) and row.get("import_price") is not None
+            ),
+            "forecast_missing_sources": (
+                [] if forecast_ready else ["doems_native_forecast_incomplete"]
+            ),
+            "battery_capacity_kwh": self.settings.battery_capacity_kwh,
+            "charge_efficiency_percent": self.settings.charge_efficiency_percent,
+            "discharge_efficiency_percent": self.settings.discharge_efficiency_percent,
+            "max_charge_power_w": self.settings.max_charge_power_w,
+            "max_discharge_power_w": self.settings.max_discharge_power_w,
+            "physical_test_active": bool(physical.get("active")),
+            "execution_active": bool(execution.get("active")),
+            "execution_origin": execution.get("origin"),
+            **{f"physical_test_{key}": value for key, value in physical.items()},
+            "physical_test_remaining_s": self.physical_test.remaining_seconds,
+            **{f"execution_{key}": value for key, value in execution.items()},
+            "execution_remaining_s": self.execution.remaining_seconds,
+            "auto_bridge_execution_enabled": bool(self._automatic_execution_armed),
+        }
 
     def snapshot(self) -> dict[str, Any]:
         """Return compact entity-safe diagnostics without publishing Plan72 arrays."""
@@ -1105,8 +1185,7 @@ class DOEMSEMSRuntime:
         execution = self.execution_result or {}
         legacy_safety = self.legacy_safety_result or {}
         action_controller = self.action_controller_result or {}
-        manual_controller = getattr(self, "manual_physical_execution", None)
-        manual_physical = manual_controller.data if manual_controller is not None else {}
+        manual_physical = self.execution.data
         control_path = self.control_path_result or {}
         control_entities = control_path.get("entities") or {}
         slots = scheduler.get("scheduler_slots") or {}
@@ -1427,7 +1506,7 @@ class DOEMSEMSRuntime:
             "execution_store_error": self.execution_store_error,
             "execution_store_last_saved_at": self.execution_store_last_saved_at,
             "execution_store_key": f"{DOMAIN}.{self.entry.entry_id}.execution",
-            "execution_store_restart_policy": "fail_safe_off_no_resume",
+            "execution_store_restart_policy": "alpha76_interrupted_run_safe_stop_arm_restored_separately",
             "legacy_safety_status": legacy_safety.get("safety_status"),
             "legacy_safety_safe": legacy_safety.get("safety_safe"),
             "legacy_safety_reason": legacy_safety.get("safety_reason"),
@@ -1460,11 +1539,7 @@ class DOEMSEMSRuntime:
                 "controller_physical_control", False
             ),
             "execution_controller_invoked": bool(manual_physical.get("active")),
-            "execution_mode": (
-                "live_guarded_phase2"
-                if self._automatic_execution_armed
-                else "validation"
-            ),
+            "execution_mode": "live_guarded" if self._automatic_execution_armed else "disarmed",
             "automatic_execution_armed": self._automatic_execution_armed,
             "manual_physical_execution_enabled": True,
             "manual_physical_execution_active": bool(manual_physical.get("active")),
@@ -1478,7 +1553,7 @@ class DOEMSEMSRuntime:
             "manual_physical_safe_return_performed": manual_physical.get(
                 "safe_return_performed", False
             ),
-            "manual_physical_write_count": manual_physical.get("write_count", 0),
+            "manual_physical_write_count": 0,
             "physical_execution_origin": manual_physical.get("origin"),
             "physical_execution_planner_identity": manual_physical.get("planner_identity"),
             "physical_execution_planner_signature": manual_physical.get("planner_signature"),
@@ -1493,10 +1568,14 @@ class DOEMSEMSRuntime:
             "physical_execution_safe_return_performed": manual_physical.get(
                 "safe_return_performed", False
             ),
-            "physical_execution_write_count": manual_physical.get("write_count", 0),
+            "physical_execution_write_count": 0,
             "automatic_planner_physical_execution_enabled": True,
             "service_calls_performed": bool(
-                manual_physical.get("service_calls_performed", False)
+                manual_physical.get("active")
+                or manual_physical.get("last_result") is not None
             ),
-            "physical_execution_authority": bool(self._automatic_execution_armed),
+            "physical_execution_authority": bool(
+                manual_physical.get("active")
+                or manual_physical.get("auto_mode_switch_active")
+            ),
         }

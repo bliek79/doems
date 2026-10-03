@@ -31,6 +31,7 @@ from .const import (
     VERSION,
 )
 from .ems_settings import EMSSettings
+from .ems_alpha76_surface import build_alpha76_sensors
 from .ems_runtime import DOEMSEMSRuntime
 from .ems_g5_live_parity_runtime import get_g5_live_parity_runtime
 from .ems_g5_live_parity_sensor import DOEMSG5LiveParitySensor
@@ -106,6 +107,7 @@ async def async_setup_entry(
                     entry,
                     get_g5_live_parity_runtime(ems_runtime),
                 ),
+                *build_alpha76_sensors(entry, ems_runtime),
             ]
         )
 
@@ -639,6 +641,14 @@ class DOEMSEMSStatusSensor(_DOEMSEMSRuntimeSensor):
         "safe_return_steps",
         "execution_trace",
         "execution_run_history",
+        "auto_execution_gate_blockers",
+        "auto_execution_gate_warnings",
+        "prestart_reasons",
+        "prestart_warnings",
+        "safety_handoff_reasons",
+        "safety_handoff_warnings",
+        "execution_handoff_reasons",
+        "execution_handoff_warnings",
     })
     _attr_name = "DOEMS EMS"
     _attr_unique_id = "doems_ems"

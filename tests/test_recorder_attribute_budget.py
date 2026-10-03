@@ -236,6 +236,21 @@ class _SyntheticRuntime:
         self.final_revalidation_result = _SyntheticMap()
         self.mode_switch_preview_result = _SyntheticMap()
         self.automatic_execution_gate_result = _SyntheticMap()
+        self.execution = SimpleNamespace(data={
+            "active": True,
+            "busy": True,
+            "status": "running",
+            "reason": "test",
+            "slot": 1,
+            "action": "laden",
+            "power_w": 3200,
+            "target_soc": 80,
+            "origin": "automatic_72h_planner",
+            "planner_identity": "identity-" + "x" * 64,
+            "planner_signature": "signature-" + "x" * 64,
+            "last_result": None,
+            "auto_mode_switch_active": False,
+        })
         self.execution_result = {
             "execution_status": "running",
             "execution_active": True,

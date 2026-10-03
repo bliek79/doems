@@ -6,7 +6,7 @@ from typing import Any
 
 from homeassistant.util import dt as dt_util
 
-from .ems_alpha76.const import (
+from .const import (
     DEFAULT_BATTERY_CAPACITY_KWH,
     DEFAULT_CHARGE_EFFICIENCY_PERCENT,
     DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
@@ -132,8 +132,6 @@ def _build_candidate(
     battery_capacity_kwh: float,
     charge_efficiency_percent: float,
     discharge_efficiency_percent: float,
-    technical_min_soc_percent: float,
-    max_soc_percent: float,
 ) -> dict[str, Any]:
     first = segment[0]
     last = segment[-1]
@@ -169,9 +167,9 @@ def _build_candidate(
     if projected_start_soc is None:
         target_soc = None
     elif action == "laden":
-        target_soc = min(float(max_soc_percent), projected_start_soc + (energy_kwh * charge_eff / capacity * 100.0))
+        target_soc = min(100.0, projected_start_soc + (energy_kwh * charge_eff / capacity * 100.0))
     else:
-        target_soc = max(float(technical_min_soc_percent), projected_start_soc - (energy_kwh / discharge_eff / capacity * 100.0))
+        target_soc = max(5.0, projected_start_soc - (energy_kwh / discharge_eff / capacity * 100.0))
 
     valid = True
     reasons: list[str] = []
@@ -184,7 +182,7 @@ def _build_candidate(
     if average_power_w > max_power_w + 1:
         valid = False
         reasons.append("required_power_above_limit")
-    if target_soc is None or not float(technical_min_soc_percent) <= target_soc <= float(max_soc_percent):
+    if target_soc is None or not 5 <= target_soc <= 100:
         valid = False
         reasons.append("invalid_target_soc")
 
@@ -290,8 +288,6 @@ def build_planner_action_bridge(
     battery_capacity_kwh = float(data.get("battery_capacity_kwh") or DEFAULT_BATTERY_CAPACITY_KWH)
     charge_efficiency_percent = float(data.get("charge_efficiency_percent") or DEFAULT_CHARGE_EFFICIENCY_PERCENT)
     discharge_efficiency_percent = float(data.get("discharge_efficiency_percent") or DEFAULT_DISCHARGE_EFFICIENCY_PERCENT)
-    technical_min_soc_percent = float(data.get("technical_min_soc_percent", 5))
-    max_soc_percent = float(data.get("max_soc_percent", 100))
 
     base = {
         "auto_bridge_observational_only": False,
@@ -372,8 +368,6 @@ def build_planner_action_bridge(
             battery_capacity_kwh,
             charge_efficiency_percent,
             discharge_efficiency_percent,
-            technical_min_soc_percent,
-            max_soc_percent,
         )
         for segment in segments
     ]
@@ -416,10 +410,10 @@ def build_planner_action_bridge(
                 "slot": slot,
                 "available_for_automatic_write": available,
                 "manual_action": detail.get("action"),
-                "manual_purpose": detail.get("purpose"),
                 "manual_status": detail.get("status"),
                 "manual_lifecycle_status": detail.get("lifecycle_status"),
                 "manual_origin": detail.get("origin"),
+                "manual_purpose": detail.get("purpose"),
                 "start_time": detail.get("start_time"),
                 "max_start_delay_min": detail.get("max_start_delay_min"),
                 "planned_end_time": detail.get("planned_end_time"),
@@ -471,13 +465,14 @@ def build_planner_action_bridge(
         item: dict[str, Any],
         candidate: dict[str, Any],
     ) -> bool:
-        """Return True for the same pending action after one native 15 min roll.
+        """Preserve one pending action across one native 15-minute transport roll.
 
-        DOEMS keeps the Alpha76 60-minute compatibility rows but anchors them to
-        the native rolling quarter. A pending 11:00-12:00 action can therefore
-        reappear as 11:15-12:15 while it is still inside its Scheduler start
-        window. Preserve the stable planner identity only for that narrowly
-        bounded continuity case. The revision signature remains candidate-local.
+        This is the only intentional DOEMS adapter exception to the frozen
+        Alpha76 bridge. It never creates a new action or changes action,
+        purpose, energy, power, target SOC, runtime, or lifecycle. It only keeps
+        the already-pending planner identity when the 72x60 compatibility view
+        shifts forward by at most one native quarter while still inside the
+        original Scheduler start window.
         """
         if item.get("manual_origin") != "automatic_72h_planner":
             return False
@@ -487,9 +482,7 @@ def build_planner_action_bridge(
             return False
         if str(item.get("manual_purpose") or "") != str(candidate.get("purpose") or ""):
             return False
-        if not item.get("planner_identity"):
-            return False
-        if candidate.get("valid") is not True:
+        if not item.get("planner_identity") or candidate.get("valid") is not True:
             return False
 
         old_start = _parse_time(item.get("start_time"))
@@ -502,7 +495,6 @@ def build_planner_action_bridge(
         shift_seconds = (new_start - old_start).total_seconds()
         if not 0 < shift_seconds <= 15 * 60:
             return False
-
         if not (new_start < old_end and old_start < new_end):
             return False
 
@@ -510,10 +502,7 @@ def build_planner_action_bridge(
             delay_min = max(0.0, float(item.get("max_start_delay_min") or 0))
         except (TypeError, ValueError):
             return False
-        if now_utc > old_start + timedelta(minutes=delay_min):
-            return False
-
-        return True
+        return now_utc <= old_start + timedelta(minutes=delay_min)
 
     for candidate in candidates[:PLAN_SLOT_COUNT]:
         enriched = dict(candidate)

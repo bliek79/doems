@@ -22,6 +22,8 @@ from .const import (
     DEFAULT_MAX_CHARGE_POWER_W,
     DEFAULT_MAX_DISCHARGE_POWER_W,
     DEFAULT_MAX_SOC_PERCENT,
+    MAX_SOC_PERCENT,
+    MIN_SOC_PERCENT,
     DEFAULT_MINIMUM_TRADE_MARGIN_EUR_PER_KWH,
     DEFAULT_SOFTWARE_RESERVE_PERCENT,
     DEFAULT_STARTUP_DELAY_SECONDS,
@@ -51,15 +53,11 @@ class EMSSettings:
             battery_capacity_kwh=float(
                 options.get(CONF_BATTERY_CAPACITY_KWH, DEFAULT_BATTERY_CAPACITY_KWH)
             ),
-            technical_min_soc_percent=int(
-                options.get(
-                    CONF_TECHNICAL_MIN_SOC_PERCENT,
-                    DEFAULT_TECHNICAL_MIN_SOC_PERCENT,
-                )
-            ),
-            max_soc_percent=int(
-                options.get(CONF_MAX_SOC_PERCENT, DEFAULT_MAX_SOC_PERCENT)
-            ),
+            # Alpha76 parity: execution/Scheduler SOC bounds are fixed 5..100.
+            # Legacy DOEMS options remain readable for migration only and can
+            # no longer alter this behavior.
+            technical_min_soc_percent=MIN_SOC_PERCENT,
+            max_soc_percent=MAX_SOC_PERCENT,
             max_charge_power_w=int(
                 options.get(CONF_MAX_CHARGE_POWER_W, DEFAULT_MAX_CHARGE_POWER_W)
             ),

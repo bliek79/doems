@@ -2,16 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from .const import (
-    DEFAULT_MAX_SOC_PERCENT as MAX_SOC_PERCENT,
-    DEFAULT_TECHNICAL_MIN_SOC_PERCENT as MIN_SOC_PERCENT,
-)
+from .const import MAX_SOC_PERCENT, MIN_SOC_PERCENT
 
 
 class DOEMSSafetyGuard:
     """Evaluate whether a scheduler-selected action is safe to prepare.
 
-    DOEMS Step 11 keeps the normal EMS controller non-actuating. The guard validates the current
+    Alpha 10 keeps the normal EMS controller non-actuating. The guard validates the current
     Home Assistant source state and the selected persistent plan, but never
     calls services or writes to the physical battery.
     """
@@ -127,7 +124,7 @@ class DOEMSSafetyGuard:
     def evaluate_automatic_handoff(self, data: dict[str, Any]) -> dict[str, Any]:
         """Evaluate Scheduler -> Safety Guard handoff for automatic plans.
 
-        DOEMS Step 11 is deliberately non-actuating. This gate is evaluated only for
+        Alpha35 is deliberately non-actuating. This gate is evaluated only for
         an automatic Scheduler-ready plan after the authoritative pre-start
         validator has approved it. It validates the plan and the availability
         of the future control path, but it does not require the battery to be in

@@ -87,6 +87,8 @@ from .const import (
     EMS_MIN_STARTUP_DELAY_SECONDS,
     EMS_MAX_STARTUP_DELAY_SECONDS,
     EMS_MAX_POWER_W,
+    MIN_SOC_PERCENT,
+    MAX_SOC_PERCENT,
     DOMAIN,
     ENERGY_SOURCE_BALANCE,
     ENERGY_SOURCE_DIRECT,
@@ -559,6 +561,9 @@ class DOEMSOptionsFlow(OptionsFlow):
 
             if not errors:
                 normalized = dict(user_input)
+                # Frozen Alpha76 parity: these are no longer user policy inputs.
+                normalized[CONF_TECHNICAL_MIN_SOC_PERCENT] = MIN_SOC_PERCENT
+                normalized[CONF_MAX_SOC_PERCENT] = MAX_SOC_PERCENT
                 errors.update(validate_ems_combination(normalized))
                 if not errors:
                     self._pending.update(normalized)
@@ -595,14 +600,6 @@ class DOEMSOptionsFlow(OptionsFlow):
                     CONF_BATTERY_CAPACITY_KWH,
                     default=float(self._current(CONF_BATTERY_CAPACITY_KWH, DEFAULT_BATTERY_CAPACITY_KWH)),
                 ): _number(1.0, 30.0, 0.1, "kWh"),
-                vol.Required(
-                    CONF_TECHNICAL_MIN_SOC_PERCENT,
-                    default=int(self._current(CONF_TECHNICAL_MIN_SOC_PERCENT, DEFAULT_TECHNICAL_MIN_SOC_PERCENT)),
-                ): _number(0, 30, 1, "%"),
-                vol.Required(
-                    CONF_MAX_SOC_PERCENT,
-                    default=int(self._current(CONF_MAX_SOC_PERCENT, DEFAULT_MAX_SOC_PERCENT)),
-                ): _number(50, 100, 1, "%"),
                 vol.Required(
                     CONF_MAX_CHARGE_POWER_W,
                     default=int(self._current(CONF_MAX_CHARGE_POWER_W, DEFAULT_MAX_CHARGE_POWER_W)),

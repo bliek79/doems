@@ -6,9 +6,9 @@ from typing import Any
 class DOEMSActionController:
     """Prepare a semantic battery command without executing it.
 
-    Step 12.2 copies the current working source behavior for the manual/legacy
-    controller path. It deliberately has no Home Assistant service-call path.
-    Automatic Plan72 execution does not flow through this controller.
+    Alpha 10 keeps the controller/safety decision chain in simulation. It intentionally does
+    not call Home Assistant services. Device-specific command mapping and
+    physical writes are reserved for a later alpha after explicit validation.
     """
 
     def evaluate(self, data: dict[str, Any]) -> dict[str, Any]:

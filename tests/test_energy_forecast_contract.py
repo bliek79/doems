@@ -23,7 +23,7 @@ def _load_pure_module(name: str):
 
 def test_manifest_and_clean_identity_contract() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["domain"] == "doems" and manifest["name"] == "DOEMS" and manifest["version"] == "0.1.0-alpha.31"
+    assert manifest["domain"] == "doems" and manifest["name"] == "DOEMS" and manifest["version"] == "0.1.0-alpha.32"
     for path in INTEGRATION.rglob("*"):
         if not path.is_file() or path.suffix not in {".py", ".json", ".yaml", ".yml"}: continue
         text = path.read_text(encoding="utf-8")
@@ -46,15 +46,15 @@ def test_public_entity_object_ids_are_doems_prefixed() -> None:
     assert all(v.startswith("doems_") for v in suggested + unique)
 
 
-def test_no_physical_control_surface() -> None:
-    active_text="\n".join(path.read_text(encoding="utf-8") for path in INTEGRATION.rglob("*.py"))
-    assert active_text.count(".services.async_call(") == 2
-    prices=(INTEGRATION / "prices.py").read_text(encoding="utf-8")
+def test_physical_control_is_confined_to_alpha76_execution_boundary() -> None:
+    prices=(INTEGRATION/"prices.py").read_text(encoding="utf-8")
     assert '"energyzero"' in prices and '"get_gas_prices"' in prices
     for forbidden in ('"anker_solix"', '"switch"', '"number"', '"select.select_option"'):
         assert forbidden not in prices
-    assert '"physical_execution_authority": False' in active_text
-
+    assert ".services.async_call(" in (INTEGRATION/"ems_execution.py").read_text(encoding="utf-8")
+    assert ".services.async_call(" in (INTEGRATION/"ems_physical_test.py").read_text(encoding="utf-8")
+    for name in ("ems_planner_bridge.py","ems_scheduler.py","ems_prestart_validator.py","ems_safety_guard.py","ems_action_controller.py","ems_automatic_execution_gate.py"):
+        assert ".services.async_call(" not in (INTEGRATION/name).read_text(encoding="utf-8")
 
 def test_install_contract_is_component_scoped() -> None:
     text=(INTEGRATION / "config_flow.py").read_text(encoding="utf-8")

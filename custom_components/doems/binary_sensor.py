@@ -20,6 +20,8 @@ from .const import (
     VERSION,
 )
 from .presence import DOEMSPresenceStore
+from .ems_runtime import DOEMSEMSRuntime
+from .ems_alpha76_surface import build_alpha76_binary_sensors
 from .solar_foundation import SolarFoundationManager
 
 
@@ -53,6 +55,9 @@ async def async_setup_entry(
                 DOEMSAwayScheduleValidSensor(entry, presence),
             ]
         )
+    runtime = hass.data.get(DOMAIN, {}).get(entry.entry_id, {}).get("ems_runtime")
+    if isinstance(runtime, DOEMSEMSRuntime):
+        entities.extend(build_alpha76_binary_sensors(entry, runtime))
     async_add_entities(entities)
 
 

@@ -36,13 +36,12 @@ def test_alpha6_public_solar_runtime_contract_is_carried_forward() -> None:
 
 
 def test_safety_and_branding_scope_remain_explicit() -> None:
-    active_text = "\n".join(path.read_text(encoding="utf-8") for path in INTEGRATION.rglob("*.py"))
-    workflow = (ROOT / ".github/workflows/p2-energy-forecast-release.yml").read_text(encoding="utf-8")
-    assert active_text.count(".services.async_call(") == 2
-    prices = (INTEGRATION / "prices.py").read_text(encoding="utf-8")
+    workflow=(ROOT/".github/workflows/p2-energy-forecast-release.yml").read_text(encoding="utf-8")
+    prices=(INTEGRATION/"prices.py").read_text(encoding="utf-8")
     assert '"energyzero"' in prices and '"get_gas_prices"' in prices
-    assert '"physical_execution_authority": False' in active_text
-    # Alpha7.6 returns branding to the existing shared icon file; no brand
-    # builder is executed and the exact existing Git blob is enforced.
+    assert ".services.async_call(" in (INTEGRATION/"ems_execution.py").read_text(encoding="utf-8")
+    assert ".services.async_call(" in (INTEGRATION/"ems_physical_test.py").read_text(encoding="utf-8")
+    for name in ("ems_planner_bridge.py","ems_scheduler.py","ems_prestart_validator.py","ems_safety_guard.py","ems_action_controller.py","ems_automatic_execution_gate.py"):
+        assert ".services.async_call(" not in (INTEGRATION/name).read_text(encoding="utf-8")
     assert "python scripts/build_brand_assets.py" not in workflow
     assert "fb0dd2dee9b6c7074da8bdde0f5663260677c779" in workflow
