@@ -13,6 +13,7 @@ from typing import Any
 from .ems_alpha76.energy_need import build_energy_need_analysis
 from .ems_alpha76.planner_preview import build_planner_preview
 from .ems_alpha76.planner_72h import build_72h_plan_preview
+from .ems_alpha76.planner_72h_sequential_safety import build_72h_plan_preview_sequential_safety
 from .ems_settings import EMSSettings
 
 SOURCE_TAG = "0.0.1-alpha.76"
@@ -181,7 +182,7 @@ def run_preview(*, input_result: dict[str, Any], settings: EMSSettings, energy_n
 
 def run_plan72(*, input_result: dict[str, Any], settings: EMSSettings, energy_need: dict[str, Any], planner_preview: dict[str, Any], soc_percent: float | None, now: datetime | None = None) -> dict[str, Any]:
     reference = planner_reference(input_result, now)
-    raw = build_72h_plan_preview(
+    raw = build_72h_plan_preview_sequential_safety(
         forecast_from_input(input_result),
         energy_need,
         planner_preview,
@@ -204,7 +205,7 @@ def run_ems_chain(*, input_result: dict[str, Any], settings: EMSSettings, soc_pe
         "planner_preview": deepcopy(preview),
         "plan72": deepcopy(plan72),
         "ems_policy_source": SOURCE_TAG,
-        "adapter_contract": "alpha41_288_to_72",
+        "adapter_contract": "alpha41_288_to_72+alpha35_sequential_safety_exception_v1",
         "startup_delay_runtime_gate_active": False,
         "planner_runtime_active": True,
         "plan_store_write": True,
