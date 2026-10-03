@@ -15,9 +15,9 @@ def _blob_sha(path: Path) -> str:
 def _read(name: str) -> str:
     return (INTEGRATION / name).read_text(encoding="utf-8")
 
-def test_alpha33_candidate_identity_keeps_alpha32_source_parity_contract() -> None:
-    assert 'VERSION = "0.1.0-alpha.33"' in _read("const.py")
-    assert json.loads(_read("manifest.json"))["version"] == "0.1.0-alpha.33"
+def test_alpha34_candidate_identity_keeps_alpha32_source_parity_contract() -> None:
+    assert 'VERSION = "0.1.0-alpha.34"' in _read("const.py")
+    assert json.loads(_read("manifest.json"))["version"] == "0.1.0-alpha.34"
 
 def test_source_verified_alpha76_modules_are_frozen() -> None:
     expected = {
@@ -74,7 +74,8 @@ def test_manual_execution_is_not_controlled_by_automatic_arm() -> None:
     block = runtime[start:end]
     manual = block[block.index('        if origin != "manual":'):]
     assert "_automatic_execution_armed" not in manual
-    assert "await self.execution.async_execute_selected_plan()" in manual
+    assert "await self.async_execute_selected_plan_verified_handoff()" in manual
+    assert "platform_setpoint_handoff_not_confirmed" in manual
     assert "retry_wait:" in manual
 
 def test_revalidation_and_mode_switch_are_owned_by_source_execution() -> None:
@@ -91,7 +92,7 @@ def test_alpha76_service_and_physical_test_surface_is_restored() -> None:
     services = (INTEGRATION / "services.yaml").read_text(encoding="utf-8")
     for service in ("start_charge_test","start_discharge_test","stop_physical_test","execute_selected_plan","stop_execution","schedule_plan","start_plan_now","cancel_plan","stop_all"):
         assert service in const and service in services
-    assert "runtime.execution.async_execute_selected_plan()" in init
+    assert "runtime.async_execute_selected_plan_verified_handoff()" in init
     assert "runtime.physical_test.async_start_charge_test(" in init
     assert "runtime.physical_test.async_start_discharge_test(" in init
 
