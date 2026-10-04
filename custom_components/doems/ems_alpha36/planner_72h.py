@@ -8,8 +8,8 @@ from homeassistant.util import dt as dt_util
 
 from ..const import DEFAULT_BATTERY_CAPACITY_KWH, MIN_SOC_PERCENT
 from ..ems_alpha76.const import DEFAULT_AUTO_EXECUTION_BUFFER_PERCENT
-from ..ems_alpha76.planner_72h_sequential_safety import (
-    build_72h_plan_preview_sequential_safety as _build_alpha35_sequential_plan,
+from .sequential_safety import (
+    build_72h_plan_preview_alpha36_sequential_safety as _build_alpha36_sequential_plan,
 )
 
 _MIN_ENERGY_KWH = 0.01
@@ -824,7 +824,7 @@ def build_72h_plan_preview(
         "now": now,
     }
     alpha80 = _build_alpha80_plan_preview(**kwargs)
-    alpha35 = _build_alpha35_sequential_plan(**kwargs)
+    alpha35 = _build_alpha36_sequential_plan(**kwargs)
 
     if (
         alpha80.get("auto_plan_72h_valid") is True
