@@ -143,7 +143,11 @@ class DOEMSEMSRuntime:
         self._state_publish_lock = asyncio.Lock()
         self._shutdown = False
         self._planner_task: asyncio.Task[None] | None = None
+        self._planner_prepare_task: asyncio.Task[None] | None = None
         self._planner_pending_triggers: set[str] = set()
+        self._planner_pending_request: dict[str, Any] | None = None
+        self._planner_active_signature: str | None = None
+        self._planner_pending_signature: str | None = None
         self._planner_generation = 0
         self._planner_published_generation = 0
         self._planner_compute_count = 0
@@ -152,6 +156,8 @@ class DOEMSEMSRuntime:
         self._planner_last_input_signature: str | None = None
         self._planner_last_cycle_id: str | None = None
         self._planner_last_refresh: datetime | None = None
+        self._planner_last_start_critical_key: str | None = None
+        self._planner_last_forecast_ready: bool | None = None
         self._planner_debounce_seconds = 2.0
         self._planner_publish_active = False
         self._deferred_fast_trigger: str | None = None
@@ -262,9 +268,15 @@ class DOEMSEMSRuntime:
         if self._planner_quarter_timer_unsub is not None:
             self._planner_quarter_timer_unsub()
             self._planner_quarter_timer_unsub = None
+        if self._planner_prepare_task is not None:
+            self._planner_prepare_task.cancel()
+            self._planner_prepare_task = None
         if self._planner_task is not None:
             self._planner_task.cancel()
             self._planner_task = None
+        self._planner_pending_request = None
+        self._planner_pending_signature = None
+        self._planner_active_signature = None
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()
@@ -403,13 +415,13 @@ class DOEMSEMSRuntime:
 
     @callback
     def _request_planner_refresh(self, trigger: str) -> None:
+        """Coalesce planner events before freezing a heavy Alpha36 request."""
         if self._shutdown:
             return
-        self._planner_generation += 1
         self._planner_pending_triggers.add(trigger)
-        if self._planner_task is None or self._planner_task.done():
-            self._planner_task = self.hass.async_create_task(
-                self._async_planner_loop()
+        if self._planner_prepare_task is None or self._planner_prepare_task.done():
+            self._planner_prepare_task = self.hass.async_create_task(
+                self._async_prepare_planner_requests()
             )
 
     @callback
@@ -420,21 +432,71 @@ class DOEMSEMSRuntime:
         else:
             self._request_fast_refresh(trigger)
 
-    async def _async_planner_loop(self) -> None:
+    async def _async_prepare_planner_requests(self) -> None:
+        """Freeze newest planner input and queue only materially new signatures."""
         try:
             first_iteration = True
             while self._planner_pending_triggers and not self._shutdown:
                 immediate = first_iteration and "startup" in self._planner_pending_triggers
                 if not immediate:
                     await asyncio.sleep(self._planner_debounce_seconds)
-                generation = self._planner_generation
                 triggers = sorted(self._planner_pending_triggers)
                 self._planner_pending_triggers.clear()
-                await self._async_run_planner_generation(generation, triggers)
+                request = self._freeze_planner_request(triggers)
+                if request is None:
+                    first_iteration = False
+                    continue
+
+                signature = str(request["signature"])
+                pending_signature = (
+                    str(self._planner_pending_request.get("signature"))
+                    if self._planner_pending_request is not None
+                    else None
+                )
+                if (
+                    (self.planner_result is not None
+                     and signature == self._planner_last_input_signature)
+                    or signature == self._planner_active_signature
+                    or signature == pending_signature
+                ):
+                    self.input_result = request["input_result"]
+                    self._planner_same_signature_skip_count += 1
+                    self._planner_last_cycle_id = str(request["cycle_id"])
+                    self.status = "ready"
+                    await self._async_fast_execution_refresh(
+                        "planner_same_signature_fast_path"
+                    )
+                    first_iteration = False
+                    continue
+
+                self._planner_generation += 1
+                request["generation"] = self._planner_generation
+                self._planner_pending_request = request
+                self._planner_pending_signature = signature
+                if self._planner_task is None or self._planner_task.done():
+                    self._planner_task = self.hass.async_create_task(
+                        self._async_planner_loop()
+                    )
                 first_iteration = False
         finally:
-            self._planner_task = None
+            self._planner_prepare_task = None
             if self._planner_pending_triggers and not self._shutdown:
+                self._planner_prepare_task = self.hass.async_create_task(
+                    self._async_prepare_planner_requests()
+                )
+
+    async def _async_planner_loop(self) -> None:
+        """Run newest frozen planner requests single-flight outside the event loop."""
+        try:
+            while self._planner_pending_request is not None and not self._shutdown:
+                request = self._planner_pending_request
+                self._planner_pending_request = None
+                self._planner_pending_signature = None
+                await self._async_compute_planner_request(request)
+        finally:
+            self._planner_active_signature = None
+            self._planner_task = None
+            if self._planner_pending_request is not None and not self._shutdown:
                 self._planner_task = self.hass.async_create_task(
                     self._async_planner_loop()
                 )
@@ -478,27 +540,11 @@ class DOEMSEMSRuntime:
             allow_negative=False,
         )
 
-    async def async_refresh(self, trigger: str = "execution_refresh") -> None:
-        """Refresh planner only for planner triggers; otherwise run the fast path."""
-        if is_planner_trigger(trigger):
-            self._planner_generation += 1
-            self._planner_pending_triggers.add(trigger)
-            if self._planner_task is None or self._planner_task.done():
-                self._planner_task = self.hass.async_create_task(
-                    self._async_planner_loop()
-                )
-            task = self._planner_task
-            if task is not None:
-                await task
-            return
-        await self._async_fast_execution_refresh(trigger)
-
-    async def _async_run_planner_generation(
+    def _freeze_planner_request(
         self,
-        generation: int,
         triggers: list[str],
-    ) -> None:
-        """Build one planner generation off-loop and publish only if still current."""
+    ) -> dict[str, Any] | None:
+        """Freeze one complete native-quarter Alpha36 planner request."""
         trigger = "+".join(triggers) if triggers else "planner_refresh"
         reference = dt_util.utcnow()
         self.last_trigger = trigger
@@ -516,15 +562,15 @@ class DOEMSEMSRuntime:
         if not self.soc_entity_id:
             self.status = "waiting_for_soc_source"
             self._notify()
-            return
+            return None
         if soc is None:
             self.status = "waiting_for_valid_soc"
             self._notify()
-            return
+            return None
         if self.coordinator is None or self.solar_forecast is None or self.prices is None:
             self.status = "waiting_for_forecast_components"
             self._notify()
-            return
+            return None
 
         try:
             input_result = build_live_ems_input(
@@ -533,79 +579,158 @@ class DOEMSEMSRuntime:
                 prices=self.prices,
                 reference=reference,
             )
-            if (
-                input_result.get("status") != "ready"
-                or input_result.get("native_valid_slot_count") != 288
-                or len(input_result.get("rows") or []) != 72
-            ):
-                self.input_result = input_result
-                self.status = "waiting_for_complete_forecast"
-                self._notify()
-                return
-
-            signature = planner_input_signature(
-                input_result=input_result,
-                settings=self.settings,
-                soc_percent=soc,
-                reference=reference,
-            )
-            cycle_id = planner_cycle_id(reference)
-            if (
-                signature == self._planner_last_input_signature
-                and self.planner_result is not None
-            ):
-                self.input_result = input_result
-                self._planner_same_signature_skip_count += 1
-                self._planner_last_cycle_id = cycle_id
-                self.status = "ready"
-                await self._async_fast_execution_refresh(
-                    "planner_same_signature_fast_path"
-                )
-                return
-
-            worker = partial(
-                run_planner_worker,
-                input_result=input_result,
-                settings=self.settings,
-                soc_percent=soc,
-                reference=reference,
-            )
-            planner_result = await self.hass.async_add_executor_job(worker)
-            self._planner_compute_count += 1
-
-            if generation != self._planner_generation:
-                self._planner_stale_discard_count += 1
-                return
-
-            # Alpha33 platform adapter: heavy planner compute remains off-loop,
-            # but publishing its Plan Store/Scheduler snapshot is serialized with
-            # every fast execution/control-path refresh. This mirrors the source
-            # DataUpdateCoordinator transaction boundary without changing planner
-            # or execution semantics.
-            async with self._state_publish_lock:
-                if generation != self._planner_generation:
-                    self._planner_stale_discard_count += 1
-                    return
-                self.input_result = input_result
-                self.planner_result = planner_result
-                self._planner_last_input_signature = signature
-                self._planner_last_cycle_id = cycle_id
-                self._planner_published_generation = generation
-                self._planner_publish_active = True
-                try:
-                    await self._async_run_bridge_planstore_scheduler()
-                finally:
-                    self._planner_publish_active = False
-                    deferred_trigger = self._deferred_fast_trigger
-                    self._deferred_fast_trigger = None
-                    if deferred_trigger:
-                        self._request_fast_refresh(deferred_trigger)
-                self.status = "ready"
         except Exception as err:
             self.status = "error"
             self.last_error = f"{type(err).__name__}: {err}"
+            self._notify()
+            return None
+
+        forecast_ready = bool(
+            input_result.get("status") == "ready"
+            and input_result.get("native_valid_slot_count") == 288
+            and len(input_result.get("rows") or []) == 72
+        )
+        recovered = self._planner_last_forecast_ready is False and forecast_ready
+        self._planner_last_forecast_ready = forecast_ready
+        if not forecast_ready:
+            self.input_result = input_result
+            self.status = "waiting_for_complete_forecast"
+            self._notify()
+            return None
+
+        effective_triggers = list(triggers)
+        if recovered and "forecast_recovered" not in effective_triggers:
+            effective_triggers.append("forecast_recovered")
+            effective_triggers.sort()
+            trigger = "+".join(effective_triggers)
+
+        signature = planner_input_signature(
+            input_result=input_result,
+            settings=self.settings,
+            soc_percent=soc,
+            reference=reference,
+        )
+        return {
+            "trigger": trigger,
+            "triggers": effective_triggers,
+            "reference": reference,
+            "input_result": input_result,
+            "soc": float(soc),
+            "settings": self.settings,
+            "signature": signature,
+            "cycle_id": planner_cycle_id(reference),
+        }
+
+    async def async_refresh(self, trigger: str = "execution_refresh") -> None:
+        """Refresh planner only for planner triggers; otherwise run the fast path."""
+        if is_planner_trigger(trigger):
+            self._request_planner_refresh(trigger)
+            while not self._shutdown:
+                prepare = self._planner_prepare_task
+                if prepare is not None:
+                    await prepare
+                worker = self._planner_task
+                if worker is not None:
+                    await worker
+                if (
+                    self._planner_prepare_task is None
+                    and self._planner_task is None
+                    and not self._planner_pending_triggers
+                    and self._planner_pending_request is None
+                ):
+                    break
+            return
+        await self._async_fast_execution_refresh(trigger)
+
+    async def _async_compute_planner_request(
+        self,
+        request: dict[str, Any],
+    ) -> None:
+        """Compute one frozen planner generation and publish only if current."""
+        generation = int(request["generation"])
+        signature = str(request["signature"])
+        self._planner_active_signature = signature
+        self._planner_compute_count += 1
+        try:
+            worker = partial(
+                run_planner_worker,
+                input_result=request["input_result"],
+                settings=request["settings"],
+                soc_percent=float(request["soc"]),
+                reference=request["reference"],
+            )
+            planner_result = await self.hass.async_add_executor_job(worker)
+        except asyncio.CancelledError:
+            raise
+        except Exception as err:
+            if generation == self._planner_generation:
+                self.status = "error"
+                self.last_error = f"{type(err).__name__}: {err}"
+            _LOGGER.exception("Alpha36 planner generation failed")
+            self._notify()
+            return
+        finally:
+            if self._planner_active_signature == signature:
+                self._planner_active_signature = None
+
+        if generation != self._planner_generation:
+            self._planner_stale_discard_count += 1
+            return
+
+        # Alpha33 platform adapter: publishing remains serialized with every
+        # fast execution/control-path refresh. Alpha36 only changes planner
+        # request coalescing and the best-of-both policy behind this boundary.
+        async with self._state_publish_lock:
+            if generation != self._planner_generation:
+                self._planner_stale_discard_count += 1
+                return
+            self.input_result = request["input_result"]
+            self.planner_result = planner_result
+            self._planner_last_input_signature = signature
+            self._planner_last_cycle_id = str(request["cycle_id"])
+            self._planner_published_generation = generation
+            self._planner_last_refresh = request["reference"]
+            self.last_trigger = str(request["trigger"])
+            self._planner_publish_active = True
+            try:
+                await self._async_run_bridge_planstore_scheduler()
+            finally:
+                self._planner_publish_active = False
+                deferred_trigger = self._deferred_fast_trigger
+                self._deferred_fast_trigger = None
+                if deferred_trigger:
+                    self._request_fast_refresh(deferred_trigger)
+            self.status = "ready"
 
         self._notify()
+
+    def _planner_start_critical_key(
+        self,
+        scheduler_data: dict[str, Any],
+    ) -> str | None:
+        """Return one stable key when an automatic plan becomes due/start-ready."""
+        if scheduler_data.get("scheduler_ready") is not True:
+            return None
+        slot = scheduler_data.get("scheduler_selected_slot")
+        slots = scheduler_data.get("scheduler_slots") or {}
+        detail = slots.get(slot) or slots.get(str(slot)) or {}
+        if detail.get("origin") != "automatic_72h_planner":
+            return None
+        identity = detail.get("planner_identity")
+        if not identity:
+            return None
+        return f"due:{identity}"
+
+    def _request_start_critical_if_new(
+        self,
+        scheduler_data: dict[str, Any],
+    ) -> None:
+        """Request one fresh planner snapshot when a new automatic action is due."""
+        key = self._planner_start_critical_key(scheduler_data)
+        if key is None or key == self._planner_last_start_critical_key:
+            return
+        self._planner_last_start_critical_key = key
+        self._request_planner_refresh("start_critical")
 
     async def _async_run_bridge_planstore_scheduler(self) -> None:
         """Run the copied Bridge -> DOEMS Plan Store -> DOEMS Scheduler chain."""
@@ -694,6 +819,7 @@ class DOEMSEMSRuntime:
             self.settings.max_discharge_power_w,
             now=self.last_refresh,
         )
+        self._request_start_critical_if_new(self.scheduler_result)
         refreshed_data = {**data, **self.scheduler_result}
         refreshed_bridge = build_planner_action_bridge(
             refreshed_data,
@@ -857,6 +983,7 @@ class DOEMSEMSRuntime:
             self.settings.max_discharge_power_w,
             now=self.last_refresh,
         )
+        self._request_start_critical_if_new(self.scheduler_result)
         planner = self.planner_result or {}
         plan72 = dict(planner.get("plan72") or {})
 
@@ -1358,6 +1485,23 @@ class DOEMSEMSRuntime:
             ),
             "planner_last_cycle_id": getattr(
                 self, "_planner_last_cycle_id", None
+            ),
+            "planner_active_signature": getattr(
+                self, "_planner_active_signature", None
+            ),
+            "planner_pending_signature": getattr(
+                self, "_planner_pending_signature", None
+            ),
+            "planner_worker_active": bool(
+                getattr(self, "_planner_task", None) is not None
+                and not getattr(self, "_planner_task").done()
+            ),
+            "planner_request_prepare_active": bool(
+                getattr(self, "_planner_prepare_task", None) is not None
+                and not getattr(self, "_planner_prepare_task").done()
+            ),
+            "planner_last_start_critical_key": getattr(
+                self, "_planner_last_start_critical_key", None
             ),
             "planner_last_refresh": (
                 getattr(self, "_planner_last_refresh", None).isoformat()
