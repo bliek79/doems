@@ -1,8 +1,9 @@
-"""DOEMS Alpha21 multi-rate planner runtime helpers.
+"""DOEMS Alpha36 best-of-both multi-rate planner runtime helpers.
 
-The production planning policy remains DOEMS Alpha20.  This module only
-separates the 15-minute/event-driven planner cadence from the fast execution
-and safety cadence.
+The production policy combines Anker Alpha80 cheapest-energy planning with the
+DOEMS Alpha35 sequential safety authority.  This module keeps the native
+15-minute/event-driven heavy planner isolated from the fast execution/safety
+cadence.
 """
 from __future__ import annotations
 
@@ -13,9 +14,9 @@ from typing import Any
 
 from homeassistant.util import dt as dt_util
 
-from .ems_alpha76_adapter import SOURCE_TAG, planner_reference, run_ems_chain
+from .ems_alpha36_adapter import SOURCE_TAG, planner_reference, run_ems_chain
 
-MULTIRATE_RUNTIME_VERSION = "alpha21_multirate_runtime_v1"
+MULTIRATE_RUNTIME_VERSION = "alpha36_multirate_runtime_v1"
 PLANNER_POLICY_VERSION = SOURCE_TAG
 PLANNER_TRIGGERS = frozenset(
     {
@@ -25,6 +26,8 @@ PLANNER_TRIGGERS = frozenset(
         "solar_forecast_update",
         "prices_forecast_update",
         "soc_recovered",
+        "forecast_recovered",
+        "start_critical",
     }
 )
 
@@ -110,7 +113,7 @@ def run_planner_worker(
     soc_percent: float,
     reference: datetime,
 ) -> dict[str, Any]:
-    """Run the unchanged Alpha20 policy in a worker thread."""
+    """Run the Alpha36 best-of-both policy in a worker thread."""
     return run_ems_chain(
         input_result=input_result,
         settings=settings,

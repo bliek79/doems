@@ -656,6 +656,11 @@ class DOEMSEMSStatusSensor(_DOEMSEMSRuntimeSensor):
         "setpoint_handoff_samples",
         "setpoint_handoff_last_checked_at",
         "setpoint_handoff_failure_count",
+        "planner_active_signature",
+        "planner_pending_signature",
+        "planner_last_start_critical_key",
+        "planner_worker_active",
+        "planner_request_prepare_active",
     })
     _attr_name = "DOEMS EMS"
     _attr_unique_id = "doems_ems"
