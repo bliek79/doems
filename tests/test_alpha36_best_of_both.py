@@ -307,3 +307,37 @@ def test_runtime_has_start_critical_one_shot_and_preserves_fast_path() -> None:
     fast_block = runtime[fast_start:fast_end]
     assert "run_planner_worker" not in fast_block
     assert "async_add_executor_job" not in fast_block
+
+
+
+def test_runtime_startup_queues_planner_without_awaiting_heavy_cycle() -> None:
+    runtime = (INTEGRATION / "ems_runtime.py").read_text(encoding="utf-8")
+    setup_start = runtime.index("    async def async_setup(self)")
+    setup_end = runtime.index("    async def async_shutdown(self)", setup_start)
+    setup = runtime[setup_start:setup_end]
+
+    assert 'self._request_planner_refresh("startup")' in setup
+    assert 'await self.async_refresh("startup")' not in setup
+    assert setup.index('self._request_planner_refresh("startup")') < setup.index(
+        "await self.physical_test.async_recover_if_needed()"
+    )
+
+
+def test_runtime_blocks_start_critical_during_first_startup_publication() -> None:
+    runtime = (INTEGRATION / "ems_runtime.py").read_text(encoding="utf-8")
+    init_start = runtime.index("    def __init__(")
+    setup_start = runtime.index("    async def async_setup(self)", init_start)
+    init = runtime[init_start:setup_start]
+    assert "self._planner_startup_complete = False" in init
+
+    guard_start = runtime.index("    def _request_start_critical_if_new")
+    bridge_start = runtime.index(
+        "    async def _async_run_bridge_planstore_scheduler", guard_start
+    )
+    guard = runtime[guard_start:bridge_start]
+    assert "if not self._planner_startup_complete:" in guard
+
+    compute_start = runtime.index("    async def _async_compute_planner_request")
+    guard_fn_start = runtime.index("    def _planner_start_critical_key", compute_start)
+    compute = runtime[compute_start:guard_fn_start]
+    assert "self._planner_startup_complete = True" in compute

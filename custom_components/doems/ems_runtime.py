@@ -158,6 +158,7 @@ class DOEMSEMSRuntime:
         self._planner_last_refresh: datetime | None = None
         self._planner_last_start_critical_key: str | None = None
         self._planner_last_forecast_ready: bool | None = None
+        self._planner_startup_complete = False
         self._planner_debounce_seconds = 2.0
         self._planner_publish_active = False
         self._deferred_fast_trigger: str | None = None
@@ -232,7 +233,13 @@ class DOEMSEMSRuntime:
             )
             self._schedule_control_path_tick()
 
-        await self.async_refresh("startup")
+        # Alpha36 startup must never block config-entry setup on a full heavy
+        # planner cycle. Queue the initial generation and let it complete in the
+        # background while Home Assistant continues loading the remaining
+        # platforms/integrations. This preserves the normal planner pipeline and
+        # coalescing semantics without making Core startup depend on planner idle.
+        self.status = "starting"
+        self._request_planner_refresh("startup")
         # Source-parity restart recovery: an interrupted physical transaction is
         # safe-stopped; the Automatic Execution arm itself is restored separately
         # by the switch RestoreEntity path.
@@ -702,6 +709,7 @@ class DOEMSEMSRuntime:
                 if deferred_trigger:
                     self._request_fast_refresh(deferred_trigger)
             self.status = "ready"
+            self._planner_startup_complete = True
 
         self._notify()
 
@@ -727,6 +735,12 @@ class DOEMSEMSRuntime:
         scheduler_data: dict[str, Any],
     ) -> None:
         """Request one fresh planner snapshot when a new automatic action is due."""
+        # The first planner publication happens while the config entry is still
+        # bootstrapping. Do not recursively queue start-critical work from that
+        # first publication; the next fast-path/scheduler refresh can request it
+        # once startup has completed.
+        if not self._planner_startup_complete:
+            return
         key = self._planner_start_critical_key(scheduler_data)
         if key is None or key == self._planner_last_start_critical_key:
             return
