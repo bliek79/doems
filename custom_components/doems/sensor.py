@@ -659,6 +659,8 @@ class DOEMSEMSStatusSensor(_DOEMSEMSRuntimeSensor):
         "planner_active_signature",
         "planner_pending_signature",
         "planner_last_start_critical_key",
+        "planner_worker_active",
+        "planner_request_prepare_active",
     })
     _attr_name = "DOEMS EMS"
     _attr_unique_id = "doems_ems"
