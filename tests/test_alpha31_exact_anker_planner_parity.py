@@ -91,9 +91,9 @@ def _input_result(*, soc: float = 10.0) -> tuple[dict, float]:
     }, soc
 
 
-def test_alpha31_production_worker_is_exact_adapter_path() -> None:
+def test_alpha36_production_worker_is_best_of_both_adapter_path() -> None:
     _install_stubs()
-    adapter = importlib.import_module("custom_components.doems.ems_alpha76_adapter")
+    adapter = importlib.import_module("custom_components.doems.ems_alpha36_adapter")
     multirate = importlib.import_module("custom_components.doems.ems_multirate")
     input_result, soc = _input_result()
 
@@ -110,7 +110,7 @@ def test_alpha31_production_worker_is_exact_adapter_path() -> None:
         reference=START,
     )
     assert actual == expected
-    assert actual["ems_policy_source"] == "0.0.1-alpha.76"
+    assert actual["ems_policy_source"] == "alpha36_best_of_both_v1"
 
 
 def test_alpha31_exact_source_allows_safety_and_profitable_trade_in_same_plan() -> None:
@@ -139,7 +139,7 @@ def test_alpha31_exact_source_allows_safety_and_profitable_trade_in_same_plan() 
     )
 
 
-def test_alpha31_production_multirate_does_not_import_doems_policy_override() -> None:
+def test_alpha36_production_multirate_uses_best_of_both_adapter() -> None:
     source = (INTEGRATION / "ems_multirate.py").read_text(encoding="utf-8")
     assert "ems_policy_alpha20" not in source
-    assert "from .ems_alpha76_adapter import SOURCE_TAG, planner_reference, run_ems_chain" in source
+    assert "from .ems_alpha36_adapter import SOURCE_TAG, planner_reference, run_ems_chain" in source
