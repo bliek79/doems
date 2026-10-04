@@ -15,9 +15,9 @@ def _blob_sha(path: Path) -> str:
 def _read(name: str) -> str:
     return (INTEGRATION / name).read_text(encoding="utf-8")
 
-def test_alpha35_candidate_identity_keeps_alpha32_source_parity_contract() -> None:
-    assert 'VERSION = "0.1.0-alpha.35"' in _read("const.py")
-    assert json.loads(_read("manifest.json"))["version"] == "0.1.0-alpha.35"
+def test_alpha36_candidate_identity_keeps_alpha32_source_parity_contract() -> None:
+    assert 'VERSION = "0.1.0-alpha.36"' in _read("const.py")
+    assert json.loads(_read("manifest.json"))["version"] == "0.1.0-alpha.36"
 
 def test_source_verified_alpha76_modules_are_frozen() -> None:
     expected = {
