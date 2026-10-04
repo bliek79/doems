@@ -86,15 +86,15 @@ def _input_result() -> dict:
     }
 
 
-def test_alpha31_production_planner_uses_exact_anker_alpha76_adapter() -> None:
+def test_alpha36_production_planner_uses_best_of_both_adapter() -> None:
     multirate_source = (INTEGRATION / "ems_multirate.py").read_text(encoding="utf-8")
-    assert "from .ems_alpha76_adapter import SOURCE_TAG, planner_reference, run_ems_chain" in multirate_source
+    assert "from .ems_alpha36_adapter import SOURCE_TAG, planner_reference, run_ems_chain" in multirate_source
     assert "ems_policy_alpha20" not in multirate_source
 
 
-def test_multirate_worker_returns_exact_alpha76_adapter_bundle() -> None:
+def test_multirate_worker_returns_alpha36_best_of_both_bundle() -> None:
     _install_stubs()
-    adapter = importlib.import_module("custom_components.doems.ems_alpha76_adapter")
+    adapter = importlib.import_module("custom_components.doems.ems_alpha36_adapter")
     multirate = importlib.import_module("custom_components.doems.ems_multirate")
     input_result = _input_result()
 
@@ -111,7 +111,7 @@ def test_multirate_worker_returns_exact_alpha76_adapter_bundle() -> None:
         reference=START,
     )
     assert actual == expected
-    assert actual["ems_policy_source"] == "0.0.1-alpha.76"
+    assert actual["ems_policy_source"] == "alpha36_best_of_both_v1"
 
 
 def test_planner_input_signature_is_stable_within_same_native_quarter() -> None:
