@@ -585,11 +585,12 @@ class DOEMSEMSRuntime:
             self._notify()
             return None
 
-        forecast_ready = bool(
-            input_result.get("status") == "ready"
-            and input_result.get("native_valid_slot_count") == 288
-            and len(input_result.get("rows") or []) == 72
-        )
+        forecast_ready = input_result.get("status") == "ready"
+        if (
+            input_result.get("native_valid_slot_count") != 288
+            or len(input_result.get("rows") or []) != 72
+        ):
+            forecast_ready = False
         recovered = self._planner_last_forecast_ready is False and forecast_ready
         self._planner_last_forecast_ready = forecast_ready
         if not forecast_ready:
