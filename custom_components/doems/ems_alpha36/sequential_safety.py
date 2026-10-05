@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -57,6 +58,7 @@ def build_72h_plan_preview_alpha36_sequential_safety(
     max_charge_power_w: int = 3500,
     max_discharge_power_w: int = 3500,
     now: datetime | None = None,
+    commitments: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Build Alpha36 safety by seeding Alpha35 replay with Alpha80 commitments.
 
@@ -108,6 +110,45 @@ def build_72h_plan_preview_alpha36_sequential_safety(
         )
     rows.sort(key=lambda item: item["time"])
     rows = rows[:72]
+
+    # Alpha39 restores the historical contract that accepted Plan Store actions
+    # are part of the projected battery state. Allocate every commitment across
+    # the hourly compatibility rows by exact time overlap. The underlying DOEMS
+    # forecast remains native 288 x 15 minutes; this is only the existing Plan72
+    # compatibility projection.
+    commitment_rows: dict[str, dict[str, Any]] = {}
+    for commitment in commitments or []:
+        start = _parse_time(commitment.get("start_time"))
+        end = _parse_time(commitment.get("end_time"))
+        action = str(commitment.get("action") or "")
+        if start is None or end is None or end <= start or action not in {"laden", "ontladen"}:
+            continue
+        try:
+            power_w = max(0.0, float(commitment.get("power_w") or 0.0))
+            energy_budget = max(0.0, float(commitment.get("planned_energy_kwh") or 0.0))
+        except (TypeError, ValueError):
+            continue
+        if power_w <= 0.0 or energy_budget <= 0.0:
+            continue
+        remaining = energy_budget
+        for sim_row in rows:
+            hour_start = sim_row["time"]
+            hour_end = hour_start + timedelta(hours=1)
+            overlap_s = max(0.0, (min(end, hour_end) - max(start, hour_start)).total_seconds())
+            if overlap_s <= 0.0 or remaining <= _SAFETY_TOL_KWH:
+                continue
+            energy = min(remaining, power_w / 1000.0 * overlap_s / 3600.0)
+            key = hour_start.isoformat()
+            bucket = commitment_rows.setdefault(key, {"charge_kwh": 0.0, "discharge_kwh": 0.0, "items": []})
+            bucket["charge_kwh" if action == "laden" else "discharge_kwh"] += energy
+            bucket["items"].append({
+                "slot": commitment.get("slot"),
+                "origin": commitment.get("origin"),
+                "kind": commitment.get("commitment_kind"),
+                "action": action,
+                "energy_kwh": round(energy, 6),
+            })
+            remaining -= energy
 
     if not rows:
         return {
@@ -340,6 +381,24 @@ def build_72h_plan_preview_alpha36_sequential_safety(
                 available_charge_input -= solar_charge_input
 
                 key = sim_row["time"].isoformat()
+                fixed = commitment_rows.get(key) or {}
+                fixed_charge_input = min(
+                    max(0.0, float(fixed.get("charge_kwh") or 0.0)),
+                    available_charge_input,
+                    max(0.0, (capacity - stored) / charge_eff),
+                )
+                if fixed_charge_input > _SAFETY_TOL_KWH:
+                    stored += fixed_charge_input * charge_eff
+                    available_charge_input -= fixed_charge_input
+
+                fixed_discharge_output = min(
+                    max(0.0, float(fixed.get("discharge_kwh") or 0.0)),
+                    discharge_output_limit,
+                    max(0.0, (stored - minimum_stored_kwh) * discharge_eff),
+                )
+                if fixed_discharge_output > _SAFETY_TOL_KWH:
+                    stored -= fixed_discharge_output / discharge_eff
+                    discharge_output_limit -= fixed_discharge_output
                 wanted_safety_stored = max(0.0, planned.get(key, 0.0))
                 grid_safety_input = 0.0
                 if wanted_safety_stored > _SAFETY_TOL_KWH and available_charge_input > _SAFETY_TOL_KWH:
@@ -566,6 +625,30 @@ def build_72h_plan_preview_alpha36_sequential_safety(
         solar_export = 0.0
 
         available_charge_input = charge_input_limit
+        fixed = commitment_rows.get(hour.isoformat()) or {}
+        fixed_charge_input = 0.0
+        fixed_discharge_output = 0.0
+
+        # 0) Accepted Plan Store commitments are fixed future battery actions.
+        # They are replayed before new optimization so every later safety/trade
+        # decision starts from the state the Scheduler is actually committed to.
+        fixed_charge_input = min(
+            max(0.0, float(fixed.get("charge_kwh") or 0.0)),
+            available_charge_input,
+            max(0.0, (capacity - stored_kwh) / charge_eff),
+        )
+        if fixed_charge_input > _MIN_ENERGY_KWH:
+            stored_kwh += fixed_charge_input * charge_eff
+            available_charge_input -= fixed_charge_input
+
+        fixed_discharge_output = min(
+            max(0.0, float(fixed.get("discharge_kwh") or 0.0)),
+            discharge_output_limit,
+            max(0.0, (stored_kwh - minimum_stored_kwh) * discharge_eff),
+        )
+        if fixed_discharge_output > _MIN_ENERGY_KWH:
+            stored_kwh -= fixed_discharge_output / discharge_eff
+            discharge_output_limit -= fixed_discharge_output
 
         # 1) Solar surplus charges first.
         if solar_surplus > _MIN_ENERGY_KWH and stored_kwh < capacity - _MIN_ENERGY_KWH:
@@ -742,6 +825,10 @@ def build_72h_plan_preview_alpha36_sequential_safety(
             execution_buffer_breach_hours += 1
 
         action_parts: list[str] = []
+        if fixed_charge_input > _MIN_ENERGY_KWH:
+            action_parts.append("planstore_laden")
+        if fixed_discharge_output > _MIN_ENERGY_KWH:
+            action_parts.append("planstore_ontladen")
         if grid_safety_input > _MIN_ENERGY_KWH:
             action_parts.append("veiligheidsladen")
         if grid_trade_input > _MIN_ENERGY_KWH:
@@ -779,6 +866,9 @@ def build_72h_plan_preview_alpha36_sequential_safety(
                 "charge_from_grid_safety_kwh": round(grid_safety_input, 3),
                 "charge_from_grid_trade_kwh": round(grid_trade_input, 3),
                 "charge_from_grid_kwh": round(grid_safety_input + grid_trade_input, 3),
+                "planstore_charge_kwh": round(fixed_charge_input, 3),
+                "planstore_discharge_kwh": round(fixed_discharge_output, 3),
+                "planstore_commitments": deepcopy(fixed.get("items") or []),
                 "discharge_to_home_kwh": round(discharge_to_home, 3),
                 "discharge_to_grid_kwh": round(discharge_to_grid, 3),
                 "grid_import_for_home_kwh": round(grid_home, 3),
