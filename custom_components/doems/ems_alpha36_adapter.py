@@ -14,7 +14,7 @@ from .ems_alpha36.planner_preview import build_planner_preview
 from .ems_alpha36.planner_72h import build_72h_plan_preview
 from .ems_settings import EMSSettings
 
-SOURCE_TAG = "alpha38_split_reserve_safety_reachability_v1"
+SOURCE_TAG = "alpha39_planstore_commitment_replay_v1"
 ECONOMIC_POLICY = "alpha80_cheapest_energy_safety_v1"
 SAFETY_AUTHORITY = "doems_alpha38_split_reserve_safety_reachability_v1"
 EXECUTION_BUFFER_PERCENT = 2.0
@@ -181,7 +181,7 @@ def run_preview(*, input_result: dict[str, Any], settings: EMSSettings, energy_n
         now=reference,
     )
 
-def run_plan72(*, input_result: dict[str, Any], settings: EMSSettings, energy_need: dict[str, Any], planner_preview: dict[str, Any], soc_percent: float | None, now: datetime | None = None) -> dict[str, Any]:
+def run_plan72(*, input_result: dict[str, Any], settings: EMSSettings, energy_need: dict[str, Any], planner_preview: dict[str, Any], soc_percent: float | None, now: datetime | None = None, commitments: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     reference = planner_reference(input_result, now)
     raw = build_72h_plan_preview(
         forecast_from_input(input_result),
@@ -194,19 +194,20 @@ def run_plan72(*, input_result: dict[str, Any], settings: EMSSettings, energy_ne
         max_charge_power_w=settings.max_charge_power_w,
         max_discharge_power_w=settings.max_discharge_power_w,
         now=reference,
+        commitments=commitments or [],
     )
     return _with_transport_observability(raw, input_result)
 
-def run_ems_chain(*, input_result: dict[str, Any], settings: EMSSettings, soc_percent: float | None, now: datetime | None = None) -> dict[str, Any]:
+def run_ems_chain(*, input_result: dict[str, Any], settings: EMSSettings, soc_percent: float | None, now: datetime | None = None, commitments: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     need = run_energy_need(input_result=input_result, settings=settings, soc_percent=soc_percent, now=now)
     preview = run_preview(input_result=input_result, settings=settings, energy_need=need, soc_percent=soc_percent, now=now)
-    plan72 = run_plan72(input_result=input_result, settings=settings, energy_need=need, planner_preview=preview, soc_percent=soc_percent, now=now)
+    plan72 = run_plan72(input_result=input_result, settings=settings, energy_need=need, planner_preview=preview, soc_percent=soc_percent, now=now, commitments=commitments or [])
     return {
         "energy_need": deepcopy(need),
         "planner_preview": deepcopy(preview),
         "plan72": deepcopy(plan72),
         "ems_policy_source": SOURCE_TAG,
-        "adapter_contract": "alpha41_288_to_72+alpha80_cheapest_energy+alpha38_split_reserve_safety_reachability_v1",
+        "adapter_contract": "alpha41_288_to_72+alpha80_cheapest_energy+alpha38_split_reserve_safety+alpha39_commitment_replay_v1",
         "economic_policy": ECONOMIC_POLICY,
         "safety_authority": SAFETY_AUTHORITY,
         "startup_delay_runtime_gate_active": False,
