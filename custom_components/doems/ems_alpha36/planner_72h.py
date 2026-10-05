@@ -57,7 +57,6 @@ def _build_alpha80_plan_preview(
     max_charge_power_w: int = 3500,
     max_discharge_power_w: int = 3500,
     now: datetime | None = None,
-    commitments: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Build a sequential 72-hour battery plan preview.
 
@@ -804,6 +803,7 @@ def build_72h_plan_preview(
     max_charge_power_w: int = 3500,
     max_discharge_power_w: int = 3500,
     now: datetime | None = None,
+    commitments: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Merge Alpha80 economics with the DOEMS Alpha38 Design C safety invariant.
 
