@@ -111,7 +111,7 @@ def test_multirate_worker_returns_alpha36_best_of_both_bundle() -> None:
         reference=START,
     )
     assert actual == expected
-    assert actual["ems_policy_source"] == "alpha38_split_reserve_safety_reachability_v1"
+    assert actual["ems_policy_source"] == "alpha39_planstore_commitment_replay_v1"
 
 
 def test_planner_input_signature_is_stable_within_same_native_quarter() -> None:

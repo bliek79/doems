@@ -11,6 +11,8 @@ or monitor semantics.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 from collections.abc import Callable
 import logging
 from datetime import datetime, timedelta
@@ -612,12 +614,24 @@ class DOEMSEMSRuntime:
             effective_triggers.sort()
             trigger = "+".join(effective_triggers)
 
+        commitments = self.plan_store.planner_commitments(
+            reference=reference,
+            horizon_hours=72,
+        )
         signature = planner_input_signature(
             input_result=input_result,
             settings=self.settings,
             soc_percent=soc,
             reference=reference,
         )
+        if commitments:
+            commitment_signature = json.dumps(
+                commitments,
+                sort_keys=True,
+                separators=(",", ":"),
+                default=str,
+            )
+            signature = f"{signature}:commitments:{hashlib.sha256(commitment_signature.encode()).hexdigest()}"
         return {
             "trigger": trigger,
             "triggers": effective_triggers,
@@ -625,6 +639,7 @@ class DOEMSEMSRuntime:
             "input_result": input_result,
             "soc": float(soc),
             "settings": self.settings,
+            "commitments": commitments,
             "signature": signature,
             "cycle_id": planner_cycle_id(reference),
         }
@@ -666,6 +681,7 @@ class DOEMSEMSRuntime:
                 settings=request["settings"],
                 soc_percent=float(request["soc"]),
                 reference=request["reference"],
+                commitments=request.get("commitments") or [],
             )
             planner_result = await self.hass.async_add_executor_job(worker)
         except asyncio.CancelledError:

@@ -803,6 +803,7 @@ def build_72h_plan_preview(
     max_charge_power_w: int = 3500,
     max_discharge_power_w: int = 3500,
     now: datetime | None = None,
+    commitments: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Merge Alpha80 economics with the DOEMS Alpha38 Design C safety invariant.
 
@@ -825,10 +826,17 @@ def build_72h_plan_preview(
         "now": now,
     }
     alpha80 = _build_alpha80_plan_preview(**kwargs)
-    alpha35 = _build_alpha36_sequential_plan(**kwargs)
+    alpha35 = _build_alpha36_sequential_plan(
+        **kwargs,
+        commitments=commitments or [],
+    )
 
+    # Alpha80 has no Plan Store input contract. When commitments exist the
+    # commitment-aware sequential route is authoritative; otherwise the proven
+    # Alpha38 best-of-both selection remains unchanged.
     if (
-        alpha80.get("auto_plan_72h_valid") is True
+        not commitments
+        and alpha80.get("auto_plan_72h_valid") is True
         and alpha35.get("auto_plan_72h_valid") is True
         and _alpha80_meets_alpha35_safety(alpha80, alpha35)
     ):
@@ -847,6 +855,8 @@ def build_72h_plan_preview(
             ),
             "auto_plan_72h_alpha80_base_status": alpha80.get("auto_plan_72h_status"),
             "auto_plan_72h_alpha80_base_valid": alpha80.get("auto_plan_72h_valid"),
+            "auto_plan_72h_planstore_commitment_count": len(commitments or []),
+            "auto_plan_72h_planstore_commitment_replay": bool(commitments),
         }
     )
     return result

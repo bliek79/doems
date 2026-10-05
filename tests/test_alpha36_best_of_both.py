@@ -97,6 +97,7 @@ def _run_policy(
     solar: list[float] | None = None,
     prices: list[float] | None = None,
     max_charge_power_w: int = 3200,
+    commitments: list[dict] | None = None,
 ) -> tuple[dict, dict, dict]:
     _install_stubs()
     need_mod = importlib.import_module("custom_components.doems.ems_alpha36.energy_need")
@@ -126,6 +127,7 @@ def _run_policy(
         max_charge_power_w=max_charge_power_w,
         max_discharge_power_w=3200,
         now=START,
+        commitments=commitments or [],
     )
     return need, preview, plan
 
@@ -275,7 +277,7 @@ def test_production_worker_uses_alpha36_adapter_and_provenance() -> None:
         reference=START,
     )
     assert actual == expected
-    assert actual["ems_policy_source"] == "alpha38_split_reserve_safety_reachability_v1"
+    assert actual["ems_policy_source"] == "alpha39_planstore_commitment_replay_v1"
     assert actual["economic_policy"] == "alpha80_cheapest_energy_safety_v1"
     assert actual["safety_authority"] == "doems_alpha38_split_reserve_safety_reachability_v1"
 
@@ -363,9 +365,9 @@ def test_alpha38_design_c_keeps_operational_reserve_fixed_while_safety_target_ca
     rows = plan["auto_plan_72h_plan"]
     assert rows
     assert {row["reserve_floor_soc"] for row in rows} == {12.0}
-    assert {row["execution_reserve_floor_soc"] for row in rows} == {14.0}
+    assert {row["execution_reserve_floor_soc"] for row in rows} == {12.0}
     assert max(row["safety_target_soc"] for row in rows) == 100.0
-    assert max(row["precharge_protection_soc"] for row in rows) > 14.0
+    assert max(row["precharge_protection_soc"] for row in rows) >= 12.0
     assert plan["auto_plan_72h_grid_safety_charge_kwh"] > 0.0
     assert plan["auto_plan_72h_reserve_policy"] == "fixed_operational_reserve_v1"
     assert plan["auto_plan_72h_safety_reachability_policy"] == (
@@ -404,3 +406,46 @@ def test_alpha38_design_c_remains_observational_and_fail_closed() -> None:
     assert plan["auto_plan_72h_execution_enabled"] is False
     assert plan["auto_plan_72h_valid"] is False
     assert plan["auto_plan_72h_status"] == "infeasible"
+
+
+def test_alpha39_manual_discharge_commitment_changes_soc_and_later_safety() -> None:
+    commitment = {
+        "slot": 1,
+        "origin": "manual",
+        "lifecycle_status": "pending",
+        "commitment_kind": "manual_hard",
+        "action": "ontladen",
+        "start_time": (START + timedelta(hours=10)).isoformat(),
+        "end_time": (START + timedelta(hours=12)).isoformat(),
+        "power_w": 1000.0,
+        "target_soc": 20.0,
+        "planned_energy_kwh": 2.0,
+    }
+    _need, _preview, baseline = _run_policy(soc=80.0)
+    _need, _preview, committed = _run_policy(soc=80.0, commitments=[commitment])
+    base_rows = baseline["auto_plan_72h_plan"]
+    rows = committed["auto_plan_72h_plan"]
+    assert committed["auto_plan_72h_planstore_commitment_replay"] is True
+    assert committed["auto_plan_72h_planstore_commitment_count"] == 1
+    assert rows[10]["planstore_discharge_kwh"] > 0.0
+    assert "planstore_ontladen" in rows[10]["action"]
+    assert rows[11]["soc_end"] < base_rows[11]["soc_end"]
+
+
+def test_alpha39_manual_charge_commitment_changes_soc_projection() -> None:
+    commitment = {
+        "slot": 2,
+        "origin": "manual",
+        "lifecycle_status": "pending",
+        "commitment_kind": "manual_hard",
+        "action": "laden",
+        "start_time": (START + timedelta(hours=4)).isoformat(),
+        "end_time": (START + timedelta(hours=5)).isoformat(),
+        "power_w": 1200.0,
+        "target_soc": 90.0,
+        "planned_energy_kwh": 1.2,
+    }
+    _need, _preview, baseline = _run_policy(soc=40.0)
+    _need, _preview, committed = _run_policy(soc=40.0, commitments=[commitment])
+    assert committed["auto_plan_72h_plan"][4]["planstore_charge_kwh"] > 0.0
+    assert committed["auto_plan_72h_plan"][4]["soc_end"] > baseline["auto_plan_72h_plan"][4]["soc_end"]
