@@ -231,9 +231,18 @@ def build_72h_plan_preview_alpha36_sequential_safety(
         return execution_floor_kwh, floor_kwh, need_kwh, first_usable
 
     def _safety_deadline_floor(index: int) -> tuple[float, float, datetime | None]:
-        """Return future safety target used only for precharge reachability."""
-        target_kwh, need_kwh, first_usable = _future_safety_need(index)
-        return min(capacity, target_kwh + execution_buffer_kwh), need_kwh, first_usable
+        """Return the hard floor for sequential safety repair.
+
+        Alpha38 Design C explicitly separates a future safety target from the
+        SOC that must be held *now*.  The hard deadline floor is therefore only
+        the fixed execution reserve.  Future home demand remains visible through
+        safety_target_soc and is handled economically by the seeded Alpha80
+        safety-charge schedule; it is not converted back into a 100% hold floor.
+        """
+        execution_floor_kwh, _reserve_floor_kwh, need_kwh, first_usable = (
+            _execution_reserve(index)
+        )
+        return execution_floor_kwh, need_kwh, first_usable
 
     safety_hours_raw = planner_preview.get("planner_preview_safety_charge_hours") or []
     safety_by_time: dict[str, float] = {}
@@ -328,8 +337,8 @@ def build_72h_plan_preview_alpha36_sequential_safety(
             safety_deadline_floor, _, _ = _safety_deadline_floor(reserve_index)
             precharge_floors.append(safety_deadline_floor)
 
-        # Backward reachability: existing energy may not be spent when maximum
-        # charging power would no longer restore the coming execution reserve.
+        # Backward reachability protects only the fixed execution reserve.
+        # Future safety targets are planning targets, not present-time hold floors.
         for reserve_index in range(len(rows) - 1, -1, -1):
             fraction = _hour_fraction(rows[reserve_index]["time"], now_utc)
             max_stored = max_charge_power_w / 1000.0 * fraction * charge_eff
