@@ -112,11 +112,13 @@ def run_planner_worker(
     settings: Any,
     soc_percent: float,
     reference: datetime,
+    commitments: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Run the Alpha38 Design C policy in a worker thread."""
+    """Run the Alpha39 commitment-aware Design C policy in a worker thread."""
     return run_ems_chain(
         input_result=input_result,
         settings=settings,
         soc_percent=soc_percent,
         now=reference,
+        commitments=commitments or [],
     )
