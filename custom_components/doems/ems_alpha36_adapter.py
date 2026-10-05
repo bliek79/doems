@@ -14,9 +14,9 @@ from .ems_alpha36.planner_preview import build_planner_preview
 from .ems_alpha36.planner_72h import build_72h_plan_preview
 from .ems_settings import EMSSettings
 
-SOURCE_TAG = "alpha36_best_of_both_v1"
+SOURCE_TAG = "alpha38_split_reserve_safety_reachability_v1"
 ECONOMIC_POLICY = "alpha80_cheapest_energy_safety_v1"
-SAFETY_AUTHORITY = "doems_alpha35_sequential_safety_v1"
+SAFETY_AUTHORITY = "doems_alpha38_split_reserve_safety_reachability_v1"
 EXECUTION_BUFFER_PERCENT = 2.0
 
 def _aware(value: Any) -> datetime | None:
@@ -206,7 +206,7 @@ def run_ems_chain(*, input_result: dict[str, Any], settings: EMSSettings, soc_pe
         "planner_preview": deepcopy(preview),
         "plan72": deepcopy(plan72),
         "ems_policy_source": SOURCE_TAG,
-        "adapter_contract": "alpha41_288_to_72+alpha80_cheapest_energy+alpha35_sequential_safety_v1",
+        "adapter_contract": "alpha41_288_to_72+alpha80_cheapest_energy+alpha38_split_reserve_safety_reachability_v1",
         "economic_policy": ECONOMIC_POLICY,
         "safety_authority": SAFETY_AUTHORITY,
         "startup_delay_runtime_gate_active": False,
