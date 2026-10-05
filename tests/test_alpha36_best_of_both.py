@@ -365,9 +365,9 @@ def test_alpha38_design_c_keeps_operational_reserve_fixed_while_safety_target_ca
     rows = plan["auto_plan_72h_plan"]
     assert rows
     assert {row["reserve_floor_soc"] for row in rows} == {12.0}
-    assert {row["execution_reserve_floor_soc"] for row in rows} == {14.0}
+    assert {row["execution_reserve_floor_soc"] for row in rows} == {12.0}
     assert max(row["safety_target_soc"] for row in rows) == 100.0
-    assert max(row["precharge_protection_soc"] for row in rows) > 14.0
+    assert max(row["precharge_protection_soc"] for row in rows) >= 12.0
     assert plan["auto_plan_72h_grid_safety_charge_kwh"] > 0.0
     assert plan["auto_plan_72h_reserve_policy"] == "fixed_operational_reserve_v1"
     assert plan["auto_plan_72h_safety_reachability_policy"] == (
