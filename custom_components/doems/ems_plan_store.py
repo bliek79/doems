@@ -95,6 +95,118 @@ class DOEMSPlanStore:
     def get_value(self, slot: int, key: str) -> Any:
         return self._plans[slot].get(key)
 
+    def planner_commitments(
+        self,
+        reference: datetime,
+        horizon_hours: int = 72,
+    ) -> list[dict[str, Any]]:
+        """Return Plan Store actions that must be replayed by Plan72.
+
+        Manual pending/active plans are hard commitments. Planner-owned actions
+        remain revisable until their planned start; once due/active they become
+        frozen commitments. This avoids a self-reinforcing automatic-plan loop
+        while restoring the historical contract that accepted plans affect the
+        projected SOC and all later safety/trade decisions.
+        """
+        if reference.tzinfo is None:
+            reference = reference.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
+        reference = reference.astimezone(dt_util.UTC)
+        horizon_end = reference + timedelta(hours=max(1, int(horizon_hours)))
+        commitments: list[dict[str, Any]] = []
+
+        terminal = {"voltooid", "geannuleerd", "fout"}
+
+        for slot in range(1, PLAN_SLOT_COUNT + 1):
+            plan = self._plans[slot]
+            action = str(plan.get("action") or "geen")
+            lifecycle = str(plan.get("lifecycle_status") or "concept").lower()
+            origin = str(plan.get("origin") or "manual")
+
+            if action not in {"laden", "ontladen"} or lifecycle in terminal:
+                continue
+            if lifecycle == "concept":
+                continue
+
+            start_raw = plan.get("start_time")
+            start = dt_util.parse_datetime(str(start_raw)) if start_raw else None
+            if start is None:
+                if lifecycle != "actief":
+                    continue
+                start = reference
+            if start.tzinfo is None:
+                start = start.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
+            start = start.astimezone(dt_util.UTC)
+
+            try:
+                runtime_h = max(0.25, float(plan.get("max_runtime_h") or 0.0))
+            except (TypeError, ValueError):
+                continue
+
+            end_raw = plan.get("planned_end_time")
+            end = dt_util.parse_datetime(str(end_raw)) if end_raw else None
+            if end is None:
+                end = start + timedelta(hours=runtime_h)
+            elif end.tzinfo is None:
+                end = end.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
+            end = end.astimezone(dt_util.UTC)
+
+            if end <= reference or start >= horizon_end or end <= start:
+                continue
+
+            # Automatic pending plans remain planner-owned proposals until due.
+            # Replaying them before that point would feed yesterday's proposal
+            # back into today's optimization and prevent legitimate revision.
+            if (
+                origin == "automatic_72h_planner"
+                and lifecycle == "pending"
+                and start > reference
+            ):
+                continue
+
+            try:
+                power_w = float(plan.get("power_w") or 0.0)
+                target_soc = float(plan.get("target_soc") or 0.0)
+            except (TypeError, ValueError):
+                continue
+            if power_w <= 0.0 or not 5.0 <= target_soc <= 100.0:
+                continue
+
+            planned_energy = plan.get("planned_energy_kwh")
+            try:
+                planned_energy_kwh = (
+                    max(0.0, float(planned_energy))
+                    if planned_energy is not None
+                    else power_w * runtime_h / 1000.0
+                )
+            except (TypeError, ValueError):
+                planned_energy_kwh = power_w * runtime_h / 1000.0
+
+            commitments.append(
+                {
+                    "slot": slot,
+                    "origin": origin,
+                    "lifecycle_status": lifecycle,
+                    "commitment_kind": (
+                        "manual_hard"
+                        if origin == "manual"
+                        else "automatic_frozen"
+                    ),
+                    "action": action,
+                    "start_time": start.isoformat(),
+                    "end_time": end.isoformat(),
+                    "power_w": power_w,
+                    "target_soc": target_soc,
+                    "planned_energy_kwh": round(planned_energy_kwh, 6),
+                    "max_runtime_h": runtime_h,
+                    "purpose": plan.get("purpose"),
+                    "planner_identity": plan.get("planner_identity"),
+                    "planner_signature": plan.get("planner_signature"),
+                }
+            )
+
+        commitments.sort(key=lambda item: (item["start_time"], int(item["slot"])))
+        return commitments
+
     async def async_set_value(self, slot: int, key: str, value: Any) -> None:
         if slot not in self._plans:
             raise ValueError(f"Unknown plan slot: {slot}")
