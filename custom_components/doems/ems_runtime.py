@@ -11,6 +11,8 @@ or monitor semantics.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 from collections.abc import Callable
 import logging
 from datetime import datetime, timedelta
