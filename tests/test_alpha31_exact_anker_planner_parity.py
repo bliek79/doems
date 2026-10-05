@@ -110,7 +110,7 @@ def test_alpha36_production_worker_is_best_of_both_adapter_path() -> None:
         reference=START,
     )
     assert actual == expected
-    assert actual["ems_policy_source"] == "alpha38_split_reserve_safety_reachability_v1"
+    assert actual["ems_policy_source"] == "alpha39_planstore_commitment_replay_v1"
 
 
 def test_alpha31_exact_source_allows_safety_and_profitable_trade_in_same_plan() -> None:
