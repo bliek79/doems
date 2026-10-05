@@ -139,15 +139,13 @@ def build_72h_plan_preview_alpha36_sequential_safety(
         row = rows[index]
         return row["solar_kwh"] > 0 and row["solar_kwh"] >= row["home_kwh"]
 
-    def _dynamic_reserve(index: int) -> tuple[float, float, datetime | None]:
-        """Required stored energy from this hour until the next usable solar block.
+    def _future_safety_need(index: int) -> tuple[float, float, datetime | None]:
+        """Return the future safety target without turning it into a hold floor.
 
-        The usable-solar rule stays aligned with alpha21: the first of two
-        consecutive hours where solar >= forecast home consumption.
-
-        Home deficits are converted to required stored battery energy using the
-        configured discharge efficiency. The fixed software safety reserve and
-        5% hardware floor are then added.
+        Alpha38 Design C separates the fixed operational reserve from the
+        forward-looking energy requirement.  The latter remains authoritative
+        for precharge deadlines and reachability, but it no longer raises
+        reserve_floor_soc or the ordinary execution floor.
         """
         if index >= len(rows):
             return base_reserve_floor_kwh, 0.0, None
@@ -159,16 +157,10 @@ def build_72h_plan_preview_alpha36_sequential_safety(
                 break
 
         if usable_index is None:
-            # The end of the available forecast is not proof that there will be
-            # no usable solar later. Do not reserve the complete remainder of the
-            # 72-hour horizon. Fall back to the normal hardware + software reserve
-            # and mark the solar horizon as incomplete through first_usable=None.
             return base_reserve_floor_kwh, 0.0, None
 
-        stop_index = usable_index
         net_home_need_kwh = 0.0
-
-        for need_index in range(index, stop_index):
+        for need_index in range(index, usable_index):
             need_row = rows[need_index]
             fraction = _hour_fraction(need_row["time"], now_utc)
             net_home_need_kwh += max(
@@ -177,21 +169,30 @@ def build_72h_plan_preview_alpha36_sequential_safety(
             ) * fraction
 
         stored_need_kwh = net_home_need_kwh / discharge_eff
-        floor_kwh = min(
+        safety_target_kwh = min(
             capacity,
             max(
-                minimum_stored_kwh,
+                base_reserve_floor_kwh,
                 base_reserve_floor_kwh + stored_need_kwh,
             ),
         )
-        first_usable = rows[usable_index]["time"]
-        return floor_kwh, net_home_need_kwh, first_usable
+        return safety_target_kwh, net_home_need_kwh, rows[usable_index]["time"]
+
+    def _dynamic_reserve(index: int) -> tuple[float, float, datetime | None]:
+        """Return fixed operational reserve plus forward-looking diagnostics."""
+        _target_kwh, need_kwh, first_usable = _future_safety_need(index)
+        return base_reserve_floor_kwh, need_kwh, first_usable
 
     def _execution_reserve(index: int) -> tuple[float, float, float, datetime | None]:
-        """Return calculated reserve plus the alpha25 execution headroom."""
+        """Return the fixed reserve plus the small execution headroom."""
         floor_kwh, need_kwh, first_usable = _dynamic_reserve(index)
         execution_floor_kwh = min(capacity, floor_kwh + execution_buffer_kwh)
         return execution_floor_kwh, floor_kwh, need_kwh, first_usable
+
+    def _safety_deadline_floor(index: int) -> tuple[float, float, datetime | None]:
+        """Return future safety target used only for precharge reachability."""
+        target_kwh, need_kwh, first_usable = _future_safety_need(index)
+        return min(capacity, target_kwh + execution_buffer_kwh), need_kwh, first_usable
 
     safety_hours_raw = planner_preview.get("planner_preview_safety_charge_hours") or []
     safety_by_time: dict[str, float] = {}
@@ -283,8 +284,8 @@ def build_72h_plan_preview_alpha36_sequential_safety(
 
         precharge_floors: list[float] = []
         for reserve_index in range(len(rows) + 1):
-            execution_floor, _, _, _ = _execution_reserve(reserve_index)
-            precharge_floors.append(execution_floor)
+            safety_deadline_floor, _, _ = _safety_deadline_floor(reserve_index)
+            precharge_floors.append(safety_deadline_floor)
 
         # Backward reachability: existing energy may not be spent when maximum
         # charging power would no longer restore the coming execution reserve.
@@ -398,7 +399,7 @@ def build_72h_plan_preview_alpha36_sequential_safety(
 
         result = replay()
         for deadline_index in range(len(rows)):
-            required_floor, _, _, _ = _execution_reserve(deadline_index + 1)
+            required_floor, _, _ = _safety_deadline_floor(deadline_index + 1)
             if (
                 result["rows"][deadline_index]["end_stored_kwh"] + _SAFETY_TOL_KWH
                 >= required_floor
@@ -536,6 +537,8 @@ def build_72h_plan_preview_alpha36_sequential_safety(
 
         execution_floor_start_kwh, reserve_floor_start_kwh, reserve_need_start_kwh, next_usable_solar = _execution_reserve(index)
         execution_floor_end_kwh, reserve_floor_end_kwh, reserve_need_end_kwh, _ = _execution_reserve(index + 1)
+        safety_target_start_kwh, _, _ = _future_safety_need(index)
+        safety_target_end_kwh, _, _ = _future_safety_need(index + 1)
         reserve_floor_start_soc = reserve_floor_start_kwh / capacity * 100.0
         reserve_floor_end_soc = reserve_floor_end_kwh / capacity * 100.0
         execution_floor_start_soc = execution_floor_start_kwh / capacity * 100.0
@@ -801,6 +804,12 @@ def build_72h_plan_preview_alpha36_sequential_safety(
                 "precharge_protection_soc": round(
                     protected_floor / capacity * 100.0, 1
                 ),
+                "safety_target_soc": round(
+                    safety_target_end_kwh / capacity * 100.0, 1
+                ),
+                "safety_target_start_soc": round(
+                    safety_target_start_kwh / capacity * 100.0, 1
+                ),
                 "action": "+".join(action_parts),
                 "observational_only": True,
             }
@@ -808,7 +817,8 @@ def build_72h_plan_preview_alpha36_sequential_safety(
 
     end_soc = plan[-1]["soc_end"] if plan else start_soc
 
-    execution_buffer_safe = execution_buffer_breach_hours == 0
+    safety_deadlines_safe = not sequential_safety["breaches"]
+    execution_buffer_safe = execution_buffer_breach_hours == 0 and safety_deadlines_safe
     first_execution_breach = next(
         (
             {
@@ -868,7 +878,7 @@ def build_72h_plan_preview_alpha36_sequential_safety(
         "auto_plan_72h_execution_buffer_breach_hours": execution_buffer_breach_hours,
         "auto_plan_72h_execution_buffer_safe": execution_buffer_safe,
         "auto_plan_72h_first_execution_breach": first_execution_breach,
-        "auto_plan_72h_safety_plan_authority": "doems_alpha36_seeded_sequential_safety_v1",
+        "auto_plan_72h_safety_plan_authority": "doems_alpha38_split_reserve_safety_reachability_v1",
         "auto_plan_72h_upstream_safety_advice_only": True,
         "auto_plan_72h_upstream_safety_advice_stored_kwh": upstream_safety_advice_stored_kwh,
         "auto_plan_72h_safety_plan_replay_count": sequential_safety["replay_count"],
@@ -876,6 +886,8 @@ def build_72h_plan_preview_alpha36_sequential_safety(
         "auto_plan_72h_safety_plan_accepted_stored_kwh": sequential_safety["accepted_stored_kwh"],
         "auto_plan_72h_safety_plan_accepted_grid_input_kwh": sequential_safety["accepted_grid_input_kwh"],
         "auto_plan_72h_safety_plan_unmet_deadlines": sequential_safety["breaches"],
+        "auto_plan_72h_reserve_policy": "fixed_operational_reserve_v1",
+        "auto_plan_72h_safety_reachability_policy": "split_reserve_safety_reachability_v1",
         "auto_plan_72h_solar_horizon_complete": all(
             item.get("solar_horizon_complete", False) for item in plan
         ),
@@ -895,8 +907,8 @@ def build_72h_plan_preview_alpha36_sequential_safety(
         "auto_plan_72h_observational_only": True,
         "auto_plan_72h_execution_enabled": False,
         "auto_plan_72h_note": (
-            "DOEMS Alpha36 combineert de Alpha80 cheapest-energy safety commitments "
-            "met de Alpha35 sequentiele execution-reserve replay. De replay kan "
-            "extra safety/bridge-energie toevoegen en blijft fail-closed."
+            "DOEMS Alpha38 Design C houdt de operationele reserve vast op de "
+            "technische+software-reserve en gebruikt toekomstige woningbehoefte "
+            "alleen voor safety-targets, precharge-reachability en fail-closed deadlines."
         ),
     }

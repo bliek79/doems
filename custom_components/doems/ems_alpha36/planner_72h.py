@@ -711,7 +711,7 @@ def _overlay_alpha35_reserve_contract(
     alpha80_plan: dict[str, Any],
     safety_candidate: dict[str, Any],
 ) -> dict[str, Any]:
-    """Publish Alpha80 economics with the stricter Alpha35 reserve truth."""
+    """Publish Alpha80 economics with Alpha38 split reserve/safety truth."""
     result = deepcopy(alpha80_plan)
     required = _alpha35_required_by_time(safety_candidate)
     plan = result.get("auto_plan_72h_plan") or []
@@ -732,6 +732,8 @@ def _overlay_alpha35_reserve_contract(
             "next_usable_solar",
             "solar_horizon_complete",
             "precharge_protection_soc",
+            "safety_target_soc",
+            "safety_target_start_soc",
         ):
             if key in safety:
                 row[key] = deepcopy(safety[key])
@@ -777,13 +779,13 @@ def _overlay_alpha35_reserve_contract(
                 "auto_plan_72h_execution_reserve_max_soc"
             ),
             "auto_plan_72h_safety_plan_authority": (
-                "doems_alpha36_alpha35_sequential_guard_v1"
+                "doems_alpha38_split_reserve_safety_reachability_v1"
             ),
             "auto_plan_72h_upstream_safety_advice_only": True,
             "auto_plan_72h_alpha80_base_accepted": breaches == 0,
             "auto_plan_72h_alpha35_safety_override": False,
             "auto_plan_72h_alpha36_policy": (
-                "alpha80_cheapest_energy_safety+alpha35_sequential_guard_v1"
+                "alpha80_cheapest_energy_safety+alpha38_split_reserve_safety_reachability_v1"
             ),
         }
     )
@@ -802,14 +804,13 @@ def build_72h_plan_preview(
     max_discharge_power_w: int = 3500,
     now: datetime | None = None,
 ) -> dict[str, Any]:
-    """Merge Alpha80 economics with the stricter DOEMS Alpha35 safety invariant.
+    """Merge Alpha80 economics with the DOEMS Alpha38 Design C safety invariant.
 
-    Alpha80 remains authoritative for the economic 72-hour route.  The Alpha35
-    sequential replay is evaluated against the same frozen input.  When the
-    Alpha80 route already satisfies every Alpha35 execution-reserve deadline,
-    the Alpha80 route is published unchanged apart from the stricter reserve
-    diagnostics.  When it does not, the Alpha35 sequential repair becomes the
-    published plan and the difference is explicitly marked as a safety override.
+    Alpha80 remains authoritative for the economic 72-hour route.  The
+    sequential replay keeps the fixed operational reserve separate from future
+    safety targets and uses backward reachability to protect each precharge
+    deadline.  When the Alpha80 route already satisfies that contract it remains
+    the published economic route; otherwise the repaired sequential route wins.
     """
     kwargs = {
         "forecast": forecast,
@@ -837,12 +838,12 @@ def build_72h_plan_preview(
     result.update(
         {
             "auto_plan_72h_safety_plan_authority": (
-                "doems_alpha36_alpha35_sequential_guard_v1"
+                "doems_alpha38_split_reserve_safety_reachability_v1"
             ),
             "auto_plan_72h_alpha80_base_accepted": False,
             "auto_plan_72h_alpha35_safety_override": True,
             "auto_plan_72h_alpha36_policy": (
-                "alpha80_cheapest_energy_safety+alpha35_sequential_guard_v1"
+                "alpha80_cheapest_energy_safety+alpha38_split_reserve_safety_reachability_v1"
             ),
             "auto_plan_72h_alpha80_base_status": alpha80.get("auto_plan_72h_status"),
             "auto_plan_72h_alpha80_base_valid": alpha80.get("auto_plan_72h_valid"),

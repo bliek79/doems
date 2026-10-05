@@ -1,7 +1,7 @@
-"""DOEMS Alpha36 best-of-both multi-rate planner runtime helpers.
+"""DOEMS Alpha38 Design C multi-rate planner runtime helpers.
 
 The production policy combines Anker Alpha80 cheapest-energy planning with the
-DOEMS Alpha35 sequential safety authority.  This module keeps the native
+DOEMS Alpha38 split reserve/safety reachability authority.  This module keeps the native
 15-minute/event-driven heavy planner isolated from the fast execution/safety
 cadence.
 """
@@ -16,7 +16,7 @@ from homeassistant.util import dt as dt_util
 
 from .ems_alpha36_adapter import SOURCE_TAG, planner_reference, run_ems_chain
 
-MULTIRATE_RUNTIME_VERSION = "alpha36_multirate_runtime_v1"
+MULTIRATE_RUNTIME_VERSION = "alpha38_multirate_runtime_v1"
 PLANNER_POLICY_VERSION = SOURCE_TAG
 PLANNER_TRIGGERS = frozenset(
     {
@@ -113,7 +113,7 @@ def run_planner_worker(
     soc_percent: float,
     reference: datetime,
 ) -> dict[str, Any]:
-    """Run the Alpha36 best-of-both policy in a worker thread."""
+    """Run the Alpha38 Design C policy in a worker thread."""
     return run_ems_chain(
         input_result=input_result,
         settings=settings,
