@@ -219,7 +219,7 @@ def test_alpha35_sequential_execution_reserve_invariant_remains_hard() -> None:
     assert plan["auto_plan_72h_valid"] is True
     assert plan["auto_plan_72h_execution_buffer_safe"] is True
     assert plan["auto_plan_72h_safety_plan_authority"] == (
-        "doems_alpha36_alpha35_sequential_guard_v1"
+        "doems_alpha38_split_reserve_safety_reachability_v1"
     )
     for row in plan["auto_plan_72h_plan"]:
         assert row["soc_end"] + 0.05 >= row["execution_reserve_floor_soc"]
@@ -275,9 +275,9 @@ def test_production_worker_uses_alpha36_adapter_and_provenance() -> None:
         reference=START,
     )
     assert actual == expected
-    assert actual["ems_policy_source"] == "alpha36_best_of_both_v1"
+    assert actual["ems_policy_source"] == "alpha38_split_reserve_safety_reachability_v1"
     assert actual["economic_policy"] == "alpha80_cheapest_energy_safety_v1"
-    assert actual["safety_authority"] == "doems_alpha35_sequential_safety_v1"
+    assert actual["safety_authority"] == "doems_alpha38_split_reserve_safety_reachability_v1"
 
 
 def test_runtime_queues_generation_only_after_signature_deduplication() -> None:
@@ -341,3 +341,66 @@ def test_runtime_blocks_start_critical_during_first_startup_publication() -> Non
     guard_fn_start = runtime.index("    def _planner_start_critical_key", compute_start)
     compute = runtime[compute_start:guard_fn_start]
     assert "self._planner_startup_complete = True" in compute
+
+
+def test_alpha38_design_c_keeps_operational_reserve_fixed_while_safety_target_can_reach_full() -> None:
+    home = [0.10] * 72
+    solar = [0.0] * 72
+    for index in range(10):
+        home[index] = 0.80
+    solar[10] = 1.20
+    solar[11] = 1.20
+    prices = [0.30] * 72
+    prices[2] = 0.08
+    prices[3] = 0.09
+
+    _need, _preview, plan = _run_policy(
+        soc=35.0,
+        home=home,
+        solar=solar,
+        prices=prices,
+    )
+    rows = plan["auto_plan_72h_plan"]
+    assert rows
+    assert {row["reserve_floor_soc"] for row in rows} == {12.0}
+    assert {row["execution_reserve_floor_soc"] for row in rows} == {14.0}
+    assert max(row["safety_target_soc"] for row in rows) == 100.0
+    assert max(row["precharge_protection_soc"] for row in rows) > 14.0
+    assert plan["auto_plan_72h_grid_safety_charge_kwh"] > 0.0
+    assert plan["auto_plan_72h_reserve_policy"] == "fixed_operational_reserve_v1"
+    assert plan["auto_plan_72h_safety_reachability_policy"] == (
+        "split_reserve_safety_reachability_v1"
+    )
+
+
+def test_alpha38_design_c_keeps_future_safety_target_out_of_published_reserve() -> None:
+    home = [0.15] * 72
+    solar = [0.0] * 72
+    for index in range(8):
+        home[index] = 0.55
+    solar[8] = 0.90
+    solar[9] = 0.90
+
+    _need, _preview, plan = _run_policy(
+        soc=60.0,
+        home=home,
+        solar=solar,
+        prices=[0.30] * 72,
+    )
+    assert plan["auto_plan_72h_reserve_floor_soc"] == 12.0
+    assert plan["auto_plan_72h_dynamic_reserve_min_soc"] == 12.0
+    assert plan["auto_plan_72h_dynamic_reserve_max_soc"] == 12.0
+    assert any(row["safety_target_soc"] > 12.0 for row in plan["auto_plan_72h_plan"])
+
+
+def test_alpha38_design_c_remains_observational_and_fail_closed() -> None:
+    _need, _preview, plan = _run_policy(
+        soc=10.0,
+        home=[0.60] * 72,
+        prices=[0.30] * 72,
+        max_charge_power_w=0,
+    )
+    assert plan["auto_plan_72h_observational_only"] is True
+    assert plan["auto_plan_72h_execution_enabled"] is False
+    assert plan["auto_plan_72h_valid"] is False
+    assert plan["auto_plan_72h_status"] == "infeasible"
