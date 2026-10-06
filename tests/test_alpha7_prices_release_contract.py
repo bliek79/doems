@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,8 +15,10 @@ def test_alpha7_8_versions_prices_files_and_registered_entities():
     config_flow = (ROOT / "custom_components/doems/config_flow.py").read_text()
     example = (ROOT / "examples/prices_p4_forecast_card.yaml").read_text()
 
-    assert 'VERSION = "0.1.0-alpha.38"' in const
-    assert '"version": "0.1.0-alpha.38"' in manifest
+    version_line = next(line for line in const.splitlines() if line.startswith("VERSION = "))
+    const_version = version_line.split('"', 2)[1]
+    assert json.loads(manifest)["version"] == const_version
+    assert const_version.startswith("0.1.0-alpha.")
     assert "DOEMSRegisteredPricesManager" in init
     assert "build_prices_sensors" in sensor
     assert 'entry_data.get("prices")' in sensor

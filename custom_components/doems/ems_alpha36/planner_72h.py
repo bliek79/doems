@@ -7,7 +7,6 @@ from typing import Any
 from homeassistant.util import dt as dt_util
 
 from ..const import DEFAULT_BATTERY_CAPACITY_KWH, MIN_SOC_PERCENT
-from ..ems_alpha76.const import DEFAULT_AUTO_EXECUTION_BUFFER_PERCENT
 from .sequential_safety import (
     build_72h_plan_preview_alpha36_sequential_safety as _build_alpha36_sequential_plan,
 )
@@ -53,7 +52,7 @@ def _build_alpha80_plan_preview(
     soc: float | None,
     charge_efficiency_percent: float,
     discharge_efficiency_percent: float,
-    execution_buffer_percent: float = DEFAULT_AUTO_EXECUTION_BUFFER_PERCENT,
+    execution_buffer_percent: float = 0.0,
     max_charge_power_w: int = 3500,
     max_discharge_power_w: int = 3500,
     now: datetime | None = None,
@@ -70,7 +69,8 @@ def _build_alpha80_plan_preview(
 
     charge_eff = max(0.50, min(1.00, float(charge_efficiency_percent) / 100.0))
     discharge_eff = max(0.50, min(1.00, float(discharge_efficiency_percent) / 100.0))
-    execution_buffer_percent = max(0.0, min(10.0, float(execution_buffer_percent)))
+    # Alpha39 Design C: execution reserve equals the fixed operational reserve; legacy extra headroom is disabled.
+    execution_buffer_percent = 0.0
 
     if soc is None:
         return {
@@ -778,6 +778,12 @@ def _overlay_alpha35_reserve_contract(
             "auto_plan_72h_execution_reserve_max_soc": safety_candidate.get(
                 "auto_plan_72h_execution_reserve_max_soc"
             ),
+            "auto_plan_72h_reserve_policy": safety_candidate.get(
+                "auto_plan_72h_reserve_policy"
+            ),
+            "auto_plan_72h_safety_reachability_policy": safety_candidate.get(
+                "auto_plan_72h_safety_reachability_policy"
+            ),
             "auto_plan_72h_safety_plan_authority": (
                 "doems_alpha38_split_reserve_safety_reachability_v1"
             ),
@@ -799,7 +805,7 @@ def build_72h_plan_preview(
     soc: float | None,
     charge_efficiency_percent: float,
     discharge_efficiency_percent: float,
-    execution_buffer_percent: float = DEFAULT_AUTO_EXECUTION_BUFFER_PERCENT,
+    execution_buffer_percent: float = 0.0,
     max_charge_power_w: int = 3500,
     max_discharge_power_w: int = 3500,
     now: datetime | None = None,
@@ -820,7 +826,7 @@ def build_72h_plan_preview(
         "soc": soc,
         "charge_efficiency_percent": charge_efficiency_percent,
         "discharge_efficiency_percent": discharge_efficiency_percent,
-        "execution_buffer_percent": execution_buffer_percent,
+        "execution_buffer_percent": 0.0,
         "max_charge_power_w": max_charge_power_w,
         "max_discharge_power_w": max_discharge_power_w,
         "now": now,

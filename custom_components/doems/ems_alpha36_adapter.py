@@ -17,7 +17,7 @@ from .ems_settings import EMSSettings
 SOURCE_TAG = "alpha39_planstore_commitment_replay_v1"
 ECONOMIC_POLICY = "alpha80_cheapest_energy_safety_v1"
 SAFETY_AUTHORITY = "doems_alpha38_split_reserve_safety_reachability_v1"
-EXECUTION_BUFFER_PERCENT = 2.0
+EXECUTION_BUFFER_PERCENT = 0.0
 
 def _aware(value: Any) -> datetime | None:
     if isinstance(value, datetime):

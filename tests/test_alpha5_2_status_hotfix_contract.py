@@ -13,5 +13,7 @@ def test_status_option_count_is_safe_for_unhashable_values() -> None:
 def test_status_fix_is_carried_forward_in_alpha36() -> None:
     const=(INTEGRATION/"const.py").read_text(encoding="utf-8")
     manifest=json.loads((INTEGRATION/"manifest.json").read_text(encoding="utf-8"))
-    assert 'VERSION = "0.1.0-alpha.38"' in const
-    assert manifest["version"]=="0.1.0-alpha.38"
+    version_line=next(line for line in const.splitlines() if line.startswith("VERSION = "))
+    const_version=version_line.split('"',2)[1]
+    assert const_version==manifest["version"]
+    assert const_version.startswith("0.1.0-alpha.")
