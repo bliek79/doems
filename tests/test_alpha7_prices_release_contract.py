@@ -14,8 +14,8 @@ def test_alpha7_7_versions_prices_files_and_registered_entities():
     config_flow = (ROOT / "custom_components/doems/config_flow.py").read_text()
     example = (ROOT / "examples/prices_p4_forecast_card.yaml").read_text()
 
-    assert 'VERSION = "0.2.0-alpha.3"' in const
-    assert '"version": "0.2.0-alpha.3"' in manifest
+    assert 'VERSION = "0.2.0-alpha.4"' in const
+    assert '"version": "0.2.0-alpha.4"' in manifest
     assert "DOEMSRegisteredPricesManager" in init
     assert "build_prices_sensors" in sensor
     assert 'entry_data.get("prices")' in sensor
