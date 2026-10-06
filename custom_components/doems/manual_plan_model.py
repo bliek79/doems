@@ -92,7 +92,7 @@ def validate_manual_plan(
         blockers.append("target_soc_out_of_range")
 
     runtime = _as_float(plan.get("max_runtime_h"))
-    if runtime is None or not 0.25 <= runtime <= 12.0:
+    if runtime is None or not 0.5 <= runtime <= 12.0:
         blockers.append("max_runtime_out_of_range")
 
     delay = _as_float(plan.get("max_start_delay_min"))
