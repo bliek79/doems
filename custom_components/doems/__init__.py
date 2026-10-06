@@ -23,6 +23,7 @@ from .manual_plan_services import (
     async_unregister_manual_plan_services,
 )
 from .manual_plan_store import DOEMSManualPlanStore
+from .manual_soc_projection import DOEMSManualSOCProjection
 from .prices_runtime import DOEMSRegisteredPricesManager
 from .solar_forecast import SolarForecastManager
 from .solar_foundation import SolarFoundationManager
@@ -76,6 +77,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
     await manual_plan_store.async_load()
     await async_register_manual_plan_services(hass, manual_plan_store)
 
+    manual_soc_projection = DOEMSManualSOCProjection(
+        energy=coordinator,
+        solar=solar_forecast,
+        prices=prices,
+        battery=battery_input,
+        plans=manual_plan_store,
+    )
+    await manual_soc_projection.async_setup()
+
     entry.runtime_data = coordinator
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "energy_forecast_enabled": coordinator is not None,
@@ -84,6 +94,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
         "prices": prices,
         "battery_input": battery_input,
         "manual_plan_store": manual_plan_store,
+        "manual_soc_projection": manual_soc_projection,
     }
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -133,6 +144,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> bo
     battery_input = entry_data.get("battery_input")
     if isinstance(battery_input, DOEMSBatteryInputContract):
         await battery_input.async_shutdown()
+
+    manual_soc_projection = entry_data.get("manual_soc_projection")
+    if isinstance(manual_soc_projection, DOEMSManualSOCProjection):
+        await manual_soc_projection.async_shutdown()
 
     solar_forecast = entry_data.get("solar_forecast")
     if isinstance(solar_forecast, SolarForecastManager):
