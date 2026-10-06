@@ -4,7 +4,7 @@ from __future__ import annotations
 
 DOMAIN = "doems"
 NAME = "DOEMS"
-VERSION = "0.2.0-alpha.1"
+VERSION = "0.2.0-alpha.2"
 
 CONF_INSTANCE_NAME = "instance_name"
 DEFAULT_INSTANCE_NAME = NAME
@@ -17,8 +17,13 @@ CONF_GRID_NET_POWER_ENTITY = "grid_net_power_entity"
 CONF_GRID_SIGN_CONVENTION = "grid_sign_convention"
 CONF_SOLAR_POWER_ENTITY = "solar_power_entity"
 CONF_BATTERY_PRESENT = "battery_present"
+CONF_BATTERY_OBSERVATION_ENABLED = "battery_observation_enabled"
+CONF_BATTERY_SOC_ENTITY = "battery_soc_entity"
+CONF_BATTERY_CAPACITY_ENTITY = "battery_capacity_entity"
 CONF_BATTERY_CHARGE_POWER_ENTITY = "battery_charge_power_entity"
 CONF_BATTERY_DISCHARGE_POWER_ENTITY = "battery_discharge_power_entity"
+CONF_BATTERY_STATUS_ENTITY = "battery_status_entity"
+BATTERY_INPUT_CONTRACT_VERSION = 1
 
 ENERGY_SOURCE_DIRECT = "direct_home_power"
 ENERGY_SOURCE_BALANCE = "power_balance"
