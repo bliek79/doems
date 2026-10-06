@@ -3,7 +3,7 @@ name: DOEMS CI and 0.2.0-alpha.2.1 Battery Input Flow Fix Release
 on:
   pull_request:
   push:
-    branches: [reset-0.2.0-alpha.2.1.1]
+    branches: [reset-0.2.0-alpha.2.1]
   workflow_dispatch:
 
 permissions:
@@ -75,7 +75,7 @@ jobs:
           grep -F 'if not reuse_power_sources:' custom_components/doems/config_flow.py
 
   publish-reset-alpha2-1:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/reset-0.2.0-alpha.2.1.1'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/reset-0.2.0-alpha.2.1'
     needs: validate
     runs-on: ubuntu-latest
     steps:
@@ -115,5 +115,5 @@ jobs:
             gh release edit 0.2.0-alpha.2.1 --title "DOEMS 0.2.0-alpha.2.1 - Battery Input Flow Fix" --notes-file RELEASE_NOTES_0.2.0-alpha.2.1.md --prerelease
             gh release upload 0.2.0-alpha.2.1 doems.zip SHA256SUMS.txt --clobber
           else
-            gh release create 0.2.0-alpha.2.1 doems.zip SHA256SUMS.txt --target reset-0.2.0-alpha.2.1.1 --title "DOEMS 0.2.0-alpha.2.1 - Battery Input Flow Fix" --notes-file RELEASE_NOTES_0.2.0-alpha.2.1.md --prerelease
+            gh release create 0.2.0-alpha.2.1 doems.zip SHA256SUMS.txt --target reset-0.2.0-alpha.2.1 --title "DOEMS 0.2.0-alpha.2.1 - Battery Input Flow Fix" --notes-file RELEASE_NOTES_0.2.0-alpha.2.1.md --prerelease
           fi
