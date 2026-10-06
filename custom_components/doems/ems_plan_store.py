@@ -144,13 +144,18 @@ class DOEMSPlanStore:
 
             end_raw = plan.get("planned_end_time")
             end = dt_util.parse_datetime(str(end_raw)) if end_raw else None
-            if end is None:
-                end = start + timedelta(hours=runtime_h)
-            elif end.tzinfo is None:
+            if end is not None and end.tzinfo is None:
                 end = end.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
-            end = end.astimezone(dt_util.UTC)
+            if end is not None:
+                end = end.astimezone(dt_util.UTC)
 
-            if end <= reference or start >= horizon_end or end <= start:
+            # Manual plan edits can change start/runtime after a previously
+            # derived end time was stored. Never let stale derived metadata
+            # hide an otherwise valid pending/active commitment from Plan72.
+            if end is None or end <= start:
+                end = start + timedelta(hours=runtime_h)
+
+            if end <= reference or start >= horizon_end:
                 continue
 
             # Automatic pending plans remain planner-owned proposals until due.
@@ -219,6 +224,11 @@ class DOEMSPlanStore:
             value = value.isoformat()
 
         self._plans[slot][key] = value
+        # Derived planner metadata belongs to the previous control values.
+        # Clear it on every explicit user edit so a changed manual start time,
+        # power or runtime can never retain a stale automatic end/energy value.
+        self._plans[slot]["planned_energy_kwh"] = None
+        self._plans[slot]["planned_end_time"] = None
         # Entity edits are explicit user edits. They immediately claim the slot
         # from the automatic planner so a later rolling refresh cannot overwrite
         # a value the user has just changed.
