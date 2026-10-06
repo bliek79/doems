@@ -13,7 +13,9 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util import dt as dt_util
 
+from .battery_contract import DOEMSBatteryInputContract
 from .const import (
+    CONF_BATTERY_OBSERVATION_ENABLED,
     CONF_ENERGY_FORECAST_ENABLED,
     CONF_INSTANCE_NAME,
     DEFAULT_INSTANCE_NAME,
@@ -82,6 +84,10 @@ async def async_setup_entry(
     if isinstance(prices, DOEMSPricesManager):
         entities.extend(build_prices_sensors(entry, prices))
 
+    battery_input = entry_data.get("battery_input")
+    if isinstance(battery_input, DOEMSBatteryInputContract):
+        entities.append(DOEMSBatteryInputStatusSensor(entry, battery_input))
+
     async_add_entities(entities)
 
 
@@ -120,6 +126,7 @@ class DOEMSFoundationStatusSensor(SensorEntity):
             "energy_storage_key": STORAGE_KEY if enabled else None,
             "installation_required_input_count": configured_fields if enabled else 0,
             "forecast_enabled": enabled,
+            "battery_input_enabled": bool(self.entry.options.get(CONF_BATTERY_OBSERVATION_ENABLED, False)),
             "ems_enabled": False,
             "physical_execution_authority": False,
             "identity_pure": True,
@@ -467,3 +474,42 @@ class DOEMSEnergyForecastConfidenceSensor(DOEMSEnergyBaseSensor):
     @property
     def native_value(self) -> float | None:
         return EnergyBaselineForecast.average_confidence(self._forecast())
+
+
+
+class DOEMSBatteryInputStatusSensor(SensorEntity):
+    """Expose the read-only R1 battery input contract."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+    _attr_name = "DOEMS Battery Input Status"
+    _attr_unique_id = "doems_battery_input_status"
+    _attr_suggested_object_id = "doems_battery_input_status"
+    _attr_icon = "mdi:battery-check-outline"
+
+    def __init__(self, entry: ConfigEntry, contract: DOEMSBatteryInputContract) -> None:
+        self.entry = entry
+        self.contract = contract
+        self._remove_listener = None
+        self._attr_device_info = _device_info(entry)
+
+    @property
+    def native_value(self) -> str:
+        return str(self.contract.snapshot()["status"])
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return self.contract.snapshot()
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._remove_listener = self.contract.async_add_listener(self._handle_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._remove_listener is not None:
+            self._remove_listener()
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
