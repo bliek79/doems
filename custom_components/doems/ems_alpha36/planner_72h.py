@@ -778,6 +778,12 @@ def _overlay_alpha35_reserve_contract(
             "auto_plan_72h_execution_reserve_max_soc": safety_candidate.get(
                 "auto_plan_72h_execution_reserve_max_soc"
             ),
+            "auto_plan_72h_reserve_policy": safety_candidate.get(
+                "auto_plan_72h_reserve_policy"
+            ),
+            "auto_plan_72h_safety_reachability_policy": safety_candidate.get(
+                "auto_plan_72h_safety_reachability_policy"
+            ),
             "auto_plan_72h_safety_plan_authority": (
                 "doems_alpha38_split_reserve_safety_reachability_v1"
             ),
