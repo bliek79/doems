@@ -23,7 +23,12 @@ def _load_pure_module(name: str):
 
 def test_manifest_and_clean_identity_contract() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["domain"] == "doems" and manifest["name"] == "DOEMS" and manifest["version"] == "0.1.0-alpha.38"
+    const = (INTEGRATION / "const.py").read_text(encoding="utf-8")
+    version_line = next(line for line in const.splitlines() if line.startswith("VERSION = "))
+    const_version = version_line.split('"', 2)[1]
+    assert manifest["domain"] == "doems" and manifest["name"] == "DOEMS"
+    assert manifest["version"] == const_version
+    assert const_version.startswith("0.1.0-alpha.")
     for path in INTEGRATION.rglob("*"):
         if not path.is_file() or path.suffix not in {".py", ".json", ".yaml", ".yml"}: continue
         text = path.read_text(encoding="utf-8")
