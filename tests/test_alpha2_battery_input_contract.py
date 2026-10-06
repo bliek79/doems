@@ -101,3 +101,18 @@ def test_alpha2_install_surface_is_configurable_and_not_anker_hardcoded() -> Non
     )
     assert "anker_solix_solarbank_max_ac_185" not in active
     assert '"physical_execution_authority": False' in active
+
+
+def test_alpha2_1_battery_observation_reuses_existing_power_sources() -> None:
+    flow = (INTEGRATION / "config_flow.py").read_text(encoding="utf-8")
+    assert "def _battery_power_sources_reusable" in flow
+    assert "reuse_power_sources = self._battery_power_sources_reusable()" in flow
+    assert "if not reuse_power_sources:" in flow
+    assert "schema: dict[vol.Marker, Any]" in flow
+    # The flow must only add charge/discharge selectors when no valid Energy
+    # battery-power sources are already available.
+    observation = flow.split("async def async_step_battery_observation", 1)[1]
+    observation = observation.split("async def async_step_solar_system", 1)[0]
+    assert observation.count("CONF_BATTERY_CHARGE_POWER_ENTITY") >= 2
+    assert observation.count("CONF_BATTERY_DISCHARGE_POWER_ENTITY") >= 2
+    assert "if not reuse_power_sources:" in observation
