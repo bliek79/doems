@@ -129,7 +129,7 @@
       },
       "battery_observation": {
         "title": "Battery observation",
-        "description": "Select read-only battery sources for SOC projection and validation. This step does not control the battery.",
+        "description": "Select read-only battery sources for SOC projection and validation. Charge and discharge power sources already selected for Energy Forecast are reused and are not requested again. This step does not control the battery.",
         "data": {
           "battery_soc_entity": "Battery SOC",
           "battery_capacity_entity": "Battery capacity",
