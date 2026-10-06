@@ -24,3 +24,11 @@ def test_alpha76_scheduler_priority_and_fixed_soc_contract() -> None:
 def test_manual_plan_entities_still_back_same_plan_store() -> None:
     for name,token in (("select.py","self.plan_store"),("number.py","self.plan_store"),("datetime.py","self.plan_store"),("sensor.py","DOEMSPlanStatusSensor")):
         assert token in _read(name)
+
+
+def test_manual_plan_edit_clears_stale_derived_commitment_metadata() -> None:
+    store=_read("ems_plan_store.py")
+    assert 'self._plans[slot]["planned_energy_kwh"] = None' in store
+    assert 'self._plans[slot]["planned_end_time"] = None' in store
+    assert 'if end is None or end <= start:' in store
+    assert 'end = start + timedelta(hours=runtime_h)' in store
