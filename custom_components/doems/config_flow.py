@@ -13,9 +13,13 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_BATTERY_CAPACITY_ENTITY,
     CONF_BATTERY_CHARGE_POWER_ENTITY,
     CONF_BATTERY_DISCHARGE_POWER_ENTITY,
+    CONF_BATTERY_OBSERVATION_ENABLED,
     CONF_BATTERY_PRESENT,
+    CONF_BATTERY_SOC_ENTITY,
+    CONF_BATTERY_STATUS_ENTITY,
     CONF_ELECTRICITY_EXPORT_SUPPLIER,
     CONF_ELECTRICITY_EXPORT_TAX,
     CONF_ELECTRICITY_FIXED_SUPPLY_PER_DAY,
@@ -145,6 +149,59 @@ def _validate_power_entity(hass: HomeAssistant, entity_id: str | None, *, allow_
     return None
 
 
+def _validate_percent_entity(hass: HomeAssistant, entity_id: str | None) -> str | None:
+    if not entity_id:
+        return "source_required"
+    object_id = entity_id.split(".", 1)[1] if "." in entity_id else entity_id
+    if object_id.startswith("doems_"):
+        return "doems_source_not_allowed"
+    state = hass.states.get(entity_id)
+    if state is None:
+        return "source_not_found"
+    if state.attributes.get("unit_of_measurement") != "%":
+        return "unsupported_percentage_unit"
+    if state.state not in {"unknown", "unavailable"}:
+        try:
+            value = float(state.state)
+        except (TypeError, ValueError):
+            return "invalid_percentage_value"
+        if not 0.0 <= value <= 100.0:
+            return "invalid_percentage_value"
+    return None
+
+
+def _validate_capacity_entity(hass: HomeAssistant, entity_id: str | None) -> str | None:
+    if not entity_id:
+        return "source_required"
+    object_id = entity_id.split(".", 1)[1] if "." in entity_id else entity_id
+    if object_id.startswith("doems_"):
+        return "doems_source_not_allowed"
+    state = hass.states.get(entity_id)
+    if state is None:
+        return "source_not_found"
+    if str(state.attributes.get("unit_of_measurement") or "").lower() not in {"wh", "kwh"}:
+        return "unsupported_capacity_unit"
+    if state.state not in {"unknown", "unavailable"}:
+        try:
+            value = float(state.state)
+        except (TypeError, ValueError):
+            return "invalid_capacity_value"
+        if value <= 0.0:
+            return "invalid_capacity_value"
+    return None
+
+
+def _validate_status_entity(hass: HomeAssistant, entity_id: str | None) -> str | None:
+    if not entity_id:
+        return "source_required"
+    object_id = entity_id.split(".", 1)[1] if "." in entity_id else entity_id
+    if object_id.startswith("doems_"):
+        return "doems_source_not_allowed"
+    if hass.states.get(entity_id) is None:
+        return "source_not_found"
+    return None
+
+
 def _validate_gas_market_entity(hass: HomeAssistant, entity_id: str | None) -> str | None:
     """Validate a generic gas source as an explicit EUR/m3 market-price sensor."""
     if not entity_id:
@@ -194,9 +251,24 @@ class DOEMSOptionsFlow(OptionsFlow):
         return self._pending.get(key, default)
 
     def _save(self) -> ConfigFlowResult:
+        if not self._pending.get(CONF_BATTERY_OBSERVATION_ENABLED, False):
+            for key in (CONF_BATTERY_SOC_ENTITY, CONF_BATTERY_CAPACITY_ENTITY, CONF_BATTERY_STATUS_ENTITY):
+                self._pending.pop(key, None)
+            if not self._pending.get(CONF_BATTERY_PRESENT, False):
+                self._pending.pop(CONF_BATTERY_CHARGE_POWER_ENTITY, None)
+                self._pending.pop(CONF_BATTERY_DISCHARGE_POWER_ENTITY, None)
         return self.async_create_entry(title="", data=self._pending)
 
     async def _continue_after_energy(self) -> ConfigFlowResult:
+        if self._pending.get(CONF_BATTERY_OBSERVATION_ENABLED, False):
+            return await self.async_step_battery_observation()
+        if self._pending.get(CONF_SOLAR_FOUNDATION_ENABLED, False):
+            return await self.async_step_solar_system()
+        if self._pending.get(CONF_PRICES_ENABLED, False):
+            return await self.async_step_prices()
+        return self._save()
+
+    async def _continue_after_battery_observation(self) -> ConfigFlowResult:
         if self._pending.get(CONF_SOLAR_FOUNDATION_ENABLED, False):
             return await self.async_step_solar_system()
         if self._pending.get(CONF_PRICES_ENABLED, False):
@@ -213,6 +285,8 @@ class DOEMSOptionsFlow(OptionsFlow):
             self._pending.update(user_input)
             if self._pending.get(CONF_ENERGY_FORECAST_ENABLED, False):
                 return await self.async_step_energy_forecast()
+            if self._pending.get(CONF_BATTERY_OBSERVATION_ENABLED, False):
+                return await self.async_step_battery_observation()
             if self._pending.get(CONF_SOLAR_FOUNDATION_ENABLED, False):
                 return await self.async_step_solar_system()
             if self._pending.get(CONF_PRICES_ENABLED, False):
@@ -224,6 +298,7 @@ class DOEMSOptionsFlow(OptionsFlow):
             data_schema=vol.Schema({
                 vol.Optional(CONF_INSTANCE_NAME, default=self._current(CONF_INSTANCE_NAME, DEFAULT_INSTANCE_NAME)): str,
                 vol.Required(CONF_ENERGY_FORECAST_ENABLED, default=bool(self._current(CONF_ENERGY_FORECAST_ENABLED, False))): bool,
+                vol.Required(CONF_BATTERY_OBSERVATION_ENABLED, default=bool(self._current(CONF_BATTERY_OBSERVATION_ENABLED, False))): bool,
                 vol.Required(CONF_SOLAR_FOUNDATION_ENABLED, default=bool(self._current(CONF_SOLAR_FOUNDATION_ENABLED, False))): bool,
                 vol.Required(CONF_PRICES_ENABLED, default=bool(self._current(CONF_PRICES_ENABLED, False))): bool,
             }),
@@ -257,8 +332,11 @@ class DOEMSOptionsFlow(OptionsFlow):
             else:
                 self._pending.update(user_input)
                 self._pending[CONF_BATTERY_PRESENT] = False
-                for key in (CONF_GRID_NET_POWER_ENTITY, CONF_GRID_SIGN_CONVENTION, CONF_SOLAR_POWER_ENTITY, CONF_BATTERY_CHARGE_POWER_ENTITY, CONF_BATTERY_DISCHARGE_POWER_ENTITY):
+                for key in (CONF_GRID_NET_POWER_ENTITY, CONF_GRID_SIGN_CONVENTION, CONF_SOLAR_POWER_ENTITY):
                     self._pending.pop(key, None)
+                if not self._pending.get(CONF_BATTERY_OBSERVATION_ENABLED, False):
+                    self._pending.pop(CONF_BATTERY_CHARGE_POWER_ENTITY, None)
+                    self._pending.pop(CONF_BATTERY_DISCHARGE_POWER_ENTITY, None)
                 return await self._continue_after_energy()
         return self.async_show_form(
             step_id="energy_direct",
@@ -278,8 +356,9 @@ class DOEMSOptionsFlow(OptionsFlow):
                 self._pending.pop(CONF_HOME_POWER_ENTITY, None)
                 if user_input.get(CONF_BATTERY_PRESENT):
                     return await self.async_step_energy_battery()
-                self._pending.pop(CONF_BATTERY_CHARGE_POWER_ENTITY, None)
-                self._pending.pop(CONF_BATTERY_DISCHARGE_POWER_ENTITY, None)
+                if not self._pending.get(CONF_BATTERY_OBSERVATION_ENABLED, False):
+                    self._pending.pop(CONF_BATTERY_CHARGE_POWER_ENTITY, None)
+                    self._pending.pop(CONF_BATTERY_DISCHARGE_POWER_ENTITY, None)
                 return await self._continue_after_energy()
         return self.async_show_form(
             step_id="energy_balance",
@@ -310,6 +389,37 @@ class DOEMSOptionsFlow(OptionsFlow):
             data_schema=vol.Schema({
                 _required_entity(CONF_BATTERY_CHARGE_POWER_ENTITY, self._current(CONF_BATTERY_CHARGE_POWER_ENTITY)): _power_selector(),
                 _required_entity(CONF_BATTERY_DISCHARGE_POWER_ENTITY, self._current(CONF_BATTERY_DISCHARGE_POWER_ENTITY)): _power_selector(),
+            }),
+            errors=errors,
+        )
+
+    async def async_step_battery_observation(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            validators = {
+                CONF_BATTERY_SOC_ENTITY: _validate_percent_entity,
+                CONF_BATTERY_CAPACITY_ENTITY: _validate_capacity_entity,
+                CONF_BATTERY_STATUS_ENTITY: _validate_status_entity,
+            }
+            for key, validator in validators.items():
+                error = validator(self.hass, user_input.get(key))
+                if error:
+                    errors[key] = error
+            for key in (CONF_BATTERY_CHARGE_POWER_ENTITY, CONF_BATTERY_DISCHARGE_POWER_ENTITY):
+                error = _validate_power_entity(self.hass, user_input.get(key), allow_negative=False)
+                if error:
+                    errors[key] = error
+            if not errors:
+                self._pending.update(user_input)
+                return await self._continue_after_battery_observation()
+        return self.async_show_form(
+            step_id="battery_observation",
+            data_schema=vol.Schema({
+                _required_entity(CONF_BATTERY_SOC_ENTITY, self._current(CONF_BATTERY_SOC_ENTITY)): _sensor_selector(),
+                _required_entity(CONF_BATTERY_CAPACITY_ENTITY, self._current(CONF_BATTERY_CAPACITY_ENTITY)): _sensor_selector(),
+                _required_entity(CONF_BATTERY_CHARGE_POWER_ENTITY, self._current(CONF_BATTERY_CHARGE_POWER_ENTITY)): _power_selector(),
+                _required_entity(CONF_BATTERY_DISCHARGE_POWER_ENTITY, self._current(CONF_BATTERY_DISCHARGE_POWER_ENTITY)): _power_selector(),
+                _required_entity(CONF_BATTERY_STATUS_ENTITY, self._current(CONF_BATTERY_STATUS_ENTITY)): _sensor_selector(),
             }),
             errors=errors,
         )
