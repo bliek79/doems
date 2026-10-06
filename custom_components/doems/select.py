@@ -21,6 +21,8 @@ from .const import (
     VERSION,
 )
 from .energy_coordinator import DOEMSEnergyCoordinator
+from .manual_plan_model import PLAN_SLOT_COUNT
+from .manual_plan_store import DOEMSManualPlanStore
 
 
 async def async_setup_entry(
@@ -28,10 +30,38 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up DOEMS selects only for enabled components."""
+    """Set up DOEMS selects for forecast and manual Plan Store."""
+    entities: list[SelectEntity] = []
     coordinator = entry.runtime_data
     if isinstance(coordinator, DOEMSEnergyCoordinator):
-        async_add_entities([DOEMSEnergyProfileSelect(entry, coordinator)])
+        entities.append(DOEMSEnergyProfileSelect(entry, coordinator))
+
+    store = hass.data.get(DOMAIN, {}).get(entry.entry_id, {}).get("manual_plan_store")
+    if isinstance(store, DOEMSManualPlanStore):
+        for slot in range(1, PLAN_SLOT_COUNT + 1):
+            entities.extend(
+                [
+                    DOEMSManualPlanSelect(
+                        entry,
+                        store,
+                        slot,
+                        "action",
+                        "Action",
+                        ["geen", "laden", "ontladen"],
+                    ),
+                    DOEMSManualPlanSelect(
+                        entry,
+                        store,
+                        slot,
+                        "execution_mode",
+                        "Execution Mode",
+                        ["direct", "gepland"],
+                    ),
+                ]
+            )
+
+    if entities:
+        async_add_entities(entities)
 
 
 class DOEMSEnergyProfileSelect(SelectEntity):
@@ -88,3 +118,49 @@ class DOEMSEnergyProfileSelect(SelectEntity):
     @callback
     def _handle_update(self) -> None:
         self.async_write_ha_state()
+
+
+
+class DOEMSManualPlanSelect(SelectEntity):
+    """Editable select field for one manual Plan Store slot."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        store: DOEMSManualPlanStore,
+        slot: int,
+        field: str,
+        label: str,
+        options: list[str],
+    ) -> None:
+        self.store = store
+        self.slot = slot
+        self.field = field
+        self._attr_name = f"DOEMS Plan {slot} {label}"
+        self._attr_unique_id = f"doems_plan_{slot}_{field}"
+        self._attr_suggested_object_id = f"doems_plan_{slot}_{field}"
+        self._attr_options = options
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, DEVICE_IDENTIFIER)},
+            name=entry.options.get(CONF_INSTANCE_NAME, DEFAULT_INSTANCE_NAME),
+            manufacturer=NAME,
+            model="Energy Management System",
+            sw_version=VERSION,
+        )
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(self.store.add_listener(self.async_write_ha_state))
+
+    @property
+    def current_option(self) -> str | None:
+        value = self.store.get_value(self.slot, self.field)
+        return str(value) if value in self.options else None
+
+    async def async_select_option(self, option: str) -> None:
+        if option not in self.options:
+            raise ValueError(f"Unsupported option: {option}")
+        await self.store.async_set_value(self.slot, self.field, option)
