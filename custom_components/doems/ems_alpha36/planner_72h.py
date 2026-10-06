@@ -69,7 +69,8 @@ def _build_alpha80_plan_preview(
 
     charge_eff = max(0.50, min(1.00, float(charge_efficiency_percent) / 100.0))
     discharge_eff = max(0.50, min(1.00, float(discharge_efficiency_percent) / 100.0))
-    execution_buffer_percent = max(0.0, min(10.0, float(execution_buffer_percent)))
+    # Alpha39 Design C: execution reserve equals the fixed operational reserve; legacy extra headroom is disabled.
+    execution_buffer_percent = 0.0
 
     if soc is None:
         return {
