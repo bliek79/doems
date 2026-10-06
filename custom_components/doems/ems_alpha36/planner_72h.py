@@ -7,7 +7,6 @@ from typing import Any
 from homeassistant.util import dt as dt_util
 
 from ..const import DEFAULT_BATTERY_CAPACITY_KWH, MIN_SOC_PERCENT
-from ..ems_alpha76.const import DEFAULT_AUTO_EXECUTION_BUFFER_PERCENT
 from .sequential_safety import (
     build_72h_plan_preview_alpha36_sequential_safety as _build_alpha36_sequential_plan,
 )
@@ -53,7 +52,7 @@ def _build_alpha80_plan_preview(
     soc: float | None,
     charge_efficiency_percent: float,
     discharge_efficiency_percent: float,
-    execution_buffer_percent: float = DEFAULT_AUTO_EXECUTION_BUFFER_PERCENT,
+    execution_buffer_percent: float = 0.0,
     max_charge_power_w: int = 3500,
     max_discharge_power_w: int = 3500,
     now: datetime | None = None,
