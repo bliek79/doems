@@ -820,7 +820,7 @@ def build_72h_plan_preview(
         "soc": soc,
         "charge_efficiency_percent": charge_efficiency_percent,
         "discharge_efficiency_percent": discharge_efficiency_percent,
-        "execution_buffer_percent": execution_buffer_percent,
+        "execution_buffer_percent": 0.0,
         "max_charge_power_w": max_charge_power_w,
         "max_discharge_power_w": max_discharge_power_w,
         "now": now,
