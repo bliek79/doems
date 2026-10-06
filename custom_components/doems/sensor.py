@@ -34,6 +34,7 @@ from .const import (
 from .energy_coordinator import DOEMSEnergyCoordinator
 from .manual_plan_model import PLAN_SLOT_COUNT
 from .manual_plan_store import DOEMSManualPlanStore
+from .manual_soc_projection import DOEMSManualSOCProjection
 from .energy_forecast import EnergyBaselineForecast, ceil_quarter
 from .prices import DOEMSPricesManager
 from .prices_sensor import build_prices_sensors
@@ -97,6 +98,16 @@ async def async_setup_entry(
             for slot in range(1, PLAN_SLOT_COUNT + 1)
         )
 
+    manual_soc_projection = entry_data.get("manual_soc_projection")
+    if isinstance(manual_soc_projection, DOEMSManualSOCProjection):
+        entities.extend(
+            [
+                DOEMSManualSOCProjectionSensor(entry, manual_soc_projection),
+                DOEMSManualSOCProjectionTimelineSensor(entry, manual_soc_projection),
+                DOEMSManualPlan72HoursCompatSensor(entry, manual_soc_projection),
+            ]
+        )
+
     async_add_entities(entities)
 
 
@@ -137,6 +148,7 @@ class DOEMSFoundationStatusSensor(SensorEntity):
             "forecast_enabled": enabled,
             "battery_input_enabled": bool(self.entry.options.get(CONF_BATTERY_OBSERVATION_ENABLED, False)),
             "manual_plan_store_enabled": True,
+            "manual_soc_projection_enabled": True,
             "ems_enabled": False,
             "physical_execution_authority": False,
             "identity_pure": True,
@@ -570,7 +582,7 @@ class DOEMSManualPlanStatusSensor(SensorEntity):
             "schedule_blockers": self.store.schedule_blockers(self.slot),
             "persistent": True,
             "manual_only": True,
-            "soc_projection_active": False,
+            "soc_projection_active": True,
             "scheduler_active": False,
             "physical_execution_authority": False,
         }
@@ -587,3 +599,172 @@ class DOEMSManualPlanStatusSensor(SensorEntity):
     @callback
     def _handle_update(self) -> None:
         self.async_write_ha_state()
+
+
+
+class _DOEMSManualSOCProjectionBase(SensorEntity):
+    """Push-updated R3 manual SOC projection base."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        projection: DOEMSManualSOCProjection,
+    ) -> None:
+        self.projection = projection
+        self._remove_listener = None
+        self._attr_device_info = _device_info(entry)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._remove_listener = self.projection.async_add_listener(self._handle_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._remove_listener is not None:
+            self._remove_listener()
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
+
+
+class DOEMSManualSOCProjectionSensor(_DOEMSManualSOCProjectionBase):
+    """Canonical R3 status and summary contract."""
+
+    _attr_name = "DOEMS Manual SOC Projection"
+    _attr_unique_id = "doems_manual_soc_projection"
+    _attr_suggested_object_id = "doems_manual_soc_projection"
+    _attr_icon = "mdi:battery-clock-outline"
+    _unrecorded_attributes = frozenset({"native_slots"})
+
+    @property
+    def native_value(self) -> str:
+        return str(self.projection.snapshot().get("status") or "blocked")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        snapshot = self.projection.snapshot()
+        return {
+            "valid": bool(snapshot.get("valid")),
+            "blockers": list(snapshot.get("blockers") or []),
+            "mode": snapshot.get("mode"),
+            "resolution_minutes": 15,
+            "horizon_hours": 72,
+            "native_slot_count": snapshot.get("native_slot_count", 0),
+            "clock_hour_bucket_count": snapshot.get("clock_hour_bucket_count", 0),
+            "manual_commitment_count": snapshot.get("manual_commitment_count", 0),
+            "manual_commitment_slots": list(snapshot.get("manual_commitment_slots") or []),
+            "start": snapshot.get("start"),
+            "end": snapshot.get("end"),
+            "start_soc_percent": snapshot.get("start_soc_percent"),
+            "end_soc_percent": snapshot.get("end_soc_percent"),
+            "projected_min_soc_percent": snapshot.get("projected_min_soc_percent"),
+            "projected_max_soc_percent": snapshot.get("projected_max_soc_percent"),
+            "capacity_kwh": snapshot.get("capacity_kwh"),
+            "min_soc_percent": snapshot.get("min_soc_percent"),
+            "max_soc_percent": snapshot.get("max_soc_percent"),
+            "charge_efficiency_percent": snapshot.get("charge_efficiency_percent"),
+            "discharge_efficiency_percent": snapshot.get("discharge_efficiency_percent"),
+            "max_projection_power_w": snapshot.get("max_projection_power_w"),
+            "manual_projection_only": True,
+            "automatic_planner_active": False,
+            "scheduler_active": False,
+            "physical_execution_authority": False,
+            "native_slots": list(snapshot.get("native_slots") or []),
+        }
+
+
+class DOEMSManualSOCProjectionTimelineSensor(_DOEMSManualSOCProjectionBase):
+    """Compact 288-point SOC timeline for direct validation/dashboard use."""
+
+    _attr_name = "DOEMS Manual SOC Projection Timeline"
+    _attr_unique_id = "doems_manual_soc_projection_timeline"
+    _attr_suggested_object_id = "doems_manual_soc_projection_timeline"
+    _attr_icon = "mdi:chart-timeline-variant"
+    _unrecorded_attributes = frozenset({"points"})
+
+    @property
+    def native_value(self) -> int:
+        snapshot = self.projection.snapshot()
+        return int(snapshot.get("native_slot_count") or 0)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        snapshot = self.projection.snapshot()
+        points = []
+        for row in snapshot.get("native_slots") or []:
+            try:
+                timestamp_ms = int(
+                    dt_util.parse_datetime(str(row.get("start"))).timestamp() * 1000
+                )
+                soc = float(row.get("end_soc_percent"))
+            except (AttributeError, TypeError, ValueError):
+                continue
+            points.append([timestamp_ms, round(soc, 4)])
+        return {
+            "status": snapshot.get("status"),
+            "valid": bool(snapshot.get("valid")),
+            "blockers": list(snapshot.get("blockers") or []),
+            "resolution_minutes": 15,
+            "horizon_hours": 72,
+            "slot_count": snapshot.get("native_slot_count", 0),
+            "point_count": len(points),
+            "point_format": "[unix_ms,end_soc_percent]",
+            "manual_commitment_count": snapshot.get("manual_commitment_count", 0),
+            "manual_commitment_slots": list(snapshot.get("manual_commitment_slots") or []),
+            "manual_projection_only": True,
+            "physical_execution_authority": False,
+            "points": points,
+        }
+
+
+class DOEMSManualPlan72HoursCompatSensor(_DOEMSManualSOCProjectionBase):
+    """R3 compatibility surface for the existing Plan72 dashboard SOC line."""
+
+    _attr_name = "DOEMS EMS Plan72 Hours"
+    _attr_unique_id = "doems_ems_plan72_hours"
+    _attr_suggested_object_id = "doems_ems_plan72_hours"
+    _attr_native_unit_of_measurement = "h"
+    _attr_icon = "mdi:chart-timeline-variant-shimmer"
+    _unrecorded_attributes = frozenset({"plan"})
+
+    @property
+    def native_value(self) -> int:
+        snapshot = self.projection.snapshot()
+        return int(snapshot.get("clock_hour_bucket_count") or 0)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        snapshot = self.projection.snapshot()
+        return {
+            "status": snapshot.get("status"),
+            "valid": bool(snapshot.get("valid")),
+            "reason": (
+                "manual_projection_ready"
+                if snapshot.get("valid")
+                else "manual_projection_blocked"
+            ),
+            "count": snapshot.get("clock_hour_bucket_count", 0),
+            "native_slot_count": snapshot.get("native_slot_count", 0),
+            "start": snapshot.get("start"),
+            "end": snapshot.get("end"),
+            "start_soc": snapshot.get("start_soc_percent"),
+            "end_soc": snapshot.get("end_soc_percent"),
+            "min_soc": snapshot.get("projected_min_soc_percent"),
+            "max_soc": snapshot.get("projected_max_soc_percent"),
+            "charge_efficiency_percent": snapshot.get("charge_efficiency_percent"),
+            "discharge_efficiency_percent": snapshot.get("discharge_efficiency_percent"),
+            "manual_commitment_count": snapshot.get("manual_commitment_count", 0),
+            "manual_commitment_slots": list(snapshot.get("manual_commitment_slots") or []),
+            "manual_projection_only": True,
+            "automatic_planner_active": False,
+            "scheduler_active": False,
+            "observational_only": True,
+            "execution_enabled": False,
+            "physical_execution_authority": False,
+            "blockers": list(snapshot.get("blockers") or []),
+            "plan": list(snapshot.get("hourly_plan") or []),
+        }
