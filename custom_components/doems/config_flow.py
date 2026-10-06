@@ -393,8 +393,19 @@ class DOEMSOptionsFlow(OptionsFlow):
             errors=errors,
         )
 
+    def _battery_power_sources_reusable(self) -> bool:
+        """Return whether Energy already supplied valid charge/discharge sources."""
+        for key in (CONF_BATTERY_CHARGE_POWER_ENTITY, CONF_BATTERY_DISCHARGE_POWER_ENTITY):
+            entity_id = self._current(key)
+            if not entity_id:
+                return False
+            if _validate_power_entity(self.hass, entity_id, allow_negative=False):
+                return False
+        return True
+
     async def async_step_battery_observation(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
+        reuse_power_sources = self._battery_power_sources_reusable()
         if user_input is not None:
             validators = {
                 CONF_BATTERY_SOC_ENTITY: _validate_percent_entity,
@@ -405,22 +416,39 @@ class DOEMSOptionsFlow(OptionsFlow):
                 error = validator(self.hass, user_input.get(key))
                 if error:
                     errors[key] = error
-            for key in (CONF_BATTERY_CHARGE_POWER_ENTITY, CONF_BATTERY_DISCHARGE_POWER_ENTITY):
-                error = _validate_power_entity(self.hass, user_input.get(key), allow_negative=False)
-                if error:
-                    errors[key] = error
+            if not reuse_power_sources:
+                for key in (CONF_BATTERY_CHARGE_POWER_ENTITY, CONF_BATTERY_DISCHARGE_POWER_ENTITY):
+                    error = _validate_power_entity(self.hass, user_input.get(key), allow_negative=False)
+                    if error:
+                        errors[key] = error
             if not errors:
                 self._pending.update(user_input)
                 return await self._continue_after_battery_observation()
+
+        schema: dict[vol.Marker, Any] = {
+            _required_entity(CONF_BATTERY_SOC_ENTITY, self._current(CONF_BATTERY_SOC_ENTITY)): _sensor_selector(),
+            _required_entity(CONF_BATTERY_CAPACITY_ENTITY, self._current(CONF_BATTERY_CAPACITY_ENTITY)): _sensor_selector(),
+        }
+        if not reuse_power_sources:
+            schema[
+                _required_entity(
+                    CONF_BATTERY_CHARGE_POWER_ENTITY,
+                    self._current(CONF_BATTERY_CHARGE_POWER_ENTITY),
+                )
+            ] = _power_selector()
+            schema[
+                _required_entity(
+                    CONF_BATTERY_DISCHARGE_POWER_ENTITY,
+                    self._current(CONF_BATTERY_DISCHARGE_POWER_ENTITY),
+                )
+            ] = _power_selector()
+        schema[
+            _required_entity(CONF_BATTERY_STATUS_ENTITY, self._current(CONF_BATTERY_STATUS_ENTITY))
+        ] = _sensor_selector()
+
         return self.async_show_form(
             step_id="battery_observation",
-            data_schema=vol.Schema({
-                _required_entity(CONF_BATTERY_SOC_ENTITY, self._current(CONF_BATTERY_SOC_ENTITY)): _sensor_selector(),
-                _required_entity(CONF_BATTERY_CAPACITY_ENTITY, self._current(CONF_BATTERY_CAPACITY_ENTITY)): _sensor_selector(),
-                _required_entity(CONF_BATTERY_CHARGE_POWER_ENTITY, self._current(CONF_BATTERY_CHARGE_POWER_ENTITY)): _power_selector(),
-                _required_entity(CONF_BATTERY_DISCHARGE_POWER_ENTITY, self._current(CONF_BATTERY_DISCHARGE_POWER_ENTITY)): _power_selector(),
-                _required_entity(CONF_BATTERY_STATUS_ENTITY, self._current(CONF_BATTERY_STATUS_ENTITY)): _sensor_selector(),
-            }),
+            data_schema=vol.Schema(schema),
             errors=errors,
         )
 
