@@ -129,7 +129,7 @@
       },
       "battery_observation": {
         "title": "Batterijobservatie",
-        "description": "Kies de read-only batterijbronnen voor SOC-projectie en validatie. Deze stap stuurt de batterij niet aan.",
+        "description": "Kies de read-only batterijbronnen voor SOC-projectie en validatie. Reeds gekozen laad- en ontlaadvermogensbronnen uit Energy Forecast worden hergebruikt en niet opnieuw gevraagd. Deze stap stuurt de batterij niet aan.",
         "data": {
           "battery_soc_entity": "Batterij SOC",
           "battery_capacity_entity": "Accucapaciteit",
