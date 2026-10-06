@@ -136,6 +136,7 @@ class DOEMSFoundationStatusSensor(SensorEntity):
             "installation_required_input_count": configured_fields if enabled else 0,
             "forecast_enabled": enabled,
             "battery_input_enabled": bool(self.entry.options.get(CONF_BATTERY_OBSERVATION_ENABLED, False)),
+            "manual_plan_store_enabled": True,
             "ems_enabled": False,
             "physical_execution_authority": False,
             "identity_pure": True,
