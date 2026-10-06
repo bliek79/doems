@@ -1,0 +1,44 @@
+schedule_plan:
+  name: Schedule manual plan
+  description: Validate and mark one manual Plan Store slot as pending. No physical execution is performed.
+  fields:
+    slot:
+      name: Plan slot
+      description: Manual Plan Store slot number.
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 3
+          step: 1
+          mode: box
+
+cancel_plan:
+  name: Cancel manual plan
+  description: Mark one manual Plan Store slot as cancelled. No battery command is sent.
+  fields:
+    slot:
+      name: Plan slot
+      description: Manual Plan Store slot number.
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 3
+          step: 1
+          mode: box
+
+clear_plan:
+  name: Clear manual plan
+  description: Reset one manual Plan Store slot to its clean empty state.
+  fields:
+    slot:
+      name: Plan slot
+      description: Manual Plan Store slot number.
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 3
+          step: 1
+          mode: box
