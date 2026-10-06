@@ -32,6 +32,8 @@ from .const import (
     VERSION,
 )
 from .energy_coordinator import DOEMSEnergyCoordinator
+from .manual_plan_model import PLAN_SLOT_COUNT
+from .manual_plan_store import DOEMSManualPlanStore
 from .energy_forecast import EnergyBaselineForecast, ceil_quarter
 from .prices import DOEMSPricesManager
 from .prices_sensor import build_prices_sensors
@@ -87,6 +89,13 @@ async def async_setup_entry(
     battery_input = entry_data.get("battery_input")
     if isinstance(battery_input, DOEMSBatteryInputContract):
         entities.append(DOEMSBatteryInputStatusSensor(entry, battery_input))
+
+    manual_plan_store = entry_data.get("manual_plan_store")
+    if isinstance(manual_plan_store, DOEMSManualPlanStore):
+        entities.extend(
+            DOEMSManualPlanStatusSensor(entry, manual_plan_store, slot)
+            for slot in range(1, PLAN_SLOT_COUNT + 1)
+        )
 
     async_add_entities(entities)
 
@@ -504,6 +513,70 @@ class DOEMSBatteryInputStatusSensor(SensorEntity):
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         self._remove_listener = self.contract.async_add_listener(self._handle_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._remove_listener is not None:
+            self._remove_listener()
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
+
+
+
+class DOEMSManualPlanStatusSensor(SensorEntity):
+    """Status and diagnostics for one persistent manual Plan Store slot."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        store: DOEMSManualPlanStore,
+        slot: int,
+    ) -> None:
+        self.store = store
+        self.slot = slot
+        self._remove_listener = None
+        self._attr_name = f"DOEMS Plan {slot} Status"
+        self._attr_unique_id = f"doems_plan_{slot}_status"
+        self._attr_suggested_object_id = f"doems_plan_{slot}_status"
+        self._attr_icon = "mdi:clipboard-text-clock-outline"
+        self._attr_device_info = _device_info(entry)
+
+    @property
+    def native_value(self) -> str:
+        return self.store.plan_status(self.slot)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        plan = self.store.get_plan(self.slot)
+        return {
+            "slot": self.slot,
+            "action": plan.get("action"),
+            "execution_mode": plan.get("execution_mode"),
+            "start_time": plan.get("start_time"),
+            "power_w": plan.get("power_w"),
+            "target_soc": plan.get("target_soc"),
+            "max_runtime_h": plan.get("max_runtime_h"),
+            "max_start_delay_min": plan.get("max_start_delay_min"),
+            "lifecycle_status": plan.get("lifecycle_status"),
+            "lifecycle_reason": plan.get("lifecycle_reason"),
+            "lifecycle_updated_at": plan.get("lifecycle_updated_at"),
+            "origin": plan.get("origin"),
+            "schedule_blockers": self.store.schedule_blockers(self.slot),
+            "persistent": True,
+            "manual_only": True,
+            "soc_projection_active": False,
+            "scheduler_active": False,
+            "physical_execution_authority": False,
+        }
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._remove_listener = self.store.add_listener(self._handle_update)
 
     async def async_will_remove_from_hass(self) -> None:
         if self._remove_listener is not None:
