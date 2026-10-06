@@ -1,9 +1,9 @@
-name: DOEMS CI and 0.2.0-alpha.3 Manual Plan Store Release
+name: DOEMS CI and 0.2.0-alpha.4 Manual SOC Replanning Release
 
 on:
   pull_request:
   push:
-    branches: [reset-0.2.0-alpha.3]
+    branches: [reset-0.2.0-alpha.4]
   workflow_dispatch:
 
 permissions:
@@ -29,9 +29,9 @@ jobs:
               json.loads(path.read_text(encoding='utf-8'))
               print(f'valid: {path}')
           PY
-      - name: Validate 0.2.0-alpha.3 manual Plan Store
+      - name: Validate 0.2.0-alpha.4 manual SOC replanning
         run: |
-          test -f RELEASE_NOTES_0.2.0-alpha.3.md
+          test -f RELEASE_NOTES_0.2.0-alpha.4.md
           test -f examples/prices_p4_forecast_card.yaml
           test -f custom_components/doems/prices.py
           test -f custom_components/doems/prices_model.py
@@ -41,8 +41,8 @@ jobs:
           test ! -f scripts/build_brand_assets.py
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
-          grep -F 'VERSION = "0.2.0-alpha.3"' custom_components/doems/const.py
-          grep -F '"version": "0.2.0-alpha.3"' custom_components/doems/manifest.json
+          grep -F 'VERSION = "0.2.0-alpha.4"' custom_components/doems/const.py
+          grep -F '"version": "0.2.0-alpha.4"' custom_components/doems/manifest.json
           grep -F 'build_prices_sensors' custom_components/doems/sensor.py
           grep -F 'DOEMSRegisteredPricesManager' custom_components/doems/__init__.py
           grep -F 'GAS_SOURCE_ENERGYZERO_MARKET_ACTION' custom_components/doems/const.py
@@ -87,9 +87,26 @@ jobs:
           grep -F 'doems_plan_{slot}_start_time' custom_components/doems/datetime.py
           ! grep -R -F 'automatic_72h_planner' custom_components/doems/manual_plan_store.py custom_components/doems/manual_plan_services.py
           ! grep -R -F 'async_call(' custom_components/doems/manual_plan_store.py custom_components/doems/manual_plan_services.py
+          test -f custom_components/doems/manual_soc_projection_model.py
+          test -f custom_components/doems/manual_soc_projection.py
+          test -f tests/test_alpha4_manual_soc_projection_contract.py
+          grep -F 'DOEMSManualSOCProjection' custom_components/doems/__init__.py
+          grep -F 'doems_manual_soc_projection' custom_components/doems/sensor.py
+          grep -F 'doems_manual_soc_projection_timeline' custom_components/doems/sensor.py
+          grep -F 'doems_ems_plan72_hours' custom_components/doems/sensor.py
+          grep -F 'FORECAST_SLOTS = 288' custom_components/doems/manual_soc_projection_model.py
+          grep -F 'CHARGE_EFFICIENCY = 0.92' custom_components/doems/manual_soc_projection_model.py
+          grep -F 'DISCHARGE_EFFICIENCY = 0.92' custom_components/doems/manual_soc_projection_model.py
+          grep -F 'MIN_SOC_PERCENT = 5.0' custom_components/doems/manual_soc_projection_model.py
+          grep -F '"automatic_planner_active": False' custom_components/doems/manual_soc_projection_model.py
+          grep -F '"scheduler_active": False' custom_components/doems/manual_soc_projection_model.py
+          grep -F '"physical_execution_authority": False' custom_components/doems/manual_soc_projection_model.py
+          ! grep -R -F 'async_call(' custom_components/doems/manual_soc_projection.py custom_components/doems/manual_soc_projection_model.py
+          ! grep -R -F 'third_party_control' custom_components/doems/manual_soc_projection.py custom_components/doems/manual_soc_projection_model.py
+          ! grep -R -F 'automatic_72h_planner' custom_components/doems/manual_soc_projection.py custom_components/doems/manual_soc_projection_model.py
 
-  publish-reset-alpha3:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/reset-0.2.0-alpha.3'
+  publish-reset-alpha4:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/reset-0.2.0-alpha.4'
     needs: validate
     runs-on: ubuntu-latest
     steps:
@@ -98,7 +115,7 @@ jobs:
           fetch-depth: 0
       - name: Build release archive
         run: |
-          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.2.0-alpha.3.md
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.2.0-alpha.4.md
           sha256sum doems.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - name: Verify Prices P4 runtime is packaged
@@ -115,7 +132,7 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/battery_contract_model.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/config_flow.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/sensor.py'
-          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.3.md'
+          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.4.md'
       - name: Verify Manual Plan Store is packaged
         run: |
           unzip -l doems.zip | grep -F 'custom_components/doems/manual_plan_model.py'
@@ -124,19 +141,25 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/number.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/datetime.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/services.yaml'
-          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.3.md'
+          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.4.md'
+      - name: Verify Manual SOC Replanning is packaged
+        run: |
+          unzip -l doems.zip | grep -F 'custom_components/doems/manual_soc_projection_model.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/manual_soc_projection.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/sensor.py'
+          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.4.md'
       - name: Verify exact existing DOEMS brand icon is packaged
         run: |
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/icon.png'
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
-      - name: Publish 0.2.0-alpha.3 manual Plan Store release
+      - name: Publish 0.2.0-alpha.4 manual SOC replanning release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view 0.2.0-alpha.3 >/dev/null 2>&1; then
-            gh release edit 0.2.0-alpha.3 --title "DOEMS 0.2.0-alpha.3 - Manual Plan Store" --notes-file RELEASE_NOTES_0.2.0-alpha.3.md --prerelease
-            gh release upload 0.2.0-alpha.3 doems.zip SHA256SUMS.txt --clobber
+          if gh release view 0.2.0-alpha.4 >/dev/null 2>&1; then
+            gh release edit 0.2.0-alpha.4 --title "DOEMS 0.2.0-alpha.4 - Manual SOC Replanning" --notes-file RELEASE_NOTES_0.2.0-alpha.4.md --prerelease
+            gh release upload 0.2.0-alpha.4 doems.zip SHA256SUMS.txt --clobber
           else
-            gh release create 0.2.0-alpha.3 doems.zip SHA256SUMS.txt --target reset-0.2.0-alpha.3 --title "DOEMS 0.2.0-alpha.3 - Manual Plan Store" --notes-file RELEASE_NOTES_0.2.0-alpha.3.md --prerelease
+            gh release create 0.2.0-alpha.4 doems.zip SHA256SUMS.txt --target reset-0.2.0-alpha.4 --title "DOEMS 0.2.0-alpha.4 - Manual SOC Replanning" --notes-file RELEASE_NOTES_0.2.0-alpha.4.md --prerelease
           fi
