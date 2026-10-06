@@ -18,6 +18,11 @@ from .const import (
 )
 from .battery_contract import DOEMSBatteryInputContract
 from .energy_coordinator import DOEMSEnergyCoordinator
+from .manual_plan_services import (
+    async_register_manual_plan_services,
+    async_unregister_manual_plan_services,
+)
+from .manual_plan_store import DOEMSManualPlanStore
 from .prices_runtime import DOEMSRegisteredPricesManager
 from .solar_forecast import SolarForecastManager
 from .solar_foundation import SolarFoundationManager
@@ -67,6 +72,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
         battery_input = DOEMSBatteryInputContract(hass, entry)
         await battery_input.async_setup()
 
+    manual_plan_store = DOEMSManualPlanStore(hass, entry.entry_id)
+    await manual_plan_store.async_load()
+    await async_register_manual_plan_services(hass, manual_plan_store)
+
     entry.runtime_data = coordinator
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "energy_forecast_enabled": coordinator is not None,
@@ -74,6 +83,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
         "solar_forecast": solar_forecast,
         "prices": prices,
         "battery_input": battery_input,
+        "manual_plan_store": manual_plan_store,
     }
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -134,6 +144,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> bo
 
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
+        await async_unregister_manual_plan_services(hass)
         hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
         entry.runtime_data = None
     return unloaded
