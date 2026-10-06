@@ -178,8 +178,8 @@ def test_alpha4_cancelled_concept_and_cleared_plans_do_not_affect_projection() -
 def test_alpha4_later_solar_is_reused_after_manual_discharge_creates_headroom() -> None:
     m = _load("manual_soc_projection_model")
     energy, solar = _axis()
-    # One later quarter has 0.8 kWh PV and no home demand.
-    solar[1]["solar_kwh"] = 0.8
+    # The first quarter after the 30-minute manual discharge has 0.8 kWh PV.
+    solar[2]["solar_kwh"] = 0.8
     plan = _plan(
         action="ontladen",
         start=datetime(2026, 10, 7, 0, 0, tzinfo=timezone.utc),
@@ -197,8 +197,8 @@ def test_alpha4_later_solar_is_reused_after_manual_discharge_creates_headroom() 
     assert result["status"] == "ready"
     rows = result["native_slots"]
     assert rows[0]["manual_discharge_kwh"] > 0
-    assert rows[1]["charge_from_solar_kwh"] > 0
-    assert rows[1]["end_soc_percent"] > rows[1]["start_soc_percent"]
+    assert rows[2]["charge_from_solar_kwh"] > 0
+    assert rows[2]["end_soc_percent"] > rows[2]["start_soc_percent"]
 
 
 def test_alpha4_partial_clock_hour_window_can_yield_73_presentation_buckets() -> None:
