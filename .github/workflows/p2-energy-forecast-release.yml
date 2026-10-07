@@ -205,5 +205,5 @@ jobs:
             gh release edit 0.2.0-alpha.6 --title "DOEMS 0.2.0-alpha.6 - Automatic Planner Shadow" --notes-file RELEASE_NOTES_0.2.0-alpha.6.md --prerelease
             gh release upload 0.2.0-alpha.6 doems.zip SHA256SUMS.txt --clobber
           else
-            gh release create 0.2.0-alpha.6 doems.zip SHA256SUMS.txt --target reset-0.2.0-alpha.6 --title "DOEMS 0.2.0-alpha.6 - Manual Lifecycle Expiry" --notes-file RELEASE_NOTES_0.2.0-alpha.6.md --prerelease
+            gh release create 0.2.0-alpha.6 doems.zip SHA256SUMS.txt --target reset-0.2.0-alpha.6 --title "DOEMS 0.2.0-alpha.6 - Automatic Planner Shadow" --notes-file RELEASE_NOTES_0.2.0-alpha.6.md --prerelease
           fi
