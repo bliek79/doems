@@ -4,7 +4,7 @@ from __future__ import annotations
 
 DOMAIN = "doems"
 NAME = "DOEMS"
-VERSION = "0.2.0-alpha.5"
+VERSION = "0.2.0-alpha.6"
 
 CONF_INSTANCE_NAME = "instance_name"
 DEFAULT_INSTANCE_NAME = NAME
@@ -24,6 +24,18 @@ CONF_BATTERY_CHARGE_POWER_ENTITY = "battery_charge_power_entity"
 CONF_BATTERY_DISCHARGE_POWER_ENTITY = "battery_discharge_power_entity"
 CONF_BATTERY_STATUS_ENTITY = "battery_status_entity"
 BATTERY_INPUT_CONTRACT_VERSION = 1
+
+# R5 automatic planner shadow configuration.
+CONF_SOFTWARE_RESERVE_PERCENT = "software_reserve_percent"
+CONF_MAX_CHARGE_POWER_W = "max_charge_power_w"
+CONF_MAX_DISCHARGE_POWER_W = "max_discharge_power_w"
+CONF_MINIMUM_TRADE_MARGIN_EUR_PER_KWH = "minimum_trade_margin_eur_per_kwh"
+CONF_PEAK_SALE_THRESHOLD_EUR_PER_KWH = "peak_sale_threshold_eur_per_kwh"
+DEFAULT_SOFTWARE_RESERVE_PERCENT = 5.0
+DEFAULT_MAX_CHARGE_POWER_W = 3500.0
+DEFAULT_MAX_DISCHARGE_POWER_W = 3500.0
+DEFAULT_MINIMUM_TRADE_MARGIN_EUR_PER_KWH = 0.10
+DEFAULT_PEAK_SALE_THRESHOLD_EUR_PER_KWH = 0.50
 
 ENERGY_SOURCE_DIRECT = "direct_home_power"
 ENERGY_SOURCE_BALANCE = "power_balance"
