@@ -92,6 +92,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
     await manual_soc_projection.async_setup()
 
     automatic_planner = DOEMSAutomaticPlanner(
+        hass=hass,
         entry=entry,
         energy=coordinator,
         solar=solar_forecast,
