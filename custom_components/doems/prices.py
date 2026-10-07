@@ -511,6 +511,42 @@ class DOEMSPricesManager:
         current = self._normalized_points_by_start.get(floor_quarter(now))
         self.current_source = current.kind if current is not None and current.kind.startswith("known_") else "missing"
 
+    def planner_timeline_slots(self, reference: datetime) -> list[dict[str, Any]]:
+        """Select exactly 288 planner quarters from the existing 76-hour buffer.
+
+        This is read-only and does not change the public Prices timeline. Missing
+        source quarters stay explicit; no value is invented or forward-filled.
+        """
+        start = ceil_quarter(reference)
+        selected, _missing = select_exact_price_window(
+            self._price_buffer_by_start,
+            start=start,
+            slot_count=FORECAST_SLOTS,
+        )
+        selected_by_start = {
+            utc(point.start): point for point in selected
+        }
+        rows: list[dict[str, Any]] = []
+        for expected in expected_quarter_starts(
+            start, FORECAST_SLOTS
+        ):
+            point = selected_by_start.get(expected)
+            if point is None:
+                rows.append(
+                    {
+                        "time": expected.isoformat(),
+                        "market_ex_vat": None,
+                        "market_incl_vat": None,
+                        "import_all_in": None,
+                        "export_all_in": None,
+                        "kind": "missing",
+                        "source_resolution_minutes": None,
+                    }
+                )
+            else:
+                rows.append(point.as_dict())
+        return rows
+
     def _compose_point(self, start: datetime, market_ex_vat: float, kind: str, source_resolution: int) -> PricePoint:
         return compose_point(
             start,
