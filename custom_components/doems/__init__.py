@@ -18,6 +18,7 @@ from .const import (
 )
 from .battery_contract import DOEMSBatteryInputContract
 from .energy_coordinator import DOEMSEnergyCoordinator
+from .manual_plan_lifecycle import DOEMSManualPlanLifecycle
 from .manual_plan_services import (
     async_register_manual_plan_services,
     async_unregister_manual_plan_services,
@@ -77,6 +78,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
     await manual_plan_store.async_load()
     await async_register_manual_plan_services(hass, manual_plan_store)
 
+    manual_plan_lifecycle = DOEMSManualPlanLifecycle(hass, manual_plan_store)
+    await manual_plan_lifecycle.async_setup()
+
     manual_soc_projection = DOEMSManualSOCProjection(
         energy=coordinator,
         solar=solar_forecast,
@@ -94,6 +98,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
         "prices": prices,
         "battery_input": battery_input,
         "manual_plan_store": manual_plan_store,
+        "manual_plan_lifecycle": manual_plan_lifecycle,
         "manual_soc_projection": manual_soc_projection,
     }
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
@@ -144,6 +149,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> bo
     battery_input = entry_data.get("battery_input")
     if isinstance(battery_input, DOEMSBatteryInputContract):
         await battery_input.async_shutdown()
+
+    manual_plan_lifecycle = entry_data.get("manual_plan_lifecycle")
+    if isinstance(manual_plan_lifecycle, DOEMSManualPlanLifecycle):
+        await manual_plan_lifecycle.async_shutdown()
 
     manual_soc_projection = entry_data.get("manual_soc_projection")
     if isinstance(manual_soc_projection, DOEMSManualSOCProjection):
