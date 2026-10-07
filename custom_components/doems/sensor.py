@@ -32,6 +32,7 @@ from .const import (
     VERSION,
 )
 from .energy_coordinator import DOEMSEnergyCoordinator
+from .manual_plan_lifecycle import DOEMSManualPlanLifecycle
 from .manual_plan_model import PLAN_SLOT_COUNT
 from .manual_plan_store import DOEMSManualPlanStore
 from .manual_soc_projection import DOEMSManualSOCProjection
@@ -98,6 +99,12 @@ async def async_setup_entry(
             for slot in range(1, PLAN_SLOT_COUNT + 1)
         )
 
+    manual_plan_lifecycle = entry_data.get("manual_plan_lifecycle")
+    if isinstance(manual_plan_lifecycle, DOEMSManualPlanLifecycle):
+        entities.append(
+            DOEMSManualPlanLifecycleStatusSensor(entry, manual_plan_lifecycle)
+        )
+
     manual_soc_projection = entry_data.get("manual_soc_projection")
     if isinstance(manual_soc_projection, DOEMSManualSOCProjection):
         entities.extend(
@@ -148,6 +155,7 @@ class DOEMSFoundationStatusSensor(SensorEntity):
             "forecast_enabled": enabled,
             "battery_input_enabled": bool(self.entry.options.get(CONF_BATTERY_OBSERVATION_ENABLED, False)),
             "manual_plan_store_enabled": True,
+            "manual_plan_lifecycle_enabled": True,
             "manual_soc_projection_enabled": True,
             "ems_enabled": False,
             "physical_execution_authority": False,
@@ -579,6 +587,7 @@ class DOEMSManualPlanStatusSensor(SensorEntity):
             "lifecycle_reason": plan.get("lifecycle_reason"),
             "lifecycle_updated_at": plan.get("lifecycle_updated_at"),
             "origin": plan.get("origin"),
+            "last_terminal_event": self.store.last_terminal_event(self.slot),
             "schedule_blockers": self.store.schedule_blockers(self.slot),
             "persistent": True,
             "manual_only": True,
@@ -600,6 +609,60 @@ class DOEMSManualPlanStatusSensor(SensorEntity):
     def _handle_update(self) -> None:
         self.async_write_ha_state()
 
+
+
+class DOEMSManualPlanLifecycleStatusSensor(SensorEntity):
+    """Expose R4 manual expiry/cleanup diagnostics."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+    _attr_name = "DOEMS Manual Plan Lifecycle"
+    _attr_unique_id = "doems_manual_plan_lifecycle"
+    _attr_suggested_object_id = "doems_manual_plan_lifecycle"
+    _attr_icon = "mdi:calendar-clock-outline"
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        lifecycle: DOEMSManualPlanLifecycle,
+    ) -> None:
+        self.lifecycle = lifecycle
+        self._remove_listener = None
+        self._attr_device_info = _device_info(entry)
+
+    @property
+    def native_value(self) -> str:
+        return str(self.lifecycle.snapshot().get("status") or "blocked")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        snapshot = self.lifecycle.snapshot()
+        return {
+            "blockers": list(snapshot.get("blockers") or []),
+            "last_evaluated_at": snapshot.get("last_evaluated_at"),
+            "last_changed": bool(snapshot.get("last_changed")),
+            "last_released_slots": list(snapshot.get("last_released_slots") or []),
+            "next_expiry_at": snapshot.get("next_expiry_at"),
+            "next_expiry_slot": snapshot.get("next_expiry_slot"),
+            "last_terminal_events": list(snapshot.get("last_terminal_events") or []),
+            "manual_only": True,
+            "scheduler_active": False,
+            "automatic_planner_active": False,
+            "physical_execution_authority": False,
+        }
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._remove_listener = self.lifecycle.async_add_listener(self._handle_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._remove_listener is not None:
+            self._remove_listener()
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
 
 
 class _DOEMSManualSOCProjectionBase(SensorEntity):
