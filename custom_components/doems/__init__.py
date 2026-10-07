@@ -16,6 +16,7 @@ from .const import (
     DOMAIN,
     PLATFORMS,
 )
+from .automatic_planner import DOEMSAutomaticPlanner
 from .battery_contract import DOEMSBatteryInputContract
 from .energy_coordinator import DOEMSEnergyCoordinator
 from .manual_plan_lifecycle import DOEMSManualPlanLifecycle
@@ -90,6 +91,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
     )
     await manual_soc_projection.async_setup()
 
+    automatic_planner = DOEMSAutomaticPlanner(
+        entry=entry,
+        energy=coordinator,
+        solar=solar_forecast,
+        prices=prices,
+        battery=battery_input,
+        plans=manual_plan_store,
+    )
+    await automatic_planner.async_setup()
+
     entry.runtime_data = coordinator
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "energy_forecast_enabled": coordinator is not None,
@@ -100,6 +111,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
         "manual_plan_store": manual_plan_store,
         "manual_plan_lifecycle": manual_plan_lifecycle,
         "manual_soc_projection": manual_soc_projection,
+        "automatic_planner": automatic_planner,
     }
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -153,6 +165,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> bo
     manual_plan_lifecycle = entry_data.get("manual_plan_lifecycle")
     if isinstance(manual_plan_lifecycle, DOEMSManualPlanLifecycle):
         await manual_plan_lifecycle.async_shutdown()
+
+    automatic_planner = entry_data.get("automatic_planner")
+    if isinstance(automatic_planner, DOEMSAutomaticPlanner):
+        await automatic_planner.async_shutdown()
 
     manual_soc_projection = entry_data.get("manual_soc_projection")
     if isinstance(manual_soc_projection, DOEMSManualSOCProjection):
