@@ -129,9 +129,9 @@ jobs:
           grep -F 'DOEMSAutomaticPlanner' custom_components/doems/__init__.py
           grep -F 'doems_automatic_planner' custom_components/doems/sensor.py
           grep -F 'doems_automatic_soc_projection_timeline' custom_components/doems/sensor.py
-          grep -F '"automatic_plan_store_writes":False' custom_components/doems/automatic_planner_model.py
-          grep -F '"scheduler_active":False' custom_components/doems/automatic_planner_model.py
-          grep -F '"physical_execution_authority":False' custom_components/doems/automatic_planner_model.py
+          grep -F "'automatic_plan_store_writes':False" custom_components/doems/automatic_planner_model.py
+          grep -F "'scheduler_active':False" custom_components/doems/automatic_planner_model.py
+          grep -F "'physical_execution_authority':False" custom_components/doems/automatic_planner_model.py
           ! grep -R -F 'async_call(' custom_components/doems/automatic_planner.py custom_components/doems/automatic_planner_model.py
           ! grep -R -F 'third_party_control' custom_components/doems/automatic_planner.py custom_components/doems/automatic_planner_model.py
           ! grep -R -F 'DOEMSScheduler' custom_components/doems/automatic_planner.py custom_components/doems/automatic_planner_model.py
