@@ -651,7 +651,7 @@ class DOEMSManualPlanLifecycleStatusSensor(SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         snapshot = self.lifecycle.snapshot()
         return {
-            "blockers": list(snapshot.get("blockers") or []),
+            "blockers": snapshot.get("blockers") or [],
             "last_evaluated_at": snapshot.get("last_evaluated_at"),
             "last_changed": bool(snapshot.get("last_changed")),
             "last_released_slots": list(snapshot.get("last_released_slots") or []),
@@ -909,10 +909,17 @@ class DOEMSAutomaticPlannerSensor(_DOEMSAutomaticPlannerBase):
             "automatic_plan_store_writes", "scheduler_active",
             "safety_prestart_active", "execution_enabled",
             "physical_execution_authority", "mode", "observational_only",
+            "runtime_version", "planner_policy_version", "planner_refresh_policy",
+            "planner_generation", "planner_published_generation",
+            "planner_compute_count", "planner_stale_discard_count",
+            "planner_same_signature_skip_count", "planner_last_request_signature",
+            "planner_last_input_signature", "planner_last_cycle_id",
+            "planner_last_refresh_reason", "planner_last_refreshed_at",
+            "planner_worker_active", "planner_last_error",
         )
         attrs = {key: snapshot.get(key) for key in keys}
-        attrs["candidates"] = list(snapshot.get("candidates") or [])
-        attrs["native_slots"] = list(snapshot.get("native_slots") or [])
+        attrs["candidates"] = snapshot.get("candidates") or []
+        attrs["native_slots"] = snapshot.get("native_slots") or []
         return attrs
 
 
@@ -932,15 +939,7 @@ class DOEMSAutomaticSOCTimelineSensor(_DOEMSAutomaticPlannerBase):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         snapshot = self.planner.snapshot()
-        points = []
-        for row in snapshot.get("native_slots") or []:
-            parsed = dt_util.parse_datetime(str(row.get("start")))
-            try:
-                soc = float(row.get("end_soc_percent"))
-            except (TypeError, ValueError):
-                continue
-            if parsed is not None:
-                points.append([int(parsed.timestamp() * 1000), round(soc, 4)])
+        points = snapshot.get("timeline_points") or []
         return {
             "status": snapshot.get("status"),
             "valid": bool(snapshot.get("valid")),
@@ -992,9 +991,9 @@ class DOEMSAutomaticPlan72HoursCompatSensor(_DOEMSAutomaticPlannerBase):
             "charge_efficiency_percent": snapshot.get("charge_efficiency_percent"),
             "discharge_efficiency_percent": snapshot.get("discharge_efficiency_percent"),
             "manual_commitment_count": snapshot.get("manual_commitment_count", 0),
-            "manual_commitment_slots": list(snapshot.get("manual_commitment_slots") or []),
+            "manual_commitment_slots": snapshot.get("manual_commitment_slots") or [],
             "candidate_count": snapshot.get("candidate_count", 0),
-            "candidate_types": list(snapshot.get("candidate_types") or []),
+            "candidate_types": snapshot.get("candidate_types") or [],
             "next_candidate": snapshot.get("next_candidate"),
             "automatic_planner_active": True,
             "automatic_plan_store_writes": False,
@@ -1004,6 +1003,18 @@ class DOEMSAutomaticPlan72HoursCompatSensor(_DOEMSAutomaticPlannerBase):
             "execution_enabled": False,
             "physical_execution_authority": False,
             "blockers": list(snapshot.get("blockers") or []),
-            "candidates": list(snapshot.get("candidates") or []),
-            "plan": list(snapshot.get("hourly_plan") or []),
+            "runtime_version": snapshot.get("runtime_version"),
+            "planner_refresh_policy": snapshot.get("planner_refresh_policy"),
+            "planner_generation": snapshot.get("planner_generation"),
+            "planner_published_generation": snapshot.get("planner_published_generation"),
+            "planner_compute_count": snapshot.get("planner_compute_count"),
+            "planner_stale_discard_count": snapshot.get("planner_stale_discard_count"),
+            "planner_same_signature_skip_count": snapshot.get("planner_same_signature_skip_count"),
+            "planner_last_cycle_id": snapshot.get("planner_last_cycle_id"),
+            "planner_last_refresh_reason": snapshot.get("planner_last_refresh_reason"),
+            "planner_last_refreshed_at": snapshot.get("planner_last_refreshed_at"),
+            "planner_worker_active": snapshot.get("planner_worker_active", False),
+            "planner_last_error": snapshot.get("planner_last_error"),
+            "candidates": snapshot.get("candidates") or [],
+            "plan": snapshot.get("hourly_plan") or [],
         }
