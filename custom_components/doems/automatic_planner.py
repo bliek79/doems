@@ -276,7 +276,7 @@ class DOEMSAutomaticPlanner:
         ]
         price_rows = [
             dict(item)
-            for item in self.prices.timeline_slots
+            for item in self.prices.planner_timeline_slots(reference)
             if isinstance(item, dict) and item.get("time")
         ]
         price_by_start = {str(item["time"]): item for item in price_rows}
