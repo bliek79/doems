@@ -98,5 +98,5 @@ def test_alpha62_wiring_reselects_prices_without_changing_control_path() -> None
 def test_alpha62_version_contract() -> None:
     const = (INTEGRATION / "const.py").read_text(encoding="utf-8")
     manifest = (INTEGRATION / "manifest.json").read_text(encoding="utf-8")
-    assert 'VERSION = "0.2.0-alpha.6.2"' in const
-    assert '"version": "0.2.0-alpha.6.2"' in manifest
+    assert 'VERSION = "0.2.0-alpha.6.3"' in const
+    assert '"version": "0.2.0-alpha.6.3"' in manifest
