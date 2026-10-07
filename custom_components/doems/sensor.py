@@ -13,6 +13,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util import dt as dt_util
 
+from .automatic_planner import DOEMSAutomaticPlanner
 from .battery_contract import DOEMSBatteryInputContract
 from .const import (
     CONF_BATTERY_OBSERVATION_ENABLED,
@@ -111,9 +112,20 @@ async def async_setup_entry(
             [
                 DOEMSManualSOCProjectionSensor(entry, manual_soc_projection),
                 DOEMSManualSOCProjectionTimelineSensor(entry, manual_soc_projection),
-                DOEMSManualPlan72HoursCompatSensor(entry, manual_soc_projection),
             ]
         )
+
+    automatic_planner = entry_data.get("automatic_planner")
+    if isinstance(automatic_planner, DOEMSAutomaticPlanner):
+        entities.extend(
+            [
+                DOEMSAutomaticPlannerSensor(entry, automatic_planner),
+                DOEMSAutomaticSOCTimelineSensor(entry, automatic_planner),
+                DOEMSAutomaticPlan72HoursCompatSensor(entry, automatic_planner),
+            ]
+        )
+    elif isinstance(manual_soc_projection, DOEMSManualSOCProjection):
+        entities.append(DOEMSManualPlan72HoursCompatSensor(entry, manual_soc_projection))
 
     async_add_entities(entities)
 
@@ -157,6 +169,7 @@ class DOEMSFoundationStatusSensor(SensorEntity):
             "manual_plan_store_enabled": True,
             "manual_plan_lifecycle_enabled": True,
             "manual_soc_projection_enabled": True,
+            "automatic_planner_shadow_enabled": True,
             "ems_enabled": False,
             "physical_execution_authority": False,
             "identity_pure": True,
@@ -829,5 +842,168 @@ class DOEMSManualPlan72HoursCompatSensor(_DOEMSManualSOCProjectionBase):
             "execution_enabled": False,
             "physical_execution_authority": False,
             "blockers": list(snapshot.get("blockers") or []),
+            "plan": list(snapshot.get("hourly_plan") or []),
+        }
+
+
+class _DOEMSAutomaticPlannerBase(SensorEntity):
+    """Push-updated R5 automatic planner shadow base."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+
+    def __init__(self, entry: ConfigEntry, planner: DOEMSAutomaticPlanner) -> None:
+        self.planner = planner
+        self._remove_listener = None
+        self._attr_device_info = _device_info(entry)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._remove_listener = self.planner.async_add_listener(self._handle_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._remove_listener is not None:
+            self._remove_listener()
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
+
+
+class DOEMSAutomaticPlannerSensor(_DOEMSAutomaticPlannerBase):
+    """R5 decision and candidate diagnostics."""
+
+    _attr_name = "DOEMS Automatic Planner"
+    _attr_unique_id = "doems_automatic_planner"
+    _attr_suggested_object_id = "doems_automatic_planner"
+    _attr_icon = "mdi:transmission-tower-export"
+    _unrecorded_attributes = frozenset({"candidates", "native_slots"})
+
+    @property
+    def native_value(self) -> str:
+        snapshot = self.planner.snapshot()
+        if not snapshot.get("valid"):
+            return str(snapshot.get("status") or "blocked")
+        return str(snapshot.get("decision") or "geen_actie")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        snapshot = self.planner.snapshot()
+        keys = (
+            "status", "valid", "blockers", "reason", "next_candidate",
+            "candidate_count", "candidate_types", "start", "end",
+            "native_slot_count", "clock_hour_bucket_count",
+            "start_soc_percent", "end_soc_percent", "projected_min_soc_percent",
+            "projected_max_soc_percent", "technical_min_soc_percent",
+            "software_reserve_percent", "planner_floor_soc_percent",
+            "planner_floor_kwh", "capacity_kwh", "capacity_source",
+            "charge_efficiency_percent", "discharge_efficiency_percent",
+            "roundtrip_efficiency_percent", "max_charge_power_w",
+            "max_discharge_power_w", "minimum_trade_margin_eur_per_kwh",
+            "peak_sale_threshold_eur_per_kwh", "safety_charge_needed",
+            "safety_schedule_sufficient", "safety_charge_kwh",
+            "trade_charge_kwh", "trade_discharge_kwh", "peak_sale_kwh",
+            "manual_commitment_count", "manual_commitment_slots",
+            "usable_solar_rule", "automatic_planner_active",
+            "automatic_plan_store_writes", "scheduler_active",
+            "safety_prestart_active", "execution_enabled",
+            "physical_execution_authority", "mode", "observational_only",
+        )
+        attrs = {key: snapshot.get(key) for key in keys}
+        attrs["candidates"] = list(snapshot.get("candidates") or [])
+        attrs["native_slots"] = list(snapshot.get("native_slots") or [])
+        return attrs
+
+
+class DOEMSAutomaticSOCTimelineSensor(_DOEMSAutomaticPlannerBase):
+    """Compact 288-point R5 combined SOC timeline."""
+
+    _attr_name = "DOEMS Automatic SOC Projection Timeline"
+    _attr_unique_id = "doems_automatic_soc_projection_timeline"
+    _attr_suggested_object_id = "doems_automatic_soc_projection_timeline"
+    _attr_icon = "mdi:chart-timeline-variant"
+    _unrecorded_attributes = frozenset({"points"})
+
+    @property
+    def native_value(self) -> int:
+        return int(self.planner.snapshot().get("native_slot_count") or 0)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        snapshot = self.planner.snapshot()
+        points = []
+        for row in snapshot.get("native_slots") or []:
+            parsed = dt_util.parse_datetime(str(row.get("start")))
+            try:
+                soc = float(row.get("end_soc_percent"))
+            except (TypeError, ValueError):
+                continue
+            if parsed is not None:
+                points.append([int(parsed.timestamp() * 1000), round(soc, 4)])
+        return {
+            "status": snapshot.get("status"),
+            "valid": bool(snapshot.get("valid")),
+            "blockers": list(snapshot.get("blockers") or []),
+            "resolution_minutes": 15,
+            "horizon_hours": 72,
+            "slot_count": snapshot.get("native_slot_count", 0),
+            "point_count": len(points),
+            "point_format": "[unix_ms,end_soc_percent]",
+            "planner_floor_soc_percent": snapshot.get("planner_floor_soc_percent"),
+            "automatic_planner_active": True,
+            "physical_execution_authority": False,
+            "points": points,
+        }
+
+
+class DOEMSAutomaticPlan72HoursCompatSensor(_DOEMSAutomaticPlannerBase):
+    """R5 Plan72 surface using the same public identity as the R3 dashboard."""
+
+    _attr_name = "DOEMS EMS Plan72 Hours"
+    _attr_unique_id = "doems_ems_plan72_hours"
+    _attr_suggested_object_id = "doems_ems_plan72_hours"
+    _attr_native_unit_of_measurement = "h"
+    _attr_icon = "mdi:chart-timeline-variant-shimmer"
+    _unrecorded_attributes = frozenset({"plan", "candidates"})
+
+    @property
+    def native_value(self) -> int:
+        return int(self.planner.snapshot().get("clock_hour_bucket_count") or 0)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        snapshot = self.planner.snapshot()
+        return {
+            "status": snapshot.get("status"),
+            "valid": bool(snapshot.get("valid")),
+            "reason": snapshot.get("reason"),
+            "decision": snapshot.get("decision"),
+            "count": snapshot.get("clock_hour_bucket_count", 0),
+            "native_slot_count": snapshot.get("native_slot_count", 0),
+            "start": snapshot.get("start"),
+            "end": snapshot.get("end"),
+            "start_soc": snapshot.get("start_soc_percent"),
+            "end_soc": snapshot.get("end_soc_percent"),
+            "min_soc": snapshot.get("projected_min_soc_percent"),
+            "max_soc": snapshot.get("projected_max_soc_percent"),
+            "planner_floor_soc_percent": snapshot.get("planner_floor_soc_percent"),
+            "capacity_kwh": snapshot.get("capacity_kwh"),
+            "charge_efficiency_percent": snapshot.get("charge_efficiency_percent"),
+            "discharge_efficiency_percent": snapshot.get("discharge_efficiency_percent"),
+            "manual_commitment_count": snapshot.get("manual_commitment_count", 0),
+            "manual_commitment_slots": list(snapshot.get("manual_commitment_slots") or []),
+            "candidate_count": snapshot.get("candidate_count", 0),
+            "candidate_types": list(snapshot.get("candidate_types") or []),
+            "next_candidate": snapshot.get("next_candidate"),
+            "automatic_planner_active": True,
+            "automatic_plan_store_writes": False,
+            "scheduler_active": False,
+            "safety_prestart_active": False,
+            "observational_only": True,
+            "execution_enabled": False,
+            "physical_execution_authority": False,
+            "blockers": list(snapshot.get("blockers") or []),
+            "candidates": list(snapshot.get("candidates") or []),
             "plan": list(snapshot.get("hourly_plan") or []),
         }
