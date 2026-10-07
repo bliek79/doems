@@ -178,5 +178,5 @@ def test_alpha61_runtime_source_is_cache_only_and_executor_backed() -> None:
 def test_alpha61_version_contract() -> None:
     const = (INTEGRATION / "const.py").read_text(encoding="utf-8")
     manifest = (INTEGRATION / "manifest.json").read_text(encoding="utf-8")
-    assert 'VERSION = "0.2.0-alpha.6.1"' in const
-    assert '"version": "0.2.0-alpha.6.1"' in manifest
+    assert 'VERSION = "0.2.0-alpha.6.2"' in const
+    assert '"version": "0.2.0-alpha.6.2"' in manifest
