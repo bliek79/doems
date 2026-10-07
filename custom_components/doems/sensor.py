@@ -39,6 +39,7 @@ from .manual_soc_projection import DOEMSManualSOCProjection
 from .energy_forecast import EnergyBaselineForecast, ceil_quarter
 from .prices import DOEMSPricesManager
 from .prices_sensor import build_prices_sensors
+from .r5_preview import DOEMSR5PreviewManager
 from .solar_forecast import SolarForecastManager
 from .solar_sensor import build_solar_sensors
 
@@ -112,6 +113,17 @@ async def async_setup_entry(
                 DOEMSManualSOCProjectionSensor(entry, manual_soc_projection),
                 DOEMSManualSOCProjectionTimelineSensor(entry, manual_soc_projection),
                 DOEMSManualPlan72HoursCompatSensor(entry, manual_soc_projection),
+            ]
+        )
+
+    r5_preview = entry_data.get("r5_preview")
+    if isinstance(r5_preview, DOEMSR5PreviewManager):
+        entities.extend(
+            [
+                DOEMSR5AutomaticBasePreviewSensor(entry, r5_preview),
+                DOEMSR5AutomaticBaseSOCTimelineSensor(entry, r5_preview),
+                DOEMSR5CombinedPreviewSensor(entry, r5_preview),
+                DOEMSR5CombinedSOCTimelineSensor(entry, r5_preview),
             ]
         )
 
@@ -830,4 +842,276 @@ class DOEMSManualPlan72HoursCompatSensor(_DOEMSManualSOCProjectionBase):
             "physical_execution_authority": False,
             "blockers": list(snapshot.get("blockers") or []),
             "plan": list(snapshot.get("hourly_plan") or []),
+        }
+
+
+class _DOEMSR5PreviewBase(SensorEntity):
+    """Push-updated cache-only base for additive R5.1 shadow previews."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        manager: DOEMSR5PreviewManager,
+        preview: str,
+    ) -> None:
+        self.manager = manager
+        self.preview = preview
+        self._remove_listener = None
+        self._attr_device_info = _device_info(entry)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._remove_listener = self.manager.async_add_listener(
+            self._handle_update
+        )
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._remove_listener is not None:
+            self._remove_listener()
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
+
+    def _snapshot(self) -> dict[str, Any]:
+        return self.manager.snapshot(self.preview)
+
+
+def _r5_preview_attributes(
+    snapshot: dict[str, Any],
+) -> dict[str, Any]:
+    keys = (
+        "status",
+        "valid",
+        "blockers",
+        "decision",
+        "reason",
+        "next_candidate",
+        "candidate_count",
+        "candidate_types",
+        "start",
+        "end",
+        "native_slot_count",
+        "clock_hour_bucket_count",
+        "start_soc_percent",
+        "end_soc_percent",
+        "projected_min_soc_percent",
+        "projected_max_soc_percent",
+        "technical_min_soc_percent",
+        "software_reserve_percent",
+        "planner_floor_soc_percent",
+        "planner_floor_kwh",
+        "dynamic_reserve_start_soc_percent",
+        "dynamic_reserve_min_soc_percent",
+        "dynamic_reserve_max_soc_percent",
+        "dynamic_need_until_usable_solar_kwh",
+        "next_usable_solar",
+        "solar_horizon_complete",
+        "solar_horizon_incomplete_slots",
+        "capacity_kwh",
+        "capacity_source",
+        "charge_efficiency_percent",
+        "discharge_efficiency_percent",
+        "roundtrip_efficiency_percent",
+        "max_charge_power_w",
+        "max_discharge_power_w",
+        "minimum_trade_margin_eur_per_kwh",
+        "safety_charge_needed",
+        "safety_schedule_sufficient",
+        "safety_charge_kwh",
+        "trade_charge_kwh",
+        "trade_discharge_kwh",
+        "manual_commitment_count",
+        "manual_commitment_slots",
+        "usable_solar_rule",
+        "dynamic_reserve_rule",
+        "automatic_base_preview",
+        "combined_preview",
+        "peak_sale_active",
+        "peak_sale_deferred_to",
+        "automatic_planner_active",
+        "automatic_plan_store_writes",
+        "scheduler_active",
+        "safety_prestart_active",
+        "execution_enabled",
+        "physical_execution_authority",
+        "observational_only",
+        "mode",
+        "runtime_version",
+        "planner_policy_version",
+        "planner_refresh_policy",
+        "planner_generation",
+        "planner_published_generation",
+        "planner_compute_count",
+        "planner_stale_discard_count",
+        "planner_same_signature_skip_count",
+        "planner_last_request_signature",
+        "planner_last_input_signature",
+        "planner_last_cycle_id",
+        "planner_last_refresh_reason",
+        "planner_last_refreshed_at",
+        "planner_worker_active",
+        "planner_last_error",
+    )
+    attributes = {key: snapshot.get(key) for key in keys}
+    attributes["candidates"] = list(snapshot.get("candidates") or [])
+    attributes["native_slots"] = list(
+        snapshot.get("native_slots") or []
+    )
+    attributes["plan"] = list(snapshot.get("hourly_plan") or [])
+    return attributes
+
+
+class DOEMSR5AutomaticBasePreviewSensor(_DOEMSR5PreviewBase):
+    """Automatic-only R5.1 base preview; existing Plan72 is untouched."""
+
+    _attr_name = "DOEMS R5.1 Automatic Base Preview"
+    _attr_unique_id = "doems_r5_1_automatic_base_preview"
+    _attr_suggested_object_id = "doems_r5_1_automatic_base_preview"
+    _attr_icon = "mdi:chart-timeline-variant-shimmer"
+    _unrecorded_attributes = frozenset(
+        {"candidates", "native_slots", "plan"}
+    )
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        manager: DOEMSR5PreviewManager,
+    ) -> None:
+        super().__init__(entry, manager, "automatic_base")
+
+    @property
+    def native_value(self) -> str:
+        snapshot = self._snapshot()
+        if not snapshot.get("valid"):
+            return str(snapshot.get("status") or "blocked")
+        return str(snapshot.get("decision") or "geen_actie")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return _r5_preview_attributes(self._snapshot())
+
+
+class DOEMSR5AutomaticBaseSOCTimelineSensor(_DOEMSR5PreviewBase):
+    """Compact 288-point automatic-only R5.1 SOC preview."""
+
+    _attr_name = "DOEMS R5.1 Automatic Base SOC Timeline"
+    _attr_unique_id = "doems_r5_1_automatic_base_soc_timeline"
+    _attr_suggested_object_id = (
+        "doems_r5_1_automatic_base_soc_timeline"
+    )
+    _attr_icon = "mdi:chart-line"
+    _unrecorded_attributes = frozenset({"points"})
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        manager: DOEMSR5PreviewManager,
+    ) -> None:
+        super().__init__(entry, manager, "automatic_base")
+
+    @property
+    def native_value(self) -> int:
+        return int(self._snapshot().get("native_slot_count") or 0)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        snapshot = self._snapshot()
+        points = list(snapshot.get("timeline_points") or [])
+        return {
+            "status": snapshot.get("status"),
+            "valid": bool(snapshot.get("valid")),
+            "blockers": list(snapshot.get("blockers") or []),
+            "resolution_minutes": 15,
+            "horizon_hours": 72,
+            "slot_count": snapshot.get("native_slot_count", 0),
+            "point_count": len(points),
+            "point_format": "[unix_ms,end_soc_percent]",
+            "planner_floor_soc_percent": snapshot.get(
+                "planner_floor_soc_percent"
+            ),
+            "automatic_base_preview": True,
+            "combined_preview": False,
+            "physical_execution_authority": False,
+            "points": points,
+        }
+
+
+class DOEMSR5CombinedPreviewSensor(_DOEMSR5PreviewBase):
+    """Combined automatic + manual R5.1 shadow replan preview."""
+
+    _attr_name = "DOEMS R5.1 Combined Preview"
+    _attr_unique_id = "doems_r5_1_combined_preview"
+    _attr_suggested_object_id = "doems_r5_1_combined_preview"
+    _attr_icon = "mdi:timeline-clock-outline"
+    _unrecorded_attributes = frozenset(
+        {"candidates", "native_slots", "plan"}
+    )
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        manager: DOEMSR5PreviewManager,
+    ) -> None:
+        super().__init__(entry, manager, "combined")
+
+    @property
+    def native_value(self) -> str:
+        snapshot = self._snapshot()
+        if not snapshot.get("valid"):
+            return str(snapshot.get("status") or "blocked")
+        return str(snapshot.get("decision") or "geen_actie")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return _r5_preview_attributes(self._snapshot())
+
+
+class DOEMSR5CombinedSOCTimelineSensor(_DOEMSR5PreviewBase):
+    """Compact 288-point combined R5.1 SOC preview."""
+
+    _attr_name = "DOEMS R5.1 Combined SOC Timeline"
+    _attr_unique_id = "doems_r5_1_combined_soc_timeline"
+    _attr_suggested_object_id = "doems_r5_1_combined_soc_timeline"
+    _attr_icon = "mdi:chart-timeline-variant"
+    _unrecorded_attributes = frozenset({"points"})
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        manager: DOEMSR5PreviewManager,
+    ) -> None:
+        super().__init__(entry, manager, "combined")
+
+    @property
+    def native_value(self) -> int:
+        return int(self._snapshot().get("native_slot_count") or 0)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        snapshot = self._snapshot()
+        points = list(snapshot.get("timeline_points") or [])
+        return {
+            "status": snapshot.get("status"),
+            "valid": bool(snapshot.get("valid")),
+            "blockers": list(snapshot.get("blockers") or []),
+            "resolution_minutes": 15,
+            "horizon_hours": 72,
+            "slot_count": snapshot.get("native_slot_count", 0),
+            "point_count": len(points),
+            "point_format": "[unix_ms,end_soc_percent]",
+            "manual_commitment_count": snapshot.get(
+                "manual_commitment_count", 0
+            ),
+            "manual_commitment_slots": list(
+                snapshot.get("manual_commitment_slots") or []
+            ),
+            "automatic_base_preview": False,
+            "combined_preview": True,
+            "physical_execution_authority": False,
+            "points": points,
         }
