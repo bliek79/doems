@@ -178,9 +178,16 @@ def build_automatic_plan(*,energy_slots:Sequence[Mapping[str,Any]],solar_slots:S
                 m=b['export_price']-cost
                 if m>=margin and (best is None or m>best[0]): best=(m,i,j)
         if best:
-            _,i,j=best; tr=sim(); free=max(0,min(r['end_soc_percent'] for r in tr[j:])-floor)/100*cap*de
-            dout=min(free,tr[j]['discharge_headroom_kwh']); cin=min(tr[i]['charge_headroom_kwh'],dout/rt if rt else 0); dout=cin*rt
-            if cin>_EPS and dout>_EPS: tc[i]=cin; td[j]=dout
+            _,i,j=best; tr=sim(); cin=tr[i]['charge_headroom_kwh']
+            if cin>_EPS:
+                tc[i]=cin
+                charged=sim()
+                free=max(0,min(r['end_soc_percent'] for r in charged[j:])-floor)/100*cap*de
+                dout=min(free,charged[j]['discharge_headroom_kwh'],cin*rt)
+                if dout>_EPS:
+                    tc[i]=dout/rt; td[j]=dout
+                else:
+                    tc.pop(i,None)
     final=sim(); cand=[]
     types=(('charge_from_grid_safety_kwh','veiligheidsladen','laden','planner_floor_protection'),('charge_from_grid_trade_kwh','handelsladen','laden','normal_arbitrage_margin'),
            ('trade_discharge_to_grid_kwh','handel_ontladen','ontladen','normal_arbitrage_margin'),('peak_sale_to_grid_kwh','piek_ontladen','ontladen','peak_price_with_protected_route_to_recharge'))
