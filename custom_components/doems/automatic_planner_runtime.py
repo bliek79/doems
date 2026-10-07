@@ -15,7 +15,7 @@ from .automatic_planner_model import build_automatic_plan
 from .energy_forecast import EnergyBaselineForecast
 
 RUNTIME_VERSION = "alpha6_1_cached_executor_v1"
-PLANNER_POLICY_VERSION = "alpha6_automatic_planner_shadow_v1"
+PLANNER_POLICY_VERSION = "alpha6_3_dynamic_reserve_parity_v1"
 
 
 def _as_utc(reference: datetime) -> datetime:
