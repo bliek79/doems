@@ -139,7 +139,7 @@ def test_alpha6_public_surface_and_source_are_read_only():
     runtime=(INTEGRATION/"automatic_planner.py").read_text(encoding="utf-8")
     model=(INTEGRATION/"automatic_planner_model.py").read_text(encoding="utf-8")
     init=(INTEGRATION/"__init__.py").read_text(encoding="utf-8")
-    assert 'VERSION = "0.2.0-alpha.6.1"' in const
+    assert 'VERSION = "0.2.0-alpha.6.2"' in const
     assert 'DEFAULT_SOFTWARE_RESERVE_PERCENT = 5.0' in const
     assert 'DEFAULT_MAX_CHARGE_POWER_W = 3500.0' in const
     assert 'DEFAULT_MAX_DISCHARGE_POWER_W = 3500.0' in const
