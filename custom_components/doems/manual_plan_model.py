@@ -25,9 +25,10 @@ LIFECYCLE_STATUSES = {
     "voltooid",
     "geannuleerd",
     "fout",
+    "verlopen",
 }
 
-TERMINAL_LIFECYCLES = {"voltooid", "geannuleerd", "fout"}
+TERMINAL_LIFECYCLES = {"voltooid", "geannuleerd", "fout", "verlopen"}
 
 DEFAULT_PLAN: dict[str, Any] = {
     "action": "geen",
