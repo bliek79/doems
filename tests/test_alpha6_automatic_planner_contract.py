@@ -69,17 +69,24 @@ def test_alpha6_capacity_is_runtime_input_not_fixed_7_1():
     assert b["planner_floor_kwh"] == 2*a["planner_floor_kwh"]
 
 
-def test_alpha6_safety_charge_protects_ten_percent_floor():
+def test_alpha6_safety_charge_protects_dynamic_reserve_and_base_floor():
     m=_load("automatic_planner_model")
     e,s,p=_axis()
     for i in range(8):
         e[i]["home_kwh"]=0.08
-        p[e[i]["start"]]["import_all_in"]=0.10 if i==2 else 0.30
+        p[e[i]["start"]]["import_all_in"]=0.10 if i==0 else 0.30
+    # Two consecutive full clock hours of usable solar start at 02:00 UTC.
+    for i in range(8,16):
+        e[i]["home_kwh"]=0.02
+        s[i]["solar_kwh"]=0.02
     r=m.build_automatic_plan(energy_slots=e,solar_slots=s,plans=[],start_soc_percent=15,capacity_kwh=7.1,price_by_start=p)
     assert r["safety_charge_needed"] is True
     assert "veiligheidsladen" in r["candidate_types"]
+    assert r["dynamic_reserve_start_soc_percent"] > 10.0
+    assert r["dynamic_reserve_min_soc_percent"] == 10.0
     assert r["projected_min_soc_percent"] >= 9.999
     assert r["safety_schedule_sufficient"] is True
+    assert r["safety_charge_kwh"] < 1.5
 
 
 def test_alpha6_peak_sale_requires_favorable_recharge_and_keeps_floor():
