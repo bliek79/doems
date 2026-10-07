@@ -1,9 +1,9 @@
-name: DOEMS CI and 0.2.0-alpha.5 Manual Lifecycle Expiry Release
+name: DOEMS CI and 0.2.0-alpha.6 Automatic Planner Shadow Release
 
 on:
   pull_request:
   push:
-    branches: [reset-0.2.0-alpha.5]
+    branches: [reset-0.2.0-alpha.6]
   workflow_dispatch:
 
 permissions:
@@ -29,9 +29,9 @@ jobs:
               json.loads(path.read_text(encoding='utf-8'))
               print(f'valid: {path}')
           PY
-      - name: Validate 0.2.0-alpha.5 manual lifecycle expiry
+      - name: Validate 0.2.0-alpha.6 automatic planner shadow
         run: |
-          test -f RELEASE_NOTES_0.2.0-alpha.5.md
+          test -f RELEASE_NOTES_0.2.0-alpha.6.md
           test -f examples/prices_p4_forecast_card.yaml
           test -f custom_components/doems/prices.py
           test -f custom_components/doems/prices_model.py
@@ -41,8 +41,8 @@ jobs:
           test ! -f scripts/build_brand_assets.py
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
-          grep -F 'VERSION = "0.2.0-alpha.5"' custom_components/doems/const.py
-          grep -F '"version": "0.2.0-alpha.5"' custom_components/doems/manifest.json
+          grep -F 'VERSION = "0.2.0-alpha.6"' custom_components/doems/const.py
+          grep -F '"version": "0.2.0-alpha.6"' custom_components/doems/manifest.json
           grep -F 'build_prices_sensors' custom_components/doems/sensor.py
           grep -F 'DOEMSRegisteredPricesManager' custom_components/doems/__init__.py
           grep -F 'GAS_SOURCE_ENERGYZERO_MARKET_ACTION' custom_components/doems/const.py
@@ -119,9 +119,25 @@ jobs:
           ! grep -R -F 'async_call(' custom_components/doems/manual_plan_lifecycle.py custom_components/doems/manual_plan_lifecycle_model.py
           ! grep -R -F 'third_party_control' custom_components/doems/manual_plan_lifecycle.py custom_components/doems/manual_plan_lifecycle_model.py
           ! grep -R -F 'DOEMSScheduler' custom_components/doems/manual_plan_lifecycle.py custom_components/doems/manual_plan_lifecycle_model.py
+          test -f custom_components/doems/automatic_planner_model.py
+          test -f custom_components/doems/automatic_planner.py
+          test -f tests/test_alpha6_automatic_planner_contract.py
+          grep -F 'DEFAULT_SOFTWARE_RESERVE_PERCENT = 5.0' custom_components/doems/const.py
+          grep -F 'DEFAULT_MAX_CHARGE_POWER_W = 3500.0' custom_components/doems/const.py
+          grep -F 'DEFAULT_MAX_DISCHARGE_POWER_W = 3500.0' custom_components/doems/const.py
+          grep -F 'DEFAULT_PEAK_SALE_THRESHOLD_EUR_PER_KWH = 0.50' custom_components/doems/const.py
+          grep -F 'DOEMSAutomaticPlanner' custom_components/doems/__init__.py
+          grep -F 'doems_automatic_planner' custom_components/doems/sensor.py
+          grep -F 'doems_automatic_soc_projection_timeline' custom_components/doems/sensor.py
+          grep -F '"automatic_plan_store_writes":False' custom_components/doems/automatic_planner_model.py
+          grep -F '"scheduler_active":False' custom_components/doems/automatic_planner_model.py
+          grep -F '"physical_execution_authority":False' custom_components/doems/automatic_planner_model.py
+          ! grep -R -F 'async_call(' custom_components/doems/automatic_planner.py custom_components/doems/automatic_planner_model.py
+          ! grep -R -F 'third_party_control' custom_components/doems/automatic_planner.py custom_components/doems/automatic_planner_model.py
+          ! grep -R -F 'DOEMSScheduler' custom_components/doems/automatic_planner.py custom_components/doems/automatic_planner_model.py
 
-  publish-reset-alpha5:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/reset-0.2.0-alpha.5'
+  publish-reset-alpha6:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/reset-0.2.0-alpha.6'
     needs: validate
     runs-on: ubuntu-latest
     steps:
@@ -130,7 +146,7 @@ jobs:
           fetch-depth: 0
       - name: Build release archive
         run: |
-          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.2.0-alpha.5.md
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.2.0-alpha.6.md
           sha256sum doems.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - name: Verify Prices P4 runtime is packaged
@@ -147,7 +163,7 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/battery_contract_model.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/config_flow.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/sensor.py'
-          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.5.md'
+          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.6.md'
       - name: Verify Manual Plan Store is packaged
         run: |
           unzip -l doems.zip | grep -F 'custom_components/doems/manual_plan_model.py'
@@ -156,32 +172,38 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/number.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/datetime.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/services.yaml'
-          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.5.md'
+          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.6.md'
       - name: Verify Manual SOC Replanning is packaged
         run: |
           unzip -l doems.zip | grep -F 'custom_components/doems/manual_soc_projection_model.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/manual_soc_projection.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/sensor.py'
-          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.5.md'
+          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.6.md'
       - name: Verify Manual Lifecycle Expiry is packaged
         run: |
           unzip -l doems.zip | grep -F 'custom_components/doems/manual_plan_lifecycle_model.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/manual_plan_lifecycle.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/manual_plan_store.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/sensor.py'
-          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.5.md'
+          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.6.md'
+      - name: Verify Automatic Planner Shadow is packaged
+        run: |
+          unzip -l doems.zip | grep -F 'custom_components/doems/automatic_planner.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/automatic_planner_model.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/sensor.py'
+          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.6.md'
       - name: Verify exact existing DOEMS brand icon is packaged
         run: |
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/icon.png'
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
-      - name: Publish 0.2.0-alpha.5 manual lifecycle expiry release
+      - name: Publish 0.2.0-alpha.6 automatic planner shadow release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view 0.2.0-alpha.5 >/dev/null 2>&1; then
-            gh release edit 0.2.0-alpha.5 --title "DOEMS 0.2.0-alpha.5 - Manual Lifecycle Expiry" --notes-file RELEASE_NOTES_0.2.0-alpha.5.md --prerelease
-            gh release upload 0.2.0-alpha.5 doems.zip SHA256SUMS.txt --clobber
+          if gh release view 0.2.0-alpha.6 >/dev/null 2>&1; then
+            gh release edit 0.2.0-alpha.6 --title "DOEMS 0.2.0-alpha.6 - Automatic Planner Shadow" --notes-file RELEASE_NOTES_0.2.0-alpha.6.md --prerelease
+            gh release upload 0.2.0-alpha.6 doems.zip SHA256SUMS.txt --clobber
           else
-            gh release create 0.2.0-alpha.5 doems.zip SHA256SUMS.txt --target reset-0.2.0-alpha.5 --title "DOEMS 0.2.0-alpha.5 - Manual Lifecycle Expiry" --notes-file RELEASE_NOTES_0.2.0-alpha.5.md --prerelease
+            gh release create 0.2.0-alpha.6 doems.zip SHA256SUMS.txt --target reset-0.2.0-alpha.6 --title "DOEMS 0.2.0-alpha.6 - Manual Lifecycle Expiry" --notes-file RELEASE_NOTES_0.2.0-alpha.6.md --prerelease
           fi
