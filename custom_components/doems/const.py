@@ -4,7 +4,7 @@ from __future__ import annotations
 
 DOMAIN = "doems"
 NAME = "DOEMS"
-VERSION = "0.2.0-alpha.5"
+VERSION = "0.2.0-alpha.7"
 
 CONF_INSTANCE_NAME = "instance_name"
 DEFAULT_INSTANCE_NAME = NAME
@@ -24,6 +24,19 @@ CONF_BATTERY_CHARGE_POWER_ENTITY = "battery_charge_power_entity"
 CONF_BATTERY_DISCHARGE_POWER_ENTITY = "battery_discharge_power_entity"
 CONF_BATTERY_STATUS_ENTITY = "battery_status_entity"
 BATTERY_INPUT_CONTRACT_VERSION = 1
+
+# R5.1 additive shadow-preview configuration.  Versioned option keys avoid
+# inheriting stale alpha.6.x planner options from an earlier live test.
+CONF_R5_1_SOFTWARE_RESERVE_PERCENT = "r5_1_software_reserve_percent"
+CONF_R5_1_MAX_CHARGE_POWER_W = "r5_1_max_charge_power_w"
+CONF_R5_1_MAX_DISCHARGE_POWER_W = "r5_1_max_discharge_power_w"
+CONF_R5_1_MINIMUM_TRADE_MARGIN_EUR_PER_KWH = (
+    "r5_1_minimum_trade_margin_eur_per_kwh"
+)
+DEFAULT_R5_1_SOFTWARE_RESERVE_PERCENT = 5.0
+DEFAULT_R5_1_MAX_CHARGE_POWER_W = 3500.0
+DEFAULT_R5_1_MAX_DISCHARGE_POWER_W = 3500.0
+DEFAULT_R5_1_MINIMUM_TRADE_MARGIN_EUR_PER_KWH = 0.10
 
 ENERGY_SOURCE_DIRECT = "direct_home_power"
 ENERGY_SOURCE_BALANCE = "power_balance"
