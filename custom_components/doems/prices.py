@@ -531,6 +531,40 @@ class DOEMSPricesManager:
             return None
         return point
 
+    def planner_timeline_slots(self, reference: datetime) -> list[dict[str, Any]]:
+        """Return the exact 288-slot planner window from the 76-hour buffer.
+
+        The public Prices timeline remains tied to the most recent Prices
+        refresh. R5 instead reselects its own 72-hour window from the already
+        cached 304-slot source buffer using the planner reference. Missing
+        source quarters remain explicit; no prices are extrapolated.
+        """
+        start = ceil_quarter(reference)
+        selected, _missing = select_exact_price_window(
+            self._price_buffer_by_start,
+            start=start,
+            slot_count=FORECAST_SLOTS,
+        )
+        selected_by_start = {utc(point.start): point for point in selected}
+        rows: list[dict[str, Any]] = []
+        for expected in expected_quarter_starts(start, FORECAST_SLOTS):
+            point = selected_by_start.get(expected)
+            if point is None:
+                rows.append(
+                    {
+                        "time": expected.isoformat(),
+                        "market_ex_vat": None,
+                        "market_incl_vat": None,
+                        "import_all_in": None,
+                        "export_all_in": None,
+                        "kind": "missing",
+                        "source_resolution_minutes": None,
+                    }
+                )
+            else:
+                rows.append(point.as_dict())
+        return rows
+
     @property
     def freshness(self) -> str:
         if self.last_update is None:
