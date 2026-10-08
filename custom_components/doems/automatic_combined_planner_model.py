@@ -262,9 +262,14 @@ def _simulate(
         safety_charge = charge(float(safety.get(index, 0.0)))
         arbitrage_charge = charge(float(trade_charge.get(index, 0.0)))
 
+        # Normal household self-consumption is physical discharge down to
+        # the *technical* device minimum. The higher software planning target
+        # is an economic precharge deadline, never a fictitious home hold.
+        # The already computed automatic_floor remains the protected floor
+        # for optional export/trade discharge.
         available_output = max(
             0.0,
-            (soc - automatic_floor)
+            (soc - MIN_SOC_PERCENT)
             / 100.0
             * capacity_kwh
             * discharge_efficiency,
@@ -392,6 +397,7 @@ def _simulate(
                 "automatic_floor_soc_percent": round(
                     automatic_floor, 6
                 ),
+                "home_discharge_floor_soc_percent": MIN_SOC_PERCENT,
                 "charge_headroom_kwh": round(
                     min(
                         charge_left,
@@ -585,9 +591,15 @@ def _build_planner(
         for index, row in enumerate(initial)
     )
 
-    # Only the energy needed to prevent the first reserve breach is added.
+    # Technical SOC (5%) is the normal household discharge limit above.
+    # Unlike alpha.7.1.3, reserve breaches below the independently configured
+    # technical + software planning target can now really be detected. Safety
+    # precharge finds the cheapest feasible slot no later than each breach.
+    # It never depends on the trade/export margin or the next usable-solar
+    # marker and never changes the 288-slot time base.
+    #
     # Re-simulate after every addition so manual commitments and target clamps
-    # are always part of the route being protected.
+    # remain hard constraints in Combined.
     for _ in range(FORECAST_SLOTS):
         route = simulate()
         breach = next(
