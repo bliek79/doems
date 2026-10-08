@@ -3,7 +3,7 @@ name: DOEMS CI and 0.2.0-alpha.7.1.1 Planner Migration Hotfix
 on:
   pull_request:
   push:
-    branches: [reset-0.2.0-alpha.7.1.1.1]
+    branches: [reset-0.2.0-alpha.7.1.1]
   workflow_dispatch:
 
 permissions:
@@ -175,7 +175,7 @@ jobs:
           test "$(git hash-object custom_components/doems/services.yaml)" = "f5f4807397b64b2c73faaecaea88324d53426592"
 
   publish-reset-alpha711:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/reset-0.2.0-alpha.7.1.1.1'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/reset-0.2.0-alpha.7.1.1'
     needs: validate
     runs-on: ubuntu-latest
     steps:
@@ -247,5 +247,5 @@ jobs:
             gh release edit 0.2.0-alpha.7.1.1 --title "DOEMS 0.2.0-alpha.7.1.1 - Planner Migration Hotfix" --notes-file RELEASE_NOTES_0.2.0-alpha.7.1.1.md --prerelease
             gh release upload 0.2.0-alpha.7.1.1 doems.zip SHA256SUMS.txt --clobber
           else
-            gh release create 0.2.0-alpha.7.1.1 doems.zip SHA256SUMS.txt --target reset-0.2.0-alpha.7.1.1.1 --title "DOEMS 0.2.0-alpha.7.1.1 - Planner Migration Hotfix" --notes-file RELEASE_NOTES_0.2.0-alpha.7.1.1.md --prerelease
+            gh release create 0.2.0-alpha.7.1.1 doems.zip SHA256SUMS.txt --target reset-0.2.0-alpha.7.1.1 --title "DOEMS 0.2.0-alpha.7.1.1 - Planner Migration Hotfix" --notes-file RELEASE_NOTES_0.2.0-alpha.7.1.1.md --prerelease
           fi
