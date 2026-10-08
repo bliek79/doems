@@ -470,82 +470,167 @@ class DOEMSPlannerManager:
             },
         }, []
 
+    def _manual_plans_snapshot(self) -> list[dict[str, Any]]:
+        """R2-R4 is read-only; only Combined receives these three plans."""
+        return [
+            {**self.plans.get_plan(slot), "slot": slot}
+            for slot in range(1, PLAN_SLOT_COUNT + 1)
+        ]
+
+    def _ensure_worker(self) -> None:
+        if not self._shutdown and (
+            self._planner_task is None or self._planner_task.done()
+        ):
+            self._planner_task = self.hass.async_create_task(
+                self._async_planner_loop(),
+                "DOEMS sequential Automatic then Combined planner",
+            )
+
     def _publish_blocked(
         self, blockers: list[str], reason: str
     ) -> None:
         self._generation += 1
+        self._auto_revision += 1
+        self._automatic_context = None
         self._pending_request = None
         if self._active_cancel_event is not None:
             self._active_cancel_event.set()
         self._last_reason = reason
         bundle = self._blocked_bundle(*blockers)
-        bundle.update(self._runtime_metadata())
+        metadata = self._runtime_metadata()
+        metadata["planner_worker_active"] = False
+        bundle.update(metadata)
         for key in ("automatic", "combined"):
-            bundle[key].update(self._runtime_metadata())
+            bundle[key].update(metadata)
         self._cached_bundle = bundle
         self._notify()
 
     async def async_request_refresh(self, reason: str) -> bool:
+        """New quarter or changed forecast: Automatic, then Combined."""
         if self._shutdown:
             return False
         request, blockers = self._freeze_request(reason)
         if request is None:
             self._publish_blocked(blockers, reason)
             return False
-
         signature = str(request["request_signature"])
-        pending_signature = (
-            str(self._pending_request.get("request_signature"))
-            if self._pending_request is not None
-            else None
-        )
         if (
-            (
-                self._planner_task is None
-                and self._cached_bundle.get("status") == "ready"
-                and signature == self._last_request_signature
-            )
-            or (
-                signature == self._active_signature
-                and self._active_generation == self._generation
-            )
-            or signature == pending_signature
+            self._pending_request is not None
+            and self._pending_request.get("stage") == "automatic"
+            and self._pending_request.get("request_signature") == signature
+        ) or (
+            self._active_stage == "automatic"
+            and signature == self._active_signature
         ):
             self._same_signature_skip_count += 1
             return False
+        if (
+            self._automatic_context is not None
+            and signature == self._last_request_signature
+        ):
+            if (
+                self._cached_bundle.get("combined", {}).get("status") != "ready"
+                and self._active_stage is None
+                and self._pending_request is None
+            ):
+                self._generation += 1
+                self._enqueue_combined(reason)
+            else:
+                self._same_signature_skip_count += 1
+            return False
 
         self._generation += 1
+        self._auto_revision += 1
+        self._automatic_context = None
         if self._active_cancel_event is not None:
             self._active_cancel_event.set()
-        request["generation"] = self._generation
+        request.update({
+            "stage": "automatic",
+            "generation": self._generation,
+            "auto_revision": self._auto_revision,
+            "manual_revision": self._manual_revision,
+        })
         self._pending_request = request
-        if self._planner_task is None or self._planner_task.done():
-            self._planner_task = self.hass.async_create_task(
-                self._async_planner_loop(),
-                "DOEMS planner additive planner",
+        self._ensure_worker()
+        return True
+
+    async def async_request_manual_refresh(
+        self, reason: str = "manual_plan_changed"
+    ) -> bool:
+        """Manual changes only invalidate Combined, not running Automatic."""
+        if self._shutdown:
+            return False
+        self._generation += 1
+        self._manual_revision += 1
+        if (
+            self._active_stage == "automatic"
+            or (
+                self._pending_request is not None
+                and self._pending_request.get("stage") == "automatic"
             )
+        ):
+            return True
+        if self._automatic_context is None:
+            # No completed Automatic base exists: recover in correct order.
+            return await self.async_request_refresh("missing_automatic_base")
+        if self._active_stage == "combined" and self._active_cancel_event:
+            self._active_cancel_event.set()
+        self._enqueue_combined(reason)
+        return True
+
+    def _enqueue_combined(self, reason: str) -> bool:
+        context = self._automatic_context
+        if context is None or self._shutdown:
+            return False
+        if (
+            self._pending_request is not None
+            and self._pending_request.get("stage") == "automatic"
+        ):
+            return False
+        frozen = dict(context["compute_kwargs"])
+        frozen.update({
+            "plans": self._manual_plans_snapshot(),
+            "stage": "combined",
+            "automatic_snapshot": context["automatic"],
+            "prebuilt_energy_slots": context["energy_slots"],
+        })
+        self._pending_request = {
+            "stage": "combined",
+            "reason": reason,
+            "generation": self._generation,
+            "auto_revision": context["auto_revision"],
+            "manual_revision": self._manual_revision,
+            "cycle_id": context["cycle_id"],
+            "request_signature": context["signature"],
+            "compute_kwargs": frozen,
+        }
+        self._ensure_worker()
         return True
 
     async def _async_planner_loop(self) -> None:
+        """One serial worker: no concurrent Automatic/Combined computation."""
         try:
-            while (
-                self._pending_request is not None
-                and not self._shutdown
-            ):
+            while self._pending_request is not None and not self._shutdown:
                 request = self._pending_request
                 self._pending_request = None
                 await self._async_compute(request)
         finally:
             self._active_signature = None
             self._planner_task = None
-            if (
-                self._pending_request is not None
-                and not self._shutdown
-            ):
-                self._planner_task = self.hass.async_create_task(
-                    self._async_planner_loop(),
-                    "DOEMS planner additive planner",
-                )
+            if self._pending_request is not None and not self._shutdown:
+                self._ensure_worker()
+
+    def _stage_current(self, request: dict[str, Any]) -> bool:
+        if int(request["auto_revision"]) != self._auto_revision:
+            return False
+        if request["stage"] == "automatic":
+            # A Manual change never invalidates Automatic.
+            return True
+        return (
+            int(request["generation"]) == self._generation
+            and int(request["manual_revision"]) == self._manual_revision
+            and self._automatic_context is not None
+        )
 
     async def _async_compute(
         self, request: dict[str, Any]
