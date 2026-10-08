@@ -119,3 +119,22 @@ def test_r5_automatic_independent_of_three_manual_slots_combined_owns_priority()
         assert with_manual["combined"]["native_slots"][index]["manual_slots"] == [slot]
         assert with_manual["automatic"]["native_slots"][index]["manual_slots"] == []
     assert not with_manual["physical_execution_enabled"]
+
+
+def test_r5_grid_charge_headroom_is_measured_before_home_discharge():
+    model = _load("automatic_combined_planner_model")
+    energy, solar = _axis(home_kwh=0.10)
+    axis, blockers = model._validate_time_axis(energy, solar)
+    assert blockers == []
+    rows = model._simulate(
+        axis=[{**row, "prices": {}} for row in axis],
+        commitments=[], start_soc_percent=100, capacity_kwh=7.1,
+        charge_efficiency=0.92, discharge_efficiency=0.92,
+        max_charge_power_w=3500, max_discharge_power_w=3500,
+        reserve_floor_end_soc=[10.0] * 288,
+    )
+    assert rows[0]["discharge_to_home_kwh"] > 0
+    # At the charging instant SOC is still 100%, so charging cannot occur.
+    assert rows[0]["charge_headroom_kwh"] == 0
+    # In the following quarter there is room to charge again.
+    assert rows[1]["charge_headroom_kwh"] > 0
