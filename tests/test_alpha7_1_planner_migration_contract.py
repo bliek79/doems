@@ -317,8 +317,8 @@ def test_alpha7_1_permanent_option_defaults_and_version() -> None:
     const = (INTEGRATION / "const.py").read_text(encoding="utf-8")
     manifest = (INTEGRATION / "manifest.json").read_text(encoding="utf-8")
 
-    assert 'VERSION = "0.2.0-alpha.7.1.1"' in const
-    assert '"version": "0.2.0-alpha.7.1.1"' in manifest
+    assert 'VERSION = "0.2.0-alpha.7.1.2"' in const
+    assert '"version": "0.2.0-alpha.7.1.2"' in manifest
     assert 'DEFAULT_PLANNER_SOFTWARE_RESERVE_PERCENT = 5.0' in const
     assert 'DEFAULT_PLANNER_MAX_CHARGE_POWER_W = 3500.0' in const
     assert 'DEFAULT_PLANNER_MAX_DISCHARGE_POWER_W = 3500.0' in const
