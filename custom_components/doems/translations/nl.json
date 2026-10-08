@@ -22,10 +22,10 @@
           "solar_foundation_enabled": "Solar Foundation activeren",
           "prices_enabled": "Prices Forecast activeren",
           "battery_observation_enabled": "Batterijobservatie activeren",
-          "r5_1_software_reserve_percent": "R5.1 software-reserve",
-          "r5_1_max_charge_power_w": "R5.1 maximaal automatisch laadvermogen",
-          "r5_1_max_discharge_power_w": "R5.1 maximaal automatisch ontlaadvermogen",
-          "r5_1_minimum_trade_margin_eur_per_kwh": "R5.1 minimale handelsmarge"
+          "planner_software_reserve_percent": "Planner software-reserve",
+          "planner_max_charge_power_w": "Planner maximaal laadvermogen",
+          "planner_max_discharge_power_w": "Planner maximaal ontlaadvermogen",
+          "planner_minimum_trade_margin_eur_per_kwh": "Planner minimale handelsmarge"
         }
       },
       "energy_forecast": {
