@@ -22,10 +22,10 @@
           "solar_foundation_enabled": "Enable Solar Foundation",
           "prices_enabled": "Enable Prices Forecast",
           "battery_observation_enabled": "Enable Battery Observation",
-          "r5_1_software_reserve_percent": "R5.1 software reserve",
-          "r5_1_max_charge_power_w": "R5.1 maximum automatic charge power",
-          "r5_1_max_discharge_power_w": "R5.1 maximum automatic discharge power",
-          "r5_1_minimum_trade_margin_eur_per_kwh": "R5.1 minimum trade margin"
+          "planner_software_reserve_percent": "Planner software reserve",
+          "planner_max_charge_power_w": "Planner maximum charge power",
+          "planner_max_discharge_power_w": "Planner maximum discharge power",
+          "planner_minimum_trade_margin_eur_per_kwh": "Planner minimum trade margin"
         }
       },
       "energy_forecast": {
