@@ -32,10 +32,7 @@ USABLE_SOLAR_RULE = (
     "first_of_two_consecutive_full_clock_hours_"
     "where_total_solar_gte_total_home"
 )
-DYNAMIC_RESERVE_RULE = (
-    "base_floor_plus_home_deficit_until_next_usable_solar_"
-    "with_incomplete_horizon_fallback_to_base_floor"
-)
+DYNAMIC_RESERVE_RULE = "fixed_hard_safety_floor_with_separate_planning_need"
 
 
 def _full_clock_hour_buckets(axis: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
@@ -111,7 +108,7 @@ def _dynamic_reserve_profile(
     base_floor_soc: float,
     discharge_efficiency: float,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Protect home deficit only until the next demonstrable usable-solar block."""
+    """Report planning need to usable solar without increasing the hard SOC floor."""
     pairs = _usable_solar_pairs(axis)
     deficits = [
         max(0.0, float(slot["home_kwh"]) - float(slot["solar_kwh"]))
@@ -150,10 +147,8 @@ def _dynamic_reserve_profile(
                 need_home_kwh = max(0.0, prefix[first_index] - prefix[index])
 
         stored_need_kwh = need_home_kwh / discharge_efficiency
-        floor_kwh = min(
-            capacity_kwh,
-            max(base_floor_kwh, base_floor_kwh + stored_need_kwh),
-        )
+        # Forecast demand is planning information, never a hard reserve.
+        floor_kwh = base_floor_kwh
         profile.append(
             {
                 "floor_kwh": floor_kwh,
@@ -630,6 +625,85 @@ def _build_planner(
         if not made:
             break
 
+    # Household price-shifting is separate from the hard SOC floor. Evaluate
+    # the complete 288-slot horizon: solar first, then cover expensive future
+    # home deficits with cheaper technically feasible earlier grid charging.
+    # Use actual route simulations, so future solar, capacity and manual
+    # commitments can reduce or invalidate any proposed charge.
+    economic_charge_kwh = 0.0
+    for _ in range(64):
+        route = simulate()
+        shortages = sorted(
+            (
+                index for index, row in enumerate(route)
+                if float(row["grid_to_home_kwh"]) > _EPS
+                and row.get("import_price") is not None
+            ),
+            key=lambda index: -float(route[index]["import_price"]),
+        )
+        best_shift: tuple[float, int, float] | None = None
+        for deficit_index in shortages:
+            deficit = route[deficit_index]
+            costly_price = float(deficit["import_price"])
+            earlier = sorted(
+                (
+                    index for index in range(deficit_index)
+                    if not route[index]["manual_slots"]
+                    and route[index].get("import_price") is not None
+                    and float(route[index]["charge_headroom_kwh"]) > _EPS
+                    and safety.get(index, 0.0) <= _EPS
+                    and trade_discharge.get(index, 0.0) <= _EPS
+                    and (
+                        float(route[index]["import_price"]) / roundtrip
+                        + minimum_trade_margin_eur_per_kwh
+                        < costly_price
+                    )
+                ),
+                key=lambda index: (float(route[index]["import_price"]), -index),
+            )[:12]
+            for index in earlier:
+                old = trade_charge.get(index, 0.0)
+                maximum = min(
+                    float(route[index]["charge_headroom_kwh"]),
+                    float(deficit["grid_to_home_kwh"]) / roundtrip,
+                )
+                if maximum <= _EPS:
+                    continue
+                trade_charge[index] = old + maximum
+                trial = simulate()
+                trade_charge[index] = old
+                delivered = max(
+                    0.0,
+                    float(deficit["grid_to_home_kwh"])
+                    - float(trial[deficit_index]["grid_to_home_kwh"]),
+                )
+                if delivered <= _EPS:
+                    continue
+                # Account for changed grid imports, earlier charging and any
+                # displaced solar exports rather than relying on price alone.
+                def route_cost(rows: Sequence[Mapping[str, Any]]) -> float:
+                    return sum(
+                        (
+                            float(row["grid_to_home_kwh"])
+                            + float(row["charge_from_grid_kwh"])
+                        ) * float(row.get("import_price") or 0.0)
+                        - float(row["solar_export_kwh"])
+                        * float(row.get("export_price") or 0.0)
+                        for row in rows
+                    )
+                saving = route_cost(route) - route_cost(trial)
+                if saving <= _EPS:
+                    continue
+                if best_shift is None or saving > best_shift[0]:
+                    best_shift = (saving, index, maximum)
+            if best_shift is not None:
+                break
+        if best_shift is None:
+            break
+        _, chosen_index, amount = best_shift
+        trade_charge[chosen_index] = trade_charge.get(chosen_index, 0.0) + amount
+        economic_charge_kwh += amount
+
     # Safety does not disable trade route-wide.  Evaluate one best ordinary
     # arbitrage pair in the remaining free route.
     route = simulate()
@@ -638,17 +712,13 @@ def _build_planner(
     for charge_index, charge_row in enumerate(route[:-1]):
         if charge_row["manual_slots"]:
             continue
-        if safety.get(charge_index, 0.0) > _EPS:
+        if safety.get(charge_index, 0.0) > _EPS or trade_charge.get(charge_index, 0.0) > _EPS:
             continue
         if charge_row.get("import_price") is None:
             continue
         if float(charge_row["charge_headroom_kwh"]) <= _EPS:
             continue
-        if (
-            usable_from_start is not None
-            and charge_index < usable_from_start
-        ):
-            continue
+        # Usable solar is a forecast marker, never an economic cutoff.
 
         cycle_cost = float(charge_row["import_price"]) / roundtrip
         for discharge_index in range(charge_index + 1, len(route)):
@@ -836,6 +906,12 @@ def _build_planner(
         "dynamic_need_until_usable_solar_kwh": round(
             float(start_reserve["need_home_kwh"]), 6
         ),
+        "planning_need_until_solar_kwh": round(float(start_reserve["need_home_kwh"]), 6),
+        "hard_safety_floor_soc": base_floor,
+        "usable_battery_kwh": round(max(0.0, (start_soc_percent - base_floor) * capacity_kwh / 100.0), 6),
+        "unavoidable_grid_import_kwh": round(sum(float(row["grid_to_home_kwh"]) for row in final), 6),
+        "economic_reserved_kwh": round(economic_charge_kwh * charge_efficiency, 6),
+        "discharge_block_reason": None,
         "next_usable_solar": start_reserve["next_usable_solar"],
         "solar_horizon_complete": bool(
             start_reserve["solar_horizon_complete"]
