@@ -16,7 +16,7 @@ from .automatic_combined_planner_model import (
     build_planner_bundle,
 )
 
-RUNTIME_VERSION = "automatic_combined_cached_executor_v1"
+RUNTIME_VERSION = "automatic_combined_sequential_stages_v2"
 PLANNER_POLICY_VERSION = "manual_priority_parity_v1"
 PLANNER_COMPUTE_BUDGET_SECONDS = 20.0
 
@@ -141,24 +141,36 @@ def compute_planner_bundle(
     price_by_start: Mapping[str, Mapping[str, Any]],
     settings: Mapping[str, Any],
     check_work: Callable[[], None] | None = None,
+    stage: str = "both",
+    automatic_snapshot: Mapping[str, Any] | None = None,
+    prebuilt_energy_slots: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Compute Automatic and Combined Planner results outside the event loop."""
+    """Compute the selected stage in one executor, never both for live runs.
+
+    The legacy both-stage API remains available for regression tests. The
+    sequential manager requests Automatic first and later Combined from the
+    exact same prepared 288 quarter inputs, so manual-only changes never
+    re-run the Automatic policy or its Energy forecast.
+    """
     if check_work is not None:
         check_work()
-    forecast = EnergyBaselineForecast(
-        energy_records,
-        local_timezone=local_timezone,
-    ).build(energy_profile, now=_as_utc(reference))
-    if check_work is not None:
-        check_work()
-    energy_slots = [
-        {
-            "start": slot.start.isoformat(),
-            "end": slot.end.isoformat(),
-            "home_kwh": slot.energy_kwh,
-        }
-        for slot in forecast
-    ]
+    if prebuilt_energy_slots is None:
+        forecast = EnergyBaselineForecast(
+            energy_records,
+            local_timezone=local_timezone,
+        ).build(energy_profile, now=_as_utc(reference))
+        if check_work is not None:
+            check_work()
+        energy_slots = [
+            {
+                "start": slot.start.isoformat(),
+                "end": slot.end.isoformat(),
+                "home_kwh": slot.energy_kwh,
+            }
+            for slot in forecast
+        ]
+    else:
+        energy_slots = [dict(row) for row in prebuilt_energy_slots]
 
     bundle = build_planner_bundle(
         energy_slots=energy_slots,
@@ -178,6 +190,8 @@ def compute_planner_bundle(
             settings["minimum_trade_margin_eur_per_kwh"]
         ),
         check_work=check_work,
+        stage=stage,
+        automatic_snapshot=automatic_snapshot,
     )
 
     if check_work is not None:
@@ -210,4 +224,6 @@ def compute_planner_bundle(
     bundle["planner_cycle_id"] = planner_cycle_id(reference)
     bundle["planner_reference"] = _as_utc(reference).isoformat()
     bundle["planner_input_signature"] = signature
+    if stage == "automatic":
+        bundle["_prepared_energy_slots"] = energy_slots
     return bundle
