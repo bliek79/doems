@@ -697,10 +697,12 @@ def _build_planner(
         ):
             continue
         purchase_price = float(row["import_price"])
-        future_cost_threshold = (
-            purchase_price / roundtrip
-            + minimum_trade_margin_eur_per_kwh
-        )
+        # The configured minimum_trade_margin is for optional sell-to-grid
+        # arbitrage, not for economically worthwhile future *home* import.
+        # For home precharging, round-trip efficiency and the actual simulated
+        # import/export cost decide. An extra 0.10 EUR/kWh would wrongly reject
+        # valid price shifting such as 0.18 now versus 0.29 later.
+        future_cost_threshold = purchase_price / roundtrip
         # Sum only future *uncovered* home demand that costs more than the
         # full cycle. Solar already credited to home/battery by simulation.
         valuable_home_need_kwh = sum(
