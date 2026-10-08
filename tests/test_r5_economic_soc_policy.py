@@ -26,13 +26,15 @@ def test_r5_future_home_need_never_becomes_hard_soc_floor():
 
 
 def test_r5_cheaper_grid_charge_before_usable_solar_avoids_expensive_home_import():
-    energy, solar = _axis(home_kwh=0.04)
+    energy, solar = _axis(home_kwh=0.20)
+    for i in range(8):
+        energy[i]["home_kwh"] = 0.0
     for i in range(32, 40):
-        solar[i]["solar_kwh"] = 0.15
+        solar[i]["solar_kwh"] = 0.50
     prices = _prices(energy, import_price=0.42, export_price=0.10)
     for i in range(8):
         prices[energy[i]["start"]]["import_all_in"] = 0.09
-    result = _run(energy, solar, prices, soc=12.0)
+    result = _run(energy, solar, prices, soc=10.0)
     assert result["native_slot_count"] == 288
     assert sum(row["charge_from_grid_kwh"] for row in result["native_slots"][:8]) > 0
     assert result["unavoidable_grid_import_kwh"] >= 0
