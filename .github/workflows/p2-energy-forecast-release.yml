@@ -19,7 +19,7 @@ jobs:
           python-version: "3.13"
       - run: python -m pip install --upgrade pip pytest
       - run: python -m compileall -q custom_components/doems
-      - run: pytest -q
+      - run: pytest -q --durations=15
       - name: Validate JSON files
         run: |
           python - <<'PY'
