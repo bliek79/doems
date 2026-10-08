@@ -20,10 +20,10 @@ from .const import (
     CONF_BATTERY_PRESENT,
     CONF_BATTERY_SOC_ENTITY,
     CONF_BATTERY_STATUS_ENTITY,
-    CONF_R5_1_MAX_CHARGE_POWER_W,
-    CONF_R5_1_MAX_DISCHARGE_POWER_W,
-    CONF_R5_1_MINIMUM_TRADE_MARGIN_EUR_PER_KWH,
-    CONF_R5_1_SOFTWARE_RESERVE_PERCENT,
+    CONF_PLANNER_MAX_CHARGE_POWER_W,
+    CONF_PLANNER_MAX_DISCHARGE_POWER_W,
+    CONF_PLANNER_MINIMUM_TRADE_MARGIN_EUR_PER_KWH,
+    CONF_PLANNER_SOFTWARE_RESERVE_PERCENT,
     CONF_ELECTRICITY_EXPORT_SUPPLIER,
     CONF_ELECTRICITY_EXPORT_TAX,
     CONF_ELECTRICITY_FIXED_SUPPLY_PER_DAY,
@@ -63,10 +63,10 @@ from .const import (
     CONF_TARIFF_VALID_FROM,
     CONF_VAT_PERCENT,
     DEFAULT_INSTANCE_NAME,
-    DEFAULT_R5_1_MAX_CHARGE_POWER_W,
-    DEFAULT_R5_1_MAX_DISCHARGE_POWER_W,
-    DEFAULT_R5_1_MINIMUM_TRADE_MARGIN_EUR_PER_KWH,
-    DEFAULT_R5_1_SOFTWARE_RESERVE_PERCENT,
+    DEFAULT_PLANNER_MAX_CHARGE_POWER_W,
+    DEFAULT_PLANNER_MAX_DISCHARGE_POWER_W,
+    DEFAULT_PLANNER_MINIMUM_TRADE_MARGIN_EUR_PER_KWH,
+    DEFAULT_PLANNER_SOFTWARE_RESERVE_PERCENT,
     DOMAIN,
     ENERGY_SOURCE_BALANCE,
     ENERGY_SOURCE_DIRECT,
@@ -231,7 +231,7 @@ def _validate_gas_market_entity(hass: HomeAssistant, entity_id: str | None) -> s
 
 class DOEMSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
-    MINOR_VERSION = 6
+    MINOR_VERSION = 7
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         await self.async_set_unique_id(DOMAIN)
@@ -309,10 +309,10 @@ class DOEMSOptionsFlow(OptionsFlow):
                 vol.Required(CONF_BATTERY_OBSERVATION_ENABLED, default=bool(self._current(CONF_BATTERY_OBSERVATION_ENABLED, False))): bool,
                 vol.Required(CONF_SOLAR_FOUNDATION_ENABLED, default=bool(self._current(CONF_SOLAR_FOUNDATION_ENABLED, False))): bool,
                 vol.Required(CONF_PRICES_ENABLED, default=bool(self._current(CONF_PRICES_ENABLED, False))): bool,
-                vol.Required(CONF_R5_1_SOFTWARE_RESERVE_PERCENT, default=float(self._current(CONF_R5_1_SOFTWARE_RESERVE_PERCENT, DEFAULT_R5_1_SOFTWARE_RESERVE_PERCENT))): _number(0.0, 30.0, 0.5, "%"),
-                vol.Required(CONF_R5_1_MAX_CHARGE_POWER_W, default=float(self._current(CONF_R5_1_MAX_CHARGE_POWER_W, DEFAULT_R5_1_MAX_CHARGE_POWER_W))): _number(100.0, 3500.0, 100.0, "W"),
-                vol.Required(CONF_R5_1_MAX_DISCHARGE_POWER_W, default=float(self._current(CONF_R5_1_MAX_DISCHARGE_POWER_W, DEFAULT_R5_1_MAX_DISCHARGE_POWER_W))): _number(100.0, 3500.0, 100.0, "W"),
-                vol.Required(CONF_R5_1_MINIMUM_TRADE_MARGIN_EUR_PER_KWH, default=float(self._current(CONF_R5_1_MINIMUM_TRADE_MARGIN_EUR_PER_KWH, DEFAULT_R5_1_MINIMUM_TRADE_MARGIN_EUR_PER_KWH))): _number(0.0, 2.0, 0.01, "EUR/kWh"),
+                vol.Required(CONF_PLANNER_SOFTWARE_RESERVE_PERCENT, default=float(self._current(CONF_PLANNER_SOFTWARE_RESERVE_PERCENT, DEFAULT_PLANNER_SOFTWARE_RESERVE_PERCENT))): _number(0.0, 30.0, 0.5, "%"),
+                vol.Required(CONF_PLANNER_MAX_CHARGE_POWER_W, default=float(self._current(CONF_PLANNER_MAX_CHARGE_POWER_W, DEFAULT_PLANNER_MAX_CHARGE_POWER_W))): _number(100.0, 3500.0, 100.0, "W"),
+                vol.Required(CONF_PLANNER_MAX_DISCHARGE_POWER_W, default=float(self._current(CONF_PLANNER_MAX_DISCHARGE_POWER_W, DEFAULT_PLANNER_MAX_DISCHARGE_POWER_W))): _number(100.0, 3500.0, 100.0, "W"),
+                vol.Required(CONF_PLANNER_MINIMUM_TRADE_MARGIN_EUR_PER_KWH, default=float(self._current(CONF_PLANNER_MINIMUM_TRADE_MARGIN_EUR_PER_KWH, DEFAULT_PLANNER_MINIMUM_TRADE_MARGIN_EUR_PER_KWH))): _number(0.0, 2.0, 0.01, "EUR/kWh"),
             }),
         )
 
