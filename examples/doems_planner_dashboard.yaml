@@ -1,0 +1,1602 @@
+type: custom:layout-card
+layout_type: custom:grid-layout
+layout:
+  grid-template-columns: 1fr
+  grid-template-rows: 106px 1032px
+  grid-template-areas: |
+    "header"
+    "main"
+  grid-row-gap: 6px
+  grid-column-gap: 0px
+cards:
+  - type: custom:button-card
+    entity: sensor.doems_combined_planner
+    triggers_update:
+      - sensor.doems_combined_planner
+      - sensor.doems_plan_1_status
+      - sensor.doems_plan_2_status
+      - sensor.doems_plan_3_status
+      - sensor.anker_solix_solarbank_max_ac_185_soc
+      - sensor.anker_solix_solarbank_max_ac_185_laadvermogen_van_de_batterij
+      - sensor.anker_solix_solarbank_max_ac_185_ontlaadvermogen_van_de_batterij
+      - select.anker_solix_solarbank_max_ac_185_bedrijfsmodus_apparaat_werkt_in_externe_modus
+    view_layout:
+      grid-area: header
+    show_icon: false
+    show_name: false
+    show_state: false
+    show_label: false
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    styles:
+      card:
+        - height: 106px
+        - border-radius: 26px
+        - padding: 8px 18px
+        - overflow: hidden
+        - background: |-
+            radial-gradient(
+              circle at top left,
+              rgba(0,200,255,0.14),
+              transparent 34%
+            ),
+            linear-gradient(
+              145deg,
+              rgba(6,20,34,0.98),
+              rgba(8,26,44,0.96) 48%,
+              rgba(5,14,28,0.96)
+            )
+        - border: 1px solid rgba(0,200,255,0.28)
+        - box-shadow: >-
+            0 18px 44px rgba(0,0,0,0.45), 0 0 18px rgba(0,200,255,0.14), inset 0
+            0 28px rgba(0,200,255,0.05)
+      grid:
+        - grid-template-areas: '"content"'
+        - grid-template-columns: 1fr
+        - grid-template-rows: 1fr
+      custom_fields:
+        content:
+          - width: 100%
+          - height: 100%
+    custom_fields:
+      content: |
+        [[[
+          const planner = entity && entity.attributes ? entity.attributes : {};
+
+          const socEntity = hass.states['sensor.anker_solix_solarbank_max_ac_185_soc'];
+          const chargeEntity = hass.states['sensor.anker_solix_solarbank_max_ac_185_laadvermogen_van_de_batterij'];
+          const dischargeEntity = hass.states['sensor.anker_solix_solarbank_max_ac_185_ontlaadvermogen_van_de_batterij'];
+          const modeEntity = hass.states['select.anker_solix_solarbank_max_ac_185_bedrijfsmodus_apparaat_werkt_in_externe_modus'];
+
+          const number = value => {
+            const n = Number(value);
+            return Number.isFinite(n) ? n : null;
+          };
+
+          const fmtPower = value => {
+            const n = number(value);
+            if (n === null) return '—';
+            return `${Math.round(Math.abs(n)).toLocaleString('nl-NL')} W`;
+          };
+
+          const fmtWhen = value => {
+            if (!value) return null;
+            const d = new Date(value);
+            if (Number.isNaN(d.getTime())) return null;
+            return d.toLocaleString('nl-NL', {
+              day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+            });
+          };
+
+          const actionText = action => {
+            if (action === 'laden' || action === 'charge') return 'Laden';
+            if (action === 'ontladen' || action === 'discharge') return 'Ontladen';
+            return action ? String(action).replaceAll('_', ' ') : 'Actie';
+          };
+
+          const modeRaw = modeEntity ? modeEntity.state : null;
+          const modeText =
+            modeRaw === 'third_party_control'
+              ? 'Externe sturing'
+              : modeRaw === 'self_consumption'
+                ? 'Zelfverbruik'
+                : modeRaw && !['unknown','unavailable'].includes(modeRaw)
+                  ? String(modeRaw).replaceAll('_', ' ')
+                  : 'Modus —';
+
+          const plannerValid = planner.valid === true;
+          const plannerStatus = planner.status || (plannerValid ? 'ready' : '—');
+          const plannerCount = number(planner.clock_hour_bucket_count);
+          const plannerValue = plannerValid ? 'Geldig' : 'Controleren';
+          const plannerColor = plannerValid ? '#22C55E' : '#FFB74D';
+          const plannerLabel =
+            plannerCount !== null
+              ? `${Math.round(plannerCount)} uur · ${String(plannerStatus).replaceAll('_', ' ')}`
+              : String(plannerStatus).replaceAll('_', ' ');
+
+          const soc = number(socEntity ? socEntity.state : null);
+          const chargePower = number(chargeEntity ? chargeEntity.state : null);
+          const dischargePower = number(dischargeEntity ? dischargeEntity.state : null);
+
+          let batteryAction = 'Stand-by';
+          let batteryPower = 0;
+          if (chargePower !== null && chargePower > 20) {
+            batteryAction = 'Laden';
+            batteryPower = chargePower;
+          } else if (dischargePower !== null && dischargePower > 20) {
+            batteryAction = 'Ontladen';
+            batteryPower = dischargePower;
+          }
+
+          const batteryValue =
+            soc !== null
+              ? `${Math.round(soc)}<span style="margin-left:2px;font-size:10px;font-weight:800;color:#B8C7D9;">%</span>`
+              : '—';
+          const batteryLabel = `${batteryAction} · ${fmtPower(batteryPower)} · ${modeText}`;
+
+          const manualPlans = [1, 2, 3]
+            .map(slot => {
+              const state = hass.states[`sensor.doems_plan_${slot}_status`];
+              const detail = state && state.attributes ? state.attributes : {};
+              const planStart = detail.start_time || null;
+              const ts = planStart ? new Date(planStart).getTime() : NaN;
+              const action = detail.action;
+              const lifecycle = detail.lifecycle_status;
+              const usable =
+                action && action !== 'geen' &&
+                !['voltooid','geannuleerd','fout','verlopen'].includes(lifecycle);
+              return { slot, detail, planStart, ts, usable };
+            })
+            .filter(item => item.usable && Number.isFinite(item.ts))
+            .sort((x, y) => x.ts - y.ts);
+
+          const automatic = planner.next_candidate || null;
+          let nextValue = 'Geen actie';
+          let nextLabel = 'Geen komende actie';
+          let nextColor = '#8FA6BD';
+
+          if (manualPlans.length > 0) {
+            const next = manualPlans[0];
+            nextValue = 'Handmatig';
+            nextColor = '#FFFFFF';
+            nextLabel =
+              `Plan ${next.slot} · ${actionText(next.detail.action)}` +
+              `${fmtWhen(next.planStart) ? ` · ${fmtWhen(next.planStart)}` : ''}`;
+          } else if (automatic && automatic.time) {
+            nextValue = 'Automatisch';
+            nextColor = '#22D3EE';
+            nextLabel =
+              `${actionText(automatic.action)} · ${String(automatic.type || '').replaceAll('_', ' ')}` +
+              `${fmtWhen(automatic.time) ? ` · ${fmtWhen(automatic.time)}` : ''}`;
+          }
+
+          const block = (icon, title, value, label, color) => `
+            <div style="height:88px;box-sizing:border-box;border-radius:18px;padding:10px 12px;background:rgba(17,38,54,0.78);border:1px solid rgba(0,229,255,0.18);box-shadow:inset 0 0 18px rgba(0,229,255,0.035);display:grid;grid-template-columns:34px 1fr;grid-template-rows:18px 34px 18px;grid-template-areas:'icon title' 'icon value' 'icon label';column-gap:9px;align-items:center;">
+              <ha-icon icon="${icon}" style="grid-area:icon;width:22px;height:22px;color:${color};justify-self:center;"></ha-icon>
+              <div style="grid-area:title;align-self:end;color:#FFFFFF;font-size:11px;font-weight:800;letter-spacing:.04em;white-space:nowrap;">${title}</div>
+              <div style="grid-area:value;align-self:center;color:${color};font-size:21px;font-weight:850;white-space:nowrap;">${value}</div>
+              <div style="grid-area:label;align-self:start;color:#8FA6BD;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${label}</div>
+            </div>
+          `;
+
+          const logo = `
+            <div style="height:88px;box-sizing:border-box;border-radius:18px;padding:6px;background:rgba(17,38,54,0.78);border:1px solid rgba(0,229,255,0.18);box-shadow:inset 0 0 18px rgba(0,229,255,0.035);display:flex;align-items:center;justify-content:center;">
+              <img src="/local/dummy_os/DummyOS_Horizontal_Glow.png" style="height:68px;width:auto;max-width:95%;object-fit:contain;display:block;filter:drop-shadow(0 0 12px rgba(0,229,255,.42));">
+            </div>
+          `;
+
+          return `
+            <div style="width:100%;height:88px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;">
+              ${logo}
+              ${block('mdi:timeline-clock-outline','COMBINED PLANNER',plannerValue,plannerLabel,plannerColor)}
+              ${block('mdi:battery-high','BATTERIJ LIVE',batteryValue,batteryLabel,'#FF8A00')}
+              ${block('mdi:play-circle-outline','VOLGENDE ACTIE',nextValue,nextLabel,nextColor)}
+            </div>
+          `;
+        ]]]
+  - type: custom:button-card
+    view_layout:
+      grid-area: main
+    show_icon: false
+    show_name: false
+    show_state: false
+    show_label: false
+    tap_action:
+      action: none
+    hold_action:
+      action: none
+    card_mod:
+      style: |
+        ha-card {
+          height: 1032px !important;
+          min-height: 1032px !important;
+          max-height: 1032px !important;
+          overflow: hidden !important;
+        }
+    styles:
+      card:
+        - height: 1032px
+        - min-height: 1032px
+        - max-height: 1032px
+        - border-radius: 28px
+        - padding: 10px
+        - overflow: hidden
+        - background: |-
+            radial-gradient(
+              circle at top left,
+              rgba(0,200,255,0.14),
+              transparent 34%
+            ),
+            linear-gradient(
+              145deg,
+              rgba(6,20,34,0.98),
+              rgba(8,26,44,0.96) 48%,
+              rgba(5,14,28,0.96)
+            )
+        - border: 1px solid rgba(0,200,255,0.28)
+        - box-shadow: >-
+            0 18px 44px rgba(0,0,0,0.45), 0 0 18px rgba(0,200,255,0.14), inset 0
+            0 28px rgba(0,200,255,0.05)
+        - box-sizing: border-box
+  - type: custom:layout-card
+    view_layout:
+      grid-area: main
+    layout_type: custom:grid-layout
+    layout:
+      grid-template-columns: repeat(8, minmax(0, 1fr))
+      grid-template-rows: 500px 500px
+      grid-template-areas: |
+        "chart chart chart chart chart chart chart chart"
+        "balance balance balance balance balance balance balance balance"
+      grid-row-gap: 12px
+      grid-column-gap: 12px
+      margin: 10px
+      padding: 0
+    cards:
+      - type: custom:apexcharts-card
+        view_layout:
+          grid-area: chart
+        graph_span: 72h
+        span:
+          start: minute
+        update_interval: 15min
+        header:
+          show: true
+          title: DOEMS Combined Planner · energie · SOC · reserve · prijs
+          show_states: false
+          colorize_states: false
+        now:
+          show: true
+          label: Nu
+          color: '#FFFFFF'
+        yaxis:
+          - id: energy
+            min: 0
+            decimals: 1
+            apex_config:
+              tickAmount: 5
+              forceNiceScale: true
+              title:
+                text: Energie per uur (kWh)
+                style:
+                  color: '#FFD600'
+                  fontSize: 11px
+                  fontWeight: 700
+              labels:
+                style:
+                  colors:
+                    - '#FFD600'
+                  fontSize: 10px
+                formatter: |
+                  EVAL:function(value) {
+                    return Number(value).toLocaleString(
+                      "nl-NL",
+                      {
+                        minimumFractionDigits: 1,
+                        maximumFractionDigits: 1
+                      }
+                    );
+                  }
+          - id: price
+            opposite: true
+            decimals: 1
+            apex_config:
+              tickAmount: 5
+              forceNiceScale: true
+              title:
+                text: Prijs (ct/kWh)
+                style:
+                  color: '#22C55E'
+                  fontSize: 11px
+                  fontWeight: 700
+              labels:
+                style:
+                  colors:
+                    - '#22C55E'
+                  fontSize: 10px
+                formatter: |
+                  EVAL:function(value) {
+                    return Number(value).toLocaleString(
+                      "nl-NL",
+                      {
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 1
+                      }
+                    ) + " ct";
+                  }
+          - id: soc
+            opposite: true
+            min: 0
+            max: 100
+            decimals: 0
+            apex_config:
+              tickAmount: 5
+              title:
+                text: SOC / reserve (%)
+                style:
+                  color: '#FF8A00'
+                  fontSize: 11px
+                  fontWeight: 700
+              labels:
+                style:
+                  colors:
+                    - '#FF8A00'
+                  fontSize: 10px
+                formatter: |
+                  EVAL:function(value) {
+                    return Math.round(Number(value)) + "%";
+                  }
+        apex_config:
+          chart:
+            height: 435
+            stacked: false
+            background: transparent
+            foreColor: '#B8C7D9'
+            toolbar:
+              show: false
+            zoom:
+              enabled: false
+            animations:
+              enabled: false
+          stroke:
+            curve: straight
+            lineCap: round
+          fill:
+            type: solid
+          markers:
+            size: 0
+          legend:
+            show: false
+            position: top
+            horizontalAlign: left
+            fontSize: 10px
+            fontWeight: 600
+            labels:
+              colors: '#B8C7D9'
+            markers:
+              width: 8
+              height: 8
+              radius: 4
+            itemMargin:
+              horizontal: 8
+              vertical: 4
+          dataLabels:
+            enabled: false
+          grid:
+            show: true
+            borderColor: rgba(120,200,255,0.16)
+            strokeDashArray: 3
+            xaxis:
+              lines:
+                show: true
+            padding:
+              left: 4
+              right: 8
+              top: 0
+              bottom: 2
+          xaxis:
+            type: datetime
+            tickAmount: 24
+            axisBorder:
+              show: true
+              color: rgba(184,199,217,0.70)
+              height: 1
+            axisTicks:
+              show: true
+              color: rgba(184,199,217,0.70)
+              height: 6
+            labels:
+              datetimeUTC: false
+              rotate: 0
+              offsetY: -2
+              hideOverlappingLabels: true
+              style:
+                colors: '#FFFFFF'
+                fontSize: 11px
+                fontWeight: 700
+              formatter: |
+                EVAL:function(value, timestamp, opts) {
+                  const raw =
+                    Number.isFinite(Number(timestamp))
+                      ? Number(timestamp)
+                      : (
+                          Number.isFinite(Number(value))
+                            ? Number(value)
+                            : Date.parse(value)
+                        );
+
+                  if (!Number.isFinite(raw)) {
+                    return "";
+                  }
+
+                  const date = new Date(raw);
+                  const hour = date.getHours();
+
+                  if (hour < 3) {
+                    return date.toLocaleDateString(
+                      "nl-NL",
+                      {
+                        weekday: "short",
+                        day: "2-digit",
+                        month: "2-digit"
+                      }
+                    );
+                  }
+
+                  return String(hour).padStart(
+                    2,
+                    "0"
+                  ) + ":00";
+                }
+          tooltip:
+            shared: true
+            intersect: false
+            followCursor: true
+            theme: dark
+            x:
+              formatter: |
+                EVAL:function(value) {
+                  return new Date(value).toLocaleString(
+                    "nl-NL",
+                    {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                      hour: "2-digit",
+                      minute: "2-digit"
+                    }
+                  );
+                }
+        series:
+          - entity: sensor.doems_combined_planner
+            name: Zonneproductie
+            type: area
+            yaxis_id: energy
+            color: '#FFD600'
+            opacity: 0.11
+            stroke_width: 0.8
+            curve: smooth
+            extend_to: false
+            float_precision: 3
+            unit: kWh
+            data_generator: |
+              const plan =
+                entity.attributes
+                  ? entity.attributes.plan
+                  : null;
+
+              if (!Array.isArray(plan))
+                return [];
+
+              return plan
+                .map(item => {
+                  const t =
+                    new Date(item.time).getTime();
+
+                  const v =
+                    Number(item.solar_kwh);
+
+                  return (
+                    Number.isFinite(t) &&
+                    Number.isFinite(v)
+                  )
+                    ? [t, Math.max(0, v)]
+                    : null;
+                })
+                .filter(Boolean);
+          - entity: sensor.doems_combined_planner
+            name: Verwacht woningverbruik
+            type: line
+            yaxis_id: energy
+            color: '#FFFFFF'
+            opacity: 1
+            stroke_width: 2.2
+            stroke_dash: 6
+            curve: smooth
+            extend_to: false
+            float_precision: 3
+            unit: kWh
+            data_generator: |
+              const plan =
+                entity.attributes
+                  ? entity.attributes.plan
+                  : null;
+
+              if (!Array.isArray(plan))
+                return [];
+
+              return plan
+                .map(item => {
+                  const t =
+                    new Date(item.time).getTime();
+
+                  const v =
+                    Number(
+                      item.home_consumption_kwh
+                    );
+
+                  return (
+                    Number.isFinite(t) &&
+                    Number.isFinite(v)
+                  )
+                    ? [t, Math.max(0, v)]
+                    : null;
+                })
+                .filter(Boolean);
+          - entity: sensor.doems_combined_planner
+            name: Laden uit zon
+            type: area
+            yaxis_id: energy
+            color: '#FF4D8D'
+            opacity: 0.18
+            stroke_width: 1
+            curve: stepline
+            extend_to: false
+            float_precision: 3
+            unit: kWh
+            data_generator: |
+              const plan =
+                entity.attributes
+                  ? entity.attributes.plan
+                  : null;
+
+              if (!Array.isArray(plan))
+                return [];
+
+              return plan
+                .map(item => {
+                  const t =
+                    new Date(item.time).getTime();
+
+                  const v =
+                    Number(
+                      item.charge_from_solar_kwh
+                    );
+
+                  return (
+                    Number.isFinite(t) &&
+                    Number.isFinite(v)
+                  )
+                    ? [t, Math.max(0, v)]
+                    : null;
+                })
+                .filter(Boolean);
+          - entity: sensor.doems_combined_planner
+            name: Veiligheidsladen
+            type: area
+            yaxis_id: energy
+            color: '#2196F3'
+            opacity: 0.25
+            stroke_width: 1.1
+            curve: stepline
+            extend_to: false
+            float_precision: 3
+            unit: kWh
+            data_generator: |
+              const plan =
+                entity.attributes
+                  ? entity.attributes.plan
+                  : null;
+
+              if (!Array.isArray(plan))
+                return [];
+
+              return plan
+                .map(item => {
+                  const t =
+                    new Date(item.time).getTime();
+
+                  const v =
+                    Number(
+                      item.charge_from_grid_safety_kwh
+                    );
+
+                  return (
+                    Number.isFinite(t) &&
+                    Number.isFinite(v)
+                  )
+                    ? [t, Math.max(0, v)]
+                    : null;
+                })
+                .filter(Boolean);
+          - entity: sensor.doems_combined_planner
+            name: Handelsladen
+            type: area
+            yaxis_id: energy
+            color: '#2196F3'
+            opacity: 0.23
+            stroke_width: 1.1
+            curve: stepline
+            extend_to: false
+            float_precision: 3
+            unit: kWh
+            data_generator: |
+              const plan =
+                entity.attributes
+                  ? entity.attributes.plan
+                  : null;
+
+              if (!Array.isArray(plan))
+                return [];
+
+              return plan
+                .map(item => {
+                  const t =
+                    new Date(item.time).getTime();
+
+                  const v =
+                    Number(
+                      item.charge_from_grid_trade_kwh
+                    );
+
+                  return (
+                    Number.isFinite(t) &&
+                    Number.isFinite(v)
+                  )
+                    ? [t, Math.max(0, v)]
+                    : null;
+                })
+                .filter(Boolean);
+          - entity: sensor.doems_combined_planner
+            name: Ontladen naar woning
+            type: area
+            yaxis_id: energy
+            color: '#00E5FF'
+            opacity: 0.18
+            stroke_width: 1
+            curve: stepline
+            extend_to: false
+            float_precision: 3
+            unit: kWh
+            data_generator: |
+              const plan =
+                entity.attributes
+                  ? entity.attributes.plan
+                  : null;
+
+              if (!Array.isArray(plan))
+                return [];
+
+              return plan
+                .map(item => {
+                  const t =
+                    new Date(item.time).getTime();
+
+                  const v =
+                    Number(
+                      item.discharge_to_home_kwh
+                    );
+
+                  return (
+                    Number.isFinite(t) &&
+                    Number.isFinite(v)
+                  )
+                    ? [t, Math.max(0, v)]
+                    : null;
+                })
+                .filter(Boolean);
+          - entity: sensor.doems_combined_planner
+            name: Ontladen naar net
+            type: area
+            yaxis_id: energy
+            color: '#B86CFF'
+            opacity: 0.22
+            stroke_width: 1
+            curve: stepline
+            extend_to: false
+            float_precision: 3
+            unit: kWh
+            data_generator: |
+              const plan =
+                entity.attributes
+                  ? entity.attributes.plan
+                  : null;
+
+              if (!Array.isArray(plan))
+                return [];
+
+              return plan
+                .map(item => {
+                  const t =
+                    new Date(item.time).getTime();
+
+                  const v =
+                    Number(
+                      item.discharge_to_grid_kwh
+                    );
+
+                  return (
+                    Number.isFinite(t) &&
+                    Number.isFinite(v)
+                  )
+                    ? [t, Math.max(0, v)]
+                    : null;
+                })
+                .filter(Boolean);
+          - entity: sensor.doems_combined_planner
+            name: Handmatig laden
+            type: area
+            yaxis_id: energy
+            color: '#FF4D8D'
+            opacity: 0.28
+            stroke_width: 1.5
+            stroke_dash: 4
+            curve: stepline
+            extend_to: false
+            float_precision: 3
+            unit: kWh
+            data_generator: |
+              const plan = entity.attributes ? entity.attributes.plan : null;
+              if (!Array.isArray(plan)) return [];
+              return plan.map(item => {
+                const t = new Date(item.time).getTime();
+                const v = Number(item.manual_charge_kwh);
+                return Number.isFinite(t) && Number.isFinite(v)
+                  ? [t, Math.max(0, v)]
+                  : null;
+              }).filter(Boolean);
+          - entity: sensor.doems_combined_planner
+            name: Handmatig ontladen
+            type: area
+            yaxis_id: energy
+            color: '#00E5FF'
+            opacity: 0.28
+            stroke_width: 1.5
+            stroke_dash: 4
+            curve: stepline
+            extend_to: false
+            float_precision: 3
+            unit: kWh
+            data_generator: |
+              const plan = entity.attributes ? entity.attributes.plan : null;
+              if (!Array.isArray(plan)) return [];
+              return plan.map(item => {
+                const t = new Date(item.time).getTime();
+                const v = Number(item.manual_discharge_kwh);
+                return Number.isFinite(t) && Number.isFinite(v)
+                  ? [t, Math.max(0, v)]
+                  : null;
+              }).filter(Boolean);
+          - entity: sensor.doems_combined_planner
+            name: Verwachte SOC
+            type: line
+            yaxis_id: soc
+            color: '#FF8A00'
+            opacity: 1
+            stroke_width: 3
+            stroke_dash: 6
+            curve: straight
+            extend_to: false
+            float_precision: 1
+            unit: '%'
+            data_generator: |
+              const plan =
+                entity.attributes
+                  ? entity.attributes.plan
+                  : null;
+
+              if (!Array.isArray(plan))
+                return [];
+
+              return plan
+                .map(item => {
+                  const t =
+                    new Date(item.time).getTime();
+
+                  const v =
+                    Number(item.soc_end);
+
+                  return (
+                    Number.isFinite(t) &&
+                    Number.isFinite(v)
+                  )
+                    ? [
+                        t,
+                        Math.max(
+                          0,
+                          Math.min(100, v)
+                        )
+                      ]
+                    : null;
+                })
+                .filter(Boolean);
+          - entity: sensor.doems_combined_planner
+            name: Dynamische reserve
+            type: line
+            yaxis_id: soc
+            color: '#FFB74D'
+            opacity: 1
+            stroke_width: 2.2
+            stroke_dash: 3
+            curve: straight
+            extend_to: false
+            float_precision: 1
+            unit: '%'
+            data_generator: |
+              const plan =
+                entity.attributes
+                  ? entity.attributes.plan
+                  : null;
+
+              if (!Array.isArray(plan))
+                return [];
+
+              return plan
+                .map(item => {
+                  const t =
+                    new Date(item.time).getTime();
+
+                  const v =
+                    Number(
+                      item.dynamic_reserve_floor_end_soc_percent
+                    );
+
+                  return (
+                    Number.isFinite(t) &&
+                    Number.isFinite(v)
+                  )
+                    ? [
+                        t,
+                        Math.max(
+                          0,
+                          Math.min(100, v)
+                        )
+                      ]
+                    : null;
+                })
+                .filter(Boolean);
+          - entity: sensor.anker_solix_solarbank_max_ac_185_soc
+            name: Werkelijke SOC
+            type: line
+            yaxis_id: soc
+            color: '#FF8A00'
+            opacity: 1
+            stroke_width: 3
+            curve: straight
+            extend_to: false
+            float_precision: 1
+            unit: '%'
+            group_by:
+              func: avg
+              duration: 15min
+              fill: 'null'
+          - entity: sensor.doems_combined_planner
+            name: Bekende prijs
+            type: line
+            yaxis_id: price
+            color: '#22C55E'
+            opacity: 1
+            stroke_width: 2.5
+            curve: smooth
+            extend_to: false
+            float_precision: 2
+            unit: ct/kWh
+            data_generator: |
+              const plan =
+                entity.attributes
+                  ? entity.attributes.plan
+                  : null;
+
+              if (!Array.isArray(plan))
+                return [];
+
+              return plan
+                .map(item => {
+                  if (item.price_source !== 'known')
+                    return null;
+
+                  const t =
+                    new Date(item.time).getTime();
+
+                  const v =
+                    Number(item.price);
+
+                  return (
+                    Number.isFinite(t) &&
+                    Number.isFinite(v)
+                  )
+                    ? [t, v * 100]
+                    : null;
+                })
+                .filter(Boolean);
+          - entity: sensor.doems_combined_planner
+            name: Prijsprognose
+            type: line
+            yaxis_id: price
+            color: '#22C55E'
+            opacity: 1
+            stroke_width: 2.5
+            stroke_dash: 6
+            curve: smooth
+            extend_to: false
+            float_precision: 2
+            unit: ct/kWh
+            data_generator: |
+              const plan =
+                entity.attributes
+                  ? entity.attributes.plan
+                  : null;
+
+              if (!Array.isArray(plan))
+                return [];
+
+              const points = [];
+              let previousKnown = null;
+
+              for (const item of plan) {
+
+                const t =
+                  new Date(item.time).getTime();
+
+                const v =
+                  Number(item.price);
+
+                if (
+                  !Number.isFinite(t) ||
+                  !Number.isFinite(v)
+                )
+                  continue;
+
+                if (item.price_source === 'known') {
+                  previousKnown = [
+                    t,
+                    v * 100
+                  ];
+
+                  continue;
+                }
+
+                if (
+                  points.length === 0 &&
+                  previousKnown
+                ) {
+                  points.push(previousKnown);
+                }
+
+                if (
+                  item.price_source === 'forecast'
+                ) {
+                  points.push([
+                    t,
+                    v * 100
+                  ]);
+                }
+              }
+
+              return points;
+        card_mod:
+          style: |
+            ha-card {
+              height: 500px !important;
+              min-height: 500px !important;
+              max-height: 500px !important;
+
+              border-radius: 20px !important;
+              padding: 10px !important;
+
+              background:
+                radial-gradient(
+                  circle at top left,
+                  rgba(80,190,255,0.18),
+                  transparent 42%
+                ),
+                rgba(80,190,255,0.055) !important;
+
+              border:
+                1px solid rgba(80,190,255,0.34) !important;
+
+              box-shadow:
+                inset 0 0 18px
+                rgba(80,190,255,0.12) !important;
+
+              overflow: hidden !important;
+              box-sizing: border-box !important;
+            }
+      - type: custom:button-card
+        entity: sensor.doems_combined_planner
+        view_layout:
+          grid-area: balance
+        show_icon: false
+        show_name: false
+        show_state: false
+        show_label: false
+        tap_action:
+          action: more-info
+        styles:
+          card:
+            - height: 500px
+            - border-radius: 20px
+            - padding: 12px
+            - overflow: hidden
+            - background: |-
+                radial-gradient(
+                  circle at top left,
+                  rgba(80,190,255,0.13),
+                  transparent 42%
+                ),
+                rgba(17,38,54,0.78)
+            - border: 1px solid rgba(0,229,255,0.22)
+            - box-shadow: inset 0 0 18px rgba(0,229,255,0.04)
+          grid:
+            - grid-template-areas: '"content"'
+            - grid-template-columns: 1fr
+            - grid-template-rows: 1fr
+          custom_fields:
+            content:
+              - width: 100%
+              - height: 100%
+        custom_fields:
+          content: |
+            [[[
+              const plan =
+                entity &&
+                entity.attributes &&
+                Array.isArray(entity.attributes.plan)
+                  ? entity.attributes.plan
+                  : [];
+
+              if (plan.length === 0) {
+                return `
+                  <div style="
+                    height:100%;
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                    color:#8FA6BD;
+                    font-size:12px;
+                    font-weight:700;
+                  ">
+                    Geen Combined Planner-data beschikbaar
+                  </div>
+                `;
+              }
+
+              const sorted = [...plan]
+                .filter(item => {
+                  const t =
+                    new Date(item.time).getTime();
+
+                  return Number.isFinite(t);
+                })
+                .sort((x, y) => {
+                  return (
+                    new Date(x.time).getTime() -
+                    new Date(y.time).getTime()
+                  );
+                });
+
+              const keyForDate = date => {
+                const y = date.getFullYear();
+
+                const m =
+                  String(
+                    date.getMonth() + 1
+                  ).padStart(2, '0');
+
+                const d =
+                  String(
+                    date.getDate()
+                  ).padStart(2, '0');
+
+                return `${y}-${m}-${d}`;
+              };
+
+              const days = {};
+
+              const createDay = (
+                key,
+                date
+              ) => ({
+                key: key,
+                date: date,
+                hours: 0,
+
+                home: 0,
+                homeCount: 0,
+
+                solar: 0,
+                solarCount: 0,
+
+                direct: 0,
+                directCount: 0,
+
+                chargeSolar: 0,
+                chargeSolarCount: 0,
+
+                chargeGrid: 0,
+                chargeGridCount: 0,
+
+                dischargeHome: 0,
+                dischargeHomeCount: 0,
+
+                dischargeGrid: 0,
+                dischargeGridCount: 0,
+
+                socEnd: null,
+                lastTimestamp: null
+              });
+
+              const addValue = (
+                day,
+                value,
+                sumKey,
+                countKey
+              ) => {
+                const n = Number(value);
+
+                if (!Number.isFinite(n))
+                  return;
+
+                day[sumKey] += n;
+                day[countKey] += 1;
+              };
+
+              for (const item of sorted) {
+
+                const timestamp =
+                  new Date(item.time).getTime();
+
+                if (!Number.isFinite(timestamp))
+                  continue;
+
+                const date =
+                  new Date(timestamp);
+
+                const key =
+                  keyForDate(date);
+
+                if (!days[key]) {
+                  days[key] =
+                    createDay(
+                      key,
+                      date
+                    );
+                }
+
+                const day =
+                  days[key];
+
+                day.hours += 1;
+
+                addValue(
+                  day,
+                  item.home_consumption_kwh,
+                  'home',
+                  'homeCount'
+                );
+
+                addValue(
+                  day,
+                  item.solar_kwh,
+                  'solar',
+                  'solarCount'
+                );
+
+                addValue(
+                  day,
+                  item.solar_to_home_kwh,
+                  'direct',
+                  'directCount'
+                );
+
+                addValue(
+                  day,
+                  item.charge_from_solar_kwh,
+                  'chargeSolar',
+                  'chargeSolarCount'
+                );
+
+                const safety =
+                  Number(
+                    item.charge_from_grid_safety_kwh
+                  );
+
+                const trade =
+                  Number(
+                    item.charge_from_grid_trade_kwh
+                  );
+
+                if (
+                  Number.isFinite(safety) &&
+                  Number.isFinite(trade)
+                ) {
+                  day.chargeGrid +=
+                    safety + trade;
+
+                  day.chargeGridCount += 1;
+                }
+
+                addValue(
+                  day,
+                  item.discharge_to_home_kwh,
+                  'dischargeHome',
+                  'dischargeHomeCount'
+                );
+
+                addValue(
+                  day,
+                  item.discharge_to_grid_kwh,
+                  'dischargeGrid',
+                  'dischargeGridCount'
+                );
+
+                const soc =
+                  Number(item.soc_end);
+
+                if (Number.isFinite(soc)) {
+                  if (
+                    day.lastTimestamp === null ||
+                    timestamp >= day.lastTimestamp
+                  ) {
+                    day.socEnd = soc;
+                    day.lastTimestamp = timestamp;
+                  }
+                }
+              }
+
+              const daily =
+                Object.values(days)
+                  .sort((a, b) => {
+                    return (
+                      a.date.getTime() -
+                      b.date.getTime()
+                    );
+                  });
+
+              const fmtEnergy = (
+                value,
+                count
+              ) => {
+
+                if (
+                  !Number.isFinite(value) ||
+                  count === 0
+                )
+                  return '—';
+
+                return value.toLocaleString(
+                  'nl-NL',
+                  {
+                    minimumFractionDigits: 3,
+                    maximumFractionDigits: 3
+                  }
+                );
+              };
+
+              const fmtSoc = value => {
+
+                if (!Number.isFinite(value))
+                  return '—';
+
+                return value.toLocaleString(
+                  'nl-NL',
+                  {
+                    minimumFractionDigits: 1,
+                    maximumFractionDigits: 1
+                  }
+                ) + '%';
+              };
+
+              const headerCell = (
+                label,
+                color = '#8FA6BD'
+              ) => `
+                <div style="
+                  min-width:0;
+                  text-align:center;
+                  font-size:7px;
+                  line-height:1.15;
+                  font-weight:850;
+                  letter-spacing:.02em;
+                  color:${color};
+                  white-space:normal;
+                ">
+                  ${label}
+                </div>
+              `;
+
+              const valueCell = (
+                value,
+                color
+              ) => `
+                <div style="
+                  min-width:0;
+                  text-align:center;
+                  font-size:9px;
+                  line-height:1.15;
+                  font-weight:800;
+                  color:${color};
+                  white-space:nowrap;
+                ">
+                  ${value}
+                </div>
+              `;
+
+              const rows =
+                daily.map(day => {
+
+                  const dayLabel =
+                    day.date.toLocaleDateString(
+                      'nl-NL',
+                      {
+                        weekday:'short',
+                        day:'2-digit',
+                        month:'2-digit'
+                      }
+                    );
+
+                  return `
+                    <div style="
+                      display:grid;
+                      grid-template-columns:
+                        76px
+                        repeat(8,minmax(0,1fr));
+                      align-items:center;
+                      min-height:66px;
+                      padding:7px 4px;
+                      border-radius:12px;
+                      background:
+                        rgba(5,18,32,0.64);
+                      border:
+                        1px solid
+                        rgba(120,200,255,0.14);
+                    ">
+
+                      <div style="
+                        padding-left:5px;
+                        min-width:0;
+                      ">
+
+                        <div style="
+                          color:#FFFFFF;
+                          font-size:10px;
+                          font-weight:850;
+                          white-space:nowrap;
+                        ">
+                          ${dayLabel}
+                        </div>
+
+                        <div style="
+                          margin-top:3px;
+                          color:#70869C;
+                          font-size:8px;
+                          font-weight:700;
+                        ">
+                          ${day.hours} uur
+                        </div>
+
+                      </div>
+
+                      ${valueCell(
+                        fmtEnergy(
+                          day.home,
+                          day.homeCount
+                        ),
+                        '#FFFFFF'
+                      )}
+
+                      ${valueCell(
+                        fmtEnergy(
+                          day.solar,
+                          day.solarCount
+                        ),
+                        '#FFD600'
+                      )}
+
+                      ${valueCell(
+                        fmtEnergy(
+                          day.direct,
+                          day.directCount
+                        ),
+                        '#5EEBFF'
+                      )}
+
+                      ${valueCell(
+                        fmtEnergy(
+                          day.chargeSolar,
+                          day.chargeSolarCount
+                        ),
+                        '#00C853'
+                      )}
+
+                      ${valueCell(
+                        fmtEnergy(
+                          day.chargeGrid,
+                          day.chargeGridCount
+                        ),
+                        '#60A5FA'
+                      )}
+
+                      ${valueCell(
+                        fmtEnergy(
+                          day.dischargeHome,
+                          day.dischargeHomeCount
+                        ),
+                        '#00E5FF'
+                      )}
+
+                      ${valueCell(
+                        fmtEnergy(
+                          day.dischargeGrid,
+                          day.dischargeGridCount
+                        ),
+                        '#B86CFF'
+                      )}
+
+                      ${valueCell(
+                        fmtSoc(day.socEnd),
+                        '#FF8A00'
+                      )}
+
+                    </div>
+                  `;
+                })
+                .join('');
+
+              return `
+                <div style="
+                  width:100%;
+                  height:100%;
+                  display:flex;
+                  flex-direction:column;
+                  gap:7px;
+                ">
+
+                  <div style="
+                    height:46px;
+                    flex:0 0 46px;
+                    display:flex;
+                    align-items:center;
+                    justify-content:space-between;
+                    padding:0 10px;
+                    border-radius:14px;
+                    background:
+                      rgba(0,229,255,0.075);
+                    border:
+                      1px solid
+                      rgba(0,229,255,0.24);
+                  ">
+
+                    <div>
+
+                      <div style="
+                        color:#FFFFFF;
+                        font-size:14px;
+                        font-weight:900;
+                      ">
+                        Combined Planner dagbalans
+                      </div>
+
+                      <div style="
+                        margin-top:2px;
+                        color:#8FA6BD;
+                        font-size:8px;
+                        font-weight:700;
+                      ">
+                        Lokale kalenderdagen · zelfde Combined Planner-bron
+                      </div>
+
+                    </div>
+
+                    <ha-icon
+                      icon="mdi:table-clock"
+                      style="
+                        width:21px;
+                        height:21px;
+                        color:#00E5FF;
+                      ">
+                    </ha-icon>
+
+                  </div>
+
+                  <div style="
+                    display:grid;
+                    grid-template-columns:
+                      76px
+                      repeat(8,minmax(0,1fr));
+                    align-items:end;
+                    min-height:45px;
+                    padding:0 4px 5px 4px;
+                    border-bottom:
+                      1px solid
+                      rgba(120,200,255,0.18);
+                  ">
+
+                    ${headerCell(
+                      'DAG',
+                      '#FFFFFF'
+                    )}
+
+                    ${headerCell(
+                      'WONING<br>kWh',
+                      '#FFFFFF'
+                    )}
+
+                    ${headerCell(
+                      'ZON<br>kWh',
+                      '#FFD600'
+                    )}
+
+                    ${headerCell(
+                      'DIRECT<br>kWh',
+                      '#5EEBFF'
+                    )}
+
+                    ${headerCell(
+                      'LADEN<br>ZON',
+                      '#00C853'
+                    )}
+
+                    ${headerCell(
+                      'LADEN<br>NET',
+                      '#60A5FA'
+                    )}
+
+                    ${headerCell(
+                      'ONTL.<br>WONING',
+                      '#00E5FF'
+                    )}
+
+                    ${headerCell(
+                      'ONTL.<br>NET',
+                      '#B86CFF'
+                    )}
+
+                    ${headerCell(
+                      'SOC<br>EINDE',
+                      '#FF8A00'
+                    )}
+
+                  </div>
+
+                  <div style="
+                    flex:1;
+                    min-height:0;
+                    display:flex;
+                    flex-direction:column;
+                    gap:6px;
+                    overflow:hidden;
+                  ">
+                    ${rows}
+                  </div>
+
+                  <div style="
+                    flex:0 0 27px;
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                    border-radius:9px;
+                    background:
+                      rgba(5,18,32,0.50);
+                    color:#70869C;
+                    font-size:8px;
+                    font-weight:700;
+                  ">
+                    Laden net = veiligheid + handel · handmatige plannen apart in grafiek
+                  </div>
+
+                </div>
+              `;
+            ]]]
