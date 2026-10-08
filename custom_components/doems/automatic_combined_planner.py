@@ -6,6 +6,8 @@ from collections.abc import Callable
 from contextlib import suppress
 from functools import partial
 import logging
+import time
+from threading import Event
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -27,8 +29,14 @@ from .energy_coordinator import DOEMSEnergyCoordinator
 from .manual_plan_model import PLAN_SLOT_COUNT
 from .manual_plan_store import DOEMSManualPlanStore
 from .prices import DOEMSPricesManager
+from .automatic_combined_planner_model import (
+    PlannerComputeBudgetExceeded,
+    PlannerComputeCancelled,
+)
 from .automatic_combined_planner_runtime import (
     RUNTIME_VERSION,
+    PLANNER_COMPUTE_BUDGET_SECONDS,
+    make_planner_work_guard,
     compute_planner_bundle,
     planner_cycle_id,
     planner_request_signature,
@@ -79,6 +87,11 @@ class DOEMSPlannerManager:
         self._shutdown = False
         self._last_battery_ready: bool | None = None
         self._last_capacity_kwh: float | None = None
+        self._active_cancel_event: Event | None = None
+        self._active_generation: int | None = None
+        self._cancel_count = 0
+        self._budget_exceeded_count = 0
+        self._last_compute_seconds: float | None = None
 
     async def async_setup(self) -> None:
         if self.energy is not None:
@@ -125,15 +138,21 @@ class DOEMSPlannerManager:
     async def async_shutdown(self) -> None:
         self._shutdown = True
         self._pending_request = None
+        if self._active_cancel_event is not None:
+            self._active_cancel_event.set()
         for unsub in self._source_unsubs:
             unsub()
         self._source_unsubs.clear()
         task = self._planner_task
         self._planner_task = None
         if task is not None and not task.done():
-            task.cancel()
-            with suppress(asyncio.CancelledError):
-                await task
+            try:
+                # First let cooperative checkpoints terminate the executor.
+                await asyncio.wait_for(task, timeout=3.0)
+            except (asyncio.TimeoutError, asyncio.CancelledError):
+                task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await task
         self._listeners.clear()
 
     def async_add_listener(
@@ -298,6 +317,10 @@ class DOEMSPlannerManager:
                 and not self._planner_task.done()
             ),
             "planner_last_error": self._last_error,
+            "planner_cancel_count": self._cancel_count,
+            "planner_budget_exceeded_count": self._budget_exceeded_count,
+            "planner_last_compute_seconds": self._last_compute_seconds,
+            "planner_compute_budget_seconds": PLANNER_COMPUTE_BUDGET_SECONDS,
         }
 
     def _freeze_request(
@@ -426,6 +449,8 @@ class DOEMSPlannerManager:
     ) -> None:
         self._generation += 1
         self._pending_request = None
+        if self._active_cancel_event is not None:
+            self._active_cancel_event.set()
         self._last_reason = reason
         bundle = self._blocked_bundle(*blockers)
         bundle.update(self._runtime_metadata())
@@ -451,15 +476,21 @@ class DOEMSPlannerManager:
         if (
             (
                 self._planner_task is None
+                and self._cached_bundle.get("status") == "ready"
                 and signature == self._last_request_signature
             )
-            or signature == self._active_signature
+            or (
+                signature == self._active_signature
+                and self._active_generation == self._generation
+            )
             or signature == pending_signature
         ):
             self._same_signature_skip_count += 1
             return False
 
         self._generation += 1
+        if self._active_cancel_event is not None:
+            self._active_cancel_event.set()
         request["generation"] = self._generation
         self._pending_request = request
         if self._planner_task is None or self._planner_task.done():
@@ -495,18 +526,49 @@ class DOEMSPlannerManager:
     ) -> None:
         generation = int(request["generation"])
         signature = str(request["request_signature"])
+        stop = Event()
+        started = time.monotonic()
         self._active_signature = signature
+        self._active_generation = generation
+        self._active_cancel_event = stop
         self._compute_count += 1
         try:
-            worker = partial(
-                compute_planner_bundle,
-                **request["compute_kwargs"],
-            )
-            bundle = await self.hass.async_add_executor_job(worker)
+            def compute() -> dict[str, Any]:
+                # Deadline starts in the executor, not while waiting in its queue.
+                guard = make_planner_work_guard(stop)
+                return compute_planner_bundle(
+                    **request["compute_kwargs"], check_work=guard
+                )
+            bundle = await self.hass.async_add_executor_job(compute)
+        except PlannerComputeCancelled:
+            self._cancel_count += 1
+            return
+        except PlannerComputeBudgetExceeded as err:
+            self._budget_exceeded_count += 1
+            if generation == self._generation and not self._shutdown:
+                self._last_error = str(err)
+                self._last_reason = str(request["reason"])
+                self._last_compute_seconds = round(
+                    time.monotonic() - started, 3
+                )
+                failed = self._blocked_bundle(
+                    "planner_compute_budget_exceeded"
+                )
+                failed.update(self._runtime_metadata())
+                for key in ("automatic", "combined"):
+                    failed[key].update(self._runtime_metadata())
+                self._cached_bundle = failed
+                self._notify()
+            _LOGGER.warning("DOEMS planner work budget exceeded")
+            return
         except asyncio.CancelledError:
+            stop.set()
             raise
         except Exception as err:
             if generation == self._generation:
+                self._last_compute_seconds = round(
+                    time.monotonic() - started, 3
+                )
                 self._last_error = (
                     f"{type(err).__name__}: {err}"
                 )
@@ -526,8 +588,13 @@ class DOEMSPlannerManager:
             )
             return
         finally:
+            self._last_compute_seconds = round(
+                time.monotonic() - started, 3
+            )
             if self._active_signature == signature:
                 self._active_signature = None
+                self._active_generation = None
+                self._active_cancel_event = None
 
         if generation != self._generation:
             self._stale_discard_count += 1
