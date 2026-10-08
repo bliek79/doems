@@ -83,23 +83,49 @@ def _migrate_entity(
     target_unique_entity_id = registry.async_get_entity_id(
         "sensor", DOMAIN, new_unique_id
     )
+
+    # A permanent planner identity may already exist from an earlier DOEMS
+    # build (notably alpha.6.x). In that case the existing permanent target is
+    # authoritative and the temporary alpha.7 registry entry must be retired.
+    # Treat this as an idempotent migration outcome, not as a fatal collision.
     if (
         target_unique_entity_id is not None
         and target_unique_entity_id != old_entity_id
     ):
-        raise RuntimeError(
-            "DOEMS planner identity migration collision for "
-            f"{new_unique_id}: {target_unique_entity_id}"
+        registry.async_remove(old_entity_id)
+        _LOGGER.info(
+            "Retired temporary DOEMS planner entity %s; permanent target "
+            "%s already exists for unique_id %s",
+            old_entity_id,
+            target_unique_entity_id,
+            new_unique_id,
         )
+        return
 
     target_entity = registry.async_get(new_entity_id)
     if (
         target_entity is not None
         and target_entity.entity_id != old_entity_id
     ):
+        # If the requested entity_id already belongs to this same DOEMS
+        # permanent unique-id, keep it and retire the temporary source.
+        if (
+            target_entity.platform == DOMAIN
+            and target_entity.unique_id == new_unique_id
+        ):
+            registry.async_remove(old_entity_id)
+            _LOGGER.info(
+                "Retired temporary DOEMS planner entity %s; permanent entity "
+                "%s already owns target identity %s",
+                old_entity_id,
+                target_entity.entity_id,
+                new_unique_id,
+            )
+            return
         raise RuntimeError(
             "DOEMS planner entity-id migration collision for "
-            f"{new_entity_id}"
+            f"{new_entity_id}: owned by {target_entity.platform}/"
+            f"{target_entity.unique_id}"
         )
 
     registry.async_update_entity(
