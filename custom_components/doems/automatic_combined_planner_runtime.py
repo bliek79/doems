@@ -4,13 +4,37 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import hashlib
 import json
+import time
+from collections.abc import Callable
+from threading import Event
 from typing import Any, Mapping, Sequence
 
 from .energy_forecast import EnergyBaselineForecast
-from .automatic_combined_planner_model import build_planner_bundle
+from .automatic_combined_planner_model import (
+    PlannerComputeBudgetExceeded,
+    PlannerComputeCancelled,
+    build_planner_bundle,
+)
 
 RUNTIME_VERSION = "automatic_combined_cached_executor_v1"
 PLANNER_POLICY_VERSION = "manual_priority_parity_v1"
+PLANNER_COMPUTE_BUDGET_SECONDS = 20.0
+
+
+def make_planner_work_guard(
+    stop: Event, *, seconds: float = PLANNER_COMPUTE_BUDGET_SECONDS,
+) -> Callable[[], None]:
+    """One cooperative deadline for the two serial native 288-slot plans."""
+    deadline = time.monotonic() + seconds
+
+    def check() -> None:
+        if stop.is_set():
+            raise PlannerComputeCancelled("planner_generation_superseded")
+        if time.monotonic() >= deadline:
+            raise PlannerComputeBudgetExceeded("planner_compute_budget_exceeded")
+
+    return check
+
 
 
 def _as_utc(reference: datetime) -> datetime:
@@ -116,12 +140,17 @@ def compute_planner_bundle(
     capacity_kwh: float,
     price_by_start: Mapping[str, Mapping[str, Any]],
     settings: Mapping[str, Any],
+    check_work: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
     """Compute Automatic and Combined Planner results outside the event loop."""
+    if check_work is not None:
+        check_work()
     forecast = EnergyBaselineForecast(
         energy_records,
         local_timezone=local_timezone,
     ).build(energy_profile, now=_as_utc(reference))
+    if check_work is not None:
+        check_work()
     energy_slots = [
         {
             "start": slot.start.isoformat(),
@@ -148,8 +177,11 @@ def compute_planner_bundle(
         minimum_trade_margin_eur_per_kwh=float(
             settings["minimum_trade_margin_eur_per_kwh"]
         ),
+        check_work=check_work,
     )
 
+    if check_work is not None:
+        check_work()
     signature = planner_input_signature(
         reference=reference,
         energy_slots=energy_slots,
@@ -171,6 +203,8 @@ def compute_planner_bundle(
         snapshot["planner_input_signature"] = signature
         snapshot["timeline_points"] = _timeline_points(snapshot)
 
+    if check_work is not None:
+        check_work()
     bundle["runtime_version"] = RUNTIME_VERSION
     bundle["planner_policy_version"] = PLANNER_POLICY_VERSION
     bundle["planner_cycle_id"] = planner_cycle_id(reference)
