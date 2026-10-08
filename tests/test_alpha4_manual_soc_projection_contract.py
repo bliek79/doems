@@ -261,14 +261,14 @@ def test_alpha4_uses_proven_92_percent_efficiencies_and_5_percent_floor() -> Non
     assert m.MAX_PROJECTION_POWER_W == 3500.0
 
 
-def test_alpha4_public_surfaces_reuse_plan72_hours_identity_and_are_read_only() -> None:
+def test_alpha4_manual_projection_is_exposed_as_manual_planner_and_is_read_only() -> None:
     sensor = (INTEGRATION / "sensor.py").read_text(encoding="utf-8")
     runtime = (INTEGRATION / "manual_soc_projection.py").read_text(encoding="utf-8")
     model = (INTEGRATION / "manual_soc_projection_model.py").read_text(encoding="utf-8")
 
-    assert 'doems_manual_soc_projection' in sensor
+    assert 'doems_manual_planner' in sensor
     assert 'doems_manual_soc_projection_timeline' in sensor
-    assert 'doems_ems_plan72_hours' in sensor
+    assert 'doems_ems_plan72_hours' not in sensor
     assert '"manual_projection_only"' in model
     assert '"automatic_planner_active": False' in model
     assert '"scheduler_active": False' in model
