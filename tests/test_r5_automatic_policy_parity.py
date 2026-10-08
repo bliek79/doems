@@ -138,3 +138,39 @@ def test_r5_grid_charge_headroom_is_measured_before_home_discharge():
     assert rows[0]["charge_headroom_kwh"] == 0
     # In the following quarter there is room to charge again.
     assert rows[1]["charge_headroom_kwh"] > 0
+
+
+def test_r5_compact_trial_exactly_matches_full_output_fields():
+    model = _load("automatic_combined_planner_model")
+    energy, solar = _axis(home_kwh=0.09)
+    for index in range(28, 80):
+        solar[index]["solar_kwh"] = 0.12
+    prices = _prices(energy, import_price=0.25, export_price=0.05)
+    axis, blockers = model._validate_time_axis(energy, solar)
+    assert blockers == []
+    inputs = [{**row, "prices": model._slot_price(prices, row["start"])} for row in axis]
+    kwargs = dict(
+        axis=inputs,
+        commitments=[],
+        start_soc_percent=60.0,
+        capacity_kwh=7.1,
+        charge_efficiency=0.92,
+        discharge_efficiency=0.92,
+        max_charge_power_w=3500,
+        max_discharge_power_w=3500,
+        reserve_floor_end_soc=[10.0] * 288,
+        safety={4: 0.35},
+        trade_charge={12: 0.25},
+        trade_discharge={120: 0.15},
+    )
+    full = model._simulate(**kwargs)
+    compact = model._simulate(**kwargs, compact=True)
+    assert len(compact) == len(full) == 288
+    for a, b in zip(full, compact):
+        for name in (
+            "index", "end_soc_percent", "manual_slots",
+            "charge_headroom_kwh", "discharge_headroom_kwh",
+            "grid_to_home_kwh", "charge_from_grid_kwh",
+            "solar_export_kwh", "import_price", "export_price",
+        ):
+            assert a[name] == b[name], (name, a["index"], a[name], b[name])
