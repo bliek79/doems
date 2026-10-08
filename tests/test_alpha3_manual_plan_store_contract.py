@@ -138,4 +138,4 @@ def test_alpha3_store_is_persistent_manual_only_and_execution_free() -> None:
     assert "DOEMSScheduler" not in store
     assert "scheduler_result" not in store
     assert "soc_projection_active" in (INTEGRATION / "sensor.py").read_text(encoding="utf-8")
-    assert '"physical_execution_authority": False' in (INTEGRATION / "sensor.py").read_text(encoding="utf-8")
+    assert '"physical_execution_enabled": False' in (INTEGRATION / "sensor.py").read_text(encoding="utf-8")
