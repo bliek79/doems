@@ -10,7 +10,6 @@ layout:
   grid-column-gap: 0px
 cards:
   - type: custom:button-card
-    entity: sensor.doems_combined_planner
     triggers_update:
       - sensor.doems_combined_planner
       - sensor.doems_plan_1_status
@@ -63,7 +62,11 @@ cards:
     custom_fields:
       content: |
         [[[
-          const planner = entity && entity.attributes ? entity.attributes : {};
+          const combinedEntity = hass.states['sensor.doems_combined_planner'];
+          const planner =
+            combinedEntity && combinedEntity.attributes
+              ? combinedEntity.attributes
+              : {};
 
           const socEntity = hass.states['sensor.anker_solix_solarbank_max_ac_185_soc'];
           const chargeEntity = hass.states['sensor.anker_solix_solarbank_max_ac_185_laadvermogen_van_de_batterij'];
@@ -106,11 +109,23 @@ cards:
                   ? String(modeRaw).replaceAll('_', ' ')
                   : 'Modus —';
 
-          const plannerValid = planner.valid === true;
-          const plannerStatus = planner.status || (plannerValid ? 'ready' : '—');
+          const plannerAvailable =
+            combinedEntity &&
+            !['unknown','unavailable'].includes(combinedEntity.state);
+          const plannerValid = plannerAvailable && planner.valid === true;
+          const plannerStatus =
+            plannerAvailable
+              ? (planner.status || (plannerValid ? 'ready' : combinedEntity.state))
+              : 'niet beschikbaar';
           const plannerCount = number(planner.clock_hour_bucket_count);
-          const plannerValue = plannerValid ? 'Geldig' : 'Controleren';
-          const plannerColor = plannerValid ? '#22C55E' : '#FFB74D';
+          const plannerValue =
+            plannerAvailable
+              ? (plannerValid ? 'Geldig' : 'Controleren')
+              : 'Niet beschikbaar';
+          const plannerColor =
+            plannerAvailable
+              ? (plannerValid ? '#22C55E' : '#FFB74D')
+              : '#EF4444';
           const plannerLabel =
             plannerCount !== null
               ? `${Math.round(plannerCount)} uur · ${String(plannerStatus).replaceAll('_', ' ')}`
