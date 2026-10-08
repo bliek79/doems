@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime, timedelta
+from collections.abc import Callable
 from typing import Any, Mapping, Sequence
 
 from .manual_soc_projection_model import (
@@ -27,6 +28,14 @@ DEFAULT_MAX_CHARGE_POWER_W = 3500.0
 DEFAULT_MAX_DISCHARGE_POWER_W = 3500.0
 DEFAULT_MINIMUM_TRADE_MARGIN_EUR_PER_KWH = 0.10
 _EPS = 0.0005
+
+
+class PlannerComputeCancelled(RuntimeError):
+    """An obsolete planner generation was cooperatively interrupted."""
+
+
+class PlannerComputeBudgetExceeded(RuntimeError):
+    """The planner did not finish inside its bounded worker time."""
 
 USABLE_SOLAR_RULE = (
     "first_of_two_consecutive_full_clock_hours_"
@@ -175,6 +184,7 @@ def _simulate(
     safety: Mapping[int, float] | None = None,
     trade_charge: Mapping[int, float] | None = None,
     trade_discharge: Mapping[int, float] | None = None,
+    check_work: Callable[[], None] | None = None,
 ) -> list[dict[str, Any]]:
     """Simulate one native route with manual commitments taking hard priority."""
     safety = safety or {}
@@ -185,6 +195,8 @@ def _simulate(
 
     for slot in axis:
         index = int(slot["index"])
+        if check_work is not None and index % 16 == 0:
+            check_work()
         start = slot["start"]
         end = slot["end"]
         automatic_floor = max(
@@ -525,6 +537,7 @@ def _build_planner(
     max_discharge_power_w: float,
     minimum_trade_margin_eur_per_kwh: float,
     combined: bool,
+    check_work: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
     base_floor = MIN_SOC_PERCENT + software_reserve_percent
     reserve_profile, usable_pairs = _dynamic_reserve_profile(
@@ -542,8 +555,13 @@ def _build_planner(
     trade_charge: dict[int, float] = {}
     trade_discharge: dict[int, float] = {}
     roundtrip = charge_efficiency * discharge_efficiency
+    simulation_count = 0
 
     def simulate() -> list[dict[str, Any]]:
+        nonlocal simulation_count
+        if check_work is not None:
+            check_work()
+        simulation_count += 1
         return _simulate(
             axis=axis,
             commitments=commitments,
@@ -557,6 +575,7 @@ def _build_planner(
             safety=safety,
             trade_charge=trade_charge,
             trade_discharge=trade_discharge,
+            check_work=check_work,
         )
 
     initial = simulate()
@@ -625,84 +644,95 @@ def _build_planner(
         if not made:
             break
 
-    # Household price-shifting is separate from the hard SOC floor. Evaluate
-    # the complete 288-slot horizon: solar first, then cover expensive future
-    # home deficits with cheaper technically feasible earlier grid charging.
-    # Use actual route simulations, so future solar, capacity and manual
-    # commitments can reduce or invalidate any proposed charge.
-    economic_charge_kwh = 0.0
-    for _ in range(64):
-        route = simulate()
-        shortages = sorted(
+    # Price-shift future expensive home import with bounded route trials.
+    # Every quarter participates in the price/deficit search, but a candidate
+    # is simulated at most twice, instead of re-simulating each deficit-slot
+    # pair in up to 64 nested passes. This remains an economic heuristic, not
+    # an unsupported claim of globally optimal 72-hour scheduling.
+    def route_cost(rows: Sequence[Mapping[str, Any]]) -> float:
+        return sum(
             (
-                index for index, row in enumerate(route)
-                if float(row["grid_to_home_kwh"]) > _EPS
-                and row.get("import_price") is not None
-            ),
-            key=lambda index: -float(route[index]["import_price"]),
+                float(row["grid_to_home_kwh"])
+                + float(row["charge_from_grid_kwh"])
+            ) * float(row.get("import_price") or 0.0)
+            - float(row["solar_export_kwh"])
+            * float(row.get("export_price") or 0.0)
+            for row in rows
         )
-        best_shift: tuple[float, int, float] | None = None
-        for deficit_index in shortages:
-            deficit = route[deficit_index]
-            costly_price = float(deficit["import_price"])
-            earlier = sorted(
-                (
-                    index for index in range(deficit_index)
-                    if not route[index]["manual_slots"]
-                    and route[index].get("import_price") is not None
-                    and float(route[index]["charge_headroom_kwh"]) > _EPS
-                    and safety.get(index, 0.0) <= _EPS
-                    and trade_discharge.get(index, 0.0) <= _EPS
-                    and (
-                        float(route[index]["import_price"]) / roundtrip
-                        + minimum_trade_margin_eur_per_kwh
-                        < costly_price
-                    )
-                ),
-                key=lambda index: (float(route[index]["import_price"]), -index),
-            )[:12]
-            for index in earlier:
-                old = trade_charge.get(index, 0.0)
-                maximum = min(
-                    float(route[index]["charge_headroom_kwh"]),
-                    float(deficit["grid_to_home_kwh"]) / roundtrip,
-                )
-                if maximum <= _EPS:
-                    continue
-                trade_charge[index] = old + maximum
-                trial = simulate()
-                trade_charge[index] = old
-                delivered = max(
-                    0.0,
-                    float(deficit["grid_to_home_kwh"])
-                    - float(trial[deficit_index]["grid_to_home_kwh"]),
-                )
-                if delivered <= _EPS:
-                    continue
-                # Account for changed grid imports, earlier charging and any
-                # displaced solar exports rather than relying on price alone.
-                def route_cost(rows: Sequence[Mapping[str, Any]]) -> float:
-                    return sum(
-                        (
-                            float(row["grid_to_home_kwh"])
-                            + float(row["charge_from_grid_kwh"])
-                        ) * float(row.get("import_price") or 0.0)
-                        - float(row["solar_export_kwh"])
-                        * float(row.get("export_price") or 0.0)
-                        for row in rows
-                    )
-                saving = route_cost(route) - route_cost(trial)
-                if saving <= _EPS:
-                    continue
-                if best_shift is None or saving > best_shift[0]:
-                    best_shift = (saving, index, maximum)
-            if best_shift is not None:
-                break
-        if best_shift is None:
-            break
-        _, chosen_index, amount = best_shift
-        trade_charge[chosen_index] = trade_charge.get(chosen_index, 0.0) + amount
-        economic_charge_kwh += amount
+
+    economic_charge_kwh = 0.0
+    economic_trial_count = 0
+    route = simulate()
+    current_cost = route_cost(route)
+    charge_windows = sorted(
+        (
+            int(row["index"])
+            for row in route
+            if not row["manual_slots"]
+            and row.get("import_price") is not None
+            and safety.get(int(row["index"]), 0.0) <= _EPS
+        ),
+        key=lambda index: (float(route[index]["import_price"]), -index),
+    )
+    for index in charge_windows:
+        if check_work is not None:
+            check_work()
+        row = route[index]
+        if (
+            row["manual_slots"]
+            or safety.get(index, 0.0) > _EPS
+            or float(row["charge_headroom_kwh"]) <= _EPS
+        ):
+            continue
+        purchase_price = float(row["import_price"])
+        future_cost_threshold = (
+            purchase_price / roundtrip
+            + minimum_trade_margin_eur_per_kwh
+        )
+        # Sum only future *uncovered* home demand that costs more than the
+        # full cycle. Solar already credited to home/battery by simulation.
+        valuable_home_need_kwh = sum(
+            float(future["grid_to_home_kwh"])
+            for future in route[index + 1:]
+            if future.get("import_price") is not None
+            and float(future["import_price"]) > future_cost_threshold
+        )
+        maximum = min(
+            float(row["charge_headroom_kwh"]),
+            valuable_home_need_kwh / roundtrip,
+        )
+        if maximum <= _EPS:
+            continue
+        previous = trade_charge.get(index, 0.0)
+        best_amount = 0.0
+        best_cost = current_cost
+        best_route: list[dict[str, Any]] | None = None
+
+        # Full headroom first. A smaller second probe preserves useful
+        # charging when a maximum fill would crowd out later free PV.
+        for amount in (maximum, maximum / 2.0):
+            if amount <= _EPS or (
+                best_amount > 0.0 and amount < best_amount
+            ):
+                continue
+            trade_charge[index] = previous + amount
+            trial = simulate()
+            economic_trial_count += 1
+            trial_cost = route_cost(trial)
+            if trial_cost < best_cost - _EPS:
+                best_amount = amount
+                best_cost = trial_cost
+                best_route = trial
+        if best_route is None:
+            if previous > _EPS:
+                trade_charge[index] = previous
+            else:
+                trade_charge.pop(index, None)
+            continue
+        trade_charge[index] = previous + best_amount
+        economic_charge_kwh += best_amount
+        route = best_route
+        current_cost = best_cost
 
     # Safety does not disable trade route-wide.  Evaluate one best ordinary
     # arbitrage pair in the remaining free route.
@@ -931,6 +961,8 @@ def _build_planner(
         "minimum_trade_margin_eur_per_kwh": (
             minimum_trade_margin_eur_per_kwh
         ),
+        "planner_simulation_count": simulation_count,
+        "planner_economic_trial_count": economic_trial_count,
         "safety_charge_needed": safety_needed,
         "safety_schedule_sufficient": safety_sufficient,
         "safety_charge_kwh": round(sum(safety.values()), 6),
@@ -971,6 +1003,7 @@ def build_planner_bundle(
     minimum_trade_margin_eur_per_kwh: float = (
         DEFAULT_MINIMUM_TRADE_MARGIN_EUR_PER_KWH
     ),
+    check_work: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
     """Build Automatic and Combined Planner results without mutating R0-R4 state."""
     blockers: list[str] = []
@@ -1070,6 +1103,7 @@ def build_planner_bundle(
         max_charge_power_w=max_charge,
         max_discharge_power_w=max_discharge,
         minimum_trade_margin_eur_per_kwh=margin,
+        check_work=check_work,
         combined=False,
     )
     combined = _build_planner(
@@ -1083,6 +1117,7 @@ def build_planner_bundle(
         max_charge_power_w=max_charge,
         max_discharge_power_w=max_discharge,
         minimum_trade_margin_eur_per_kwh=margin,
+        check_work=check_work,
         combined=True,
     )
 
