@@ -632,104 +632,194 @@ class DOEMSPlannerManager:
             and self._automatic_context is not None
         )
 
+    def _publish_stage_failed(
+        self, stage: str, reason: str, blocker: str
+    ) -> None:
+        """Combined failure must never erase a valid Automatic forecast."""
+        self._last_reason = reason
+        if stage == "automatic":
+            self._automatic_context = None
+            bundle = self._blocked_bundle(blocker)
+        else:
+            bundle = dict(self._cached_bundle)
+            bundle["status"] = "blocked"
+            bundle["valid"] = False
+            bundle["blockers"] = [blocker]
+            bundle["combined"] = self._blocked_snapshot(
+                blocker, combined=True
+            )
+        metadata = self._runtime_metadata()
+        metadata["planner_worker_active"] = False
+        metadata["planner_active_stage"] = None
+        bundle.update(metadata)
+        for key in ("automatic", "combined"):
+            if isinstance(bundle.get(key), dict):
+                bundle[key].update(metadata)
+        self._cached_bundle = bundle
+        self._notify()
+
     async def _async_compute(
         self, request: dict[str, Any]
     ) -> None:
+        stage = str(request["stage"])
         generation = int(request["generation"])
         signature = str(request["request_signature"])
         stop = Event()
         started = time.monotonic()
+        self._active_stage = stage
         self._active_signature = signature
         self._active_generation = generation
         self._active_cancel_event = stop
         self._compute_count += 1
+        if stage == "automatic":
+            self._automatic_compute_count += 1
+        else:
+            self._combined_compute_count += 1
         try:
             def compute() -> dict[str, Any]:
-                # Deadline starts in the executor, not while waiting in its queue.
+                # Independent 20-second work budget per stage, so Combined
+                # can never invalidate the already completed Automatic run.
                 guard = make_planner_work_guard(stop)
+                if stage == "automatic":
+                    return compute_planner_bundle(
+                        **request["compute_kwargs"],
+                        stage="automatic",
+                        check_work=guard,
+                    )
                 return compute_planner_bundle(
-                    **request["compute_kwargs"], check_work=guard
+                    **request["compute_kwargs"],
+                    check_work=guard,
                 )
+
             bundle = await self.hass.async_add_executor_job(compute)
         except PlannerComputeCancelled:
             self._cancel_count += 1
             return
         except PlannerComputeBudgetExceeded as err:
             self._budget_exceeded_count += 1
-            if generation == self._generation and not self._shutdown:
+            if not self._shutdown and self._stage_current(request):
                 self._last_error = str(err)
-                self._last_reason = str(request["reason"])
-                self._last_compute_seconds = round(
-                    time.monotonic() - started, 3
+                self._publish_stage_failed(
+                    stage, str(request["reason"]),
+                    "planner_compute_budget_exceeded",
                 )
-                failed = self._blocked_bundle(
-                    "planner_compute_budget_exceeded"
-                )
-                failed.update(self._runtime_metadata())
-                for key in ("automatic", "combined"):
-                    failed[key].update(self._runtime_metadata())
-                self._cached_bundle = failed
-                self._notify()
-            _LOGGER.warning("DOEMS planner work budget exceeded")
+            _LOGGER.warning("DOEMS %s stage work budget exceeded", stage)
             return
         except asyncio.CancelledError:
             stop.set()
             raise
         except Exception as err:
-            if generation == self._generation:
-                self._last_compute_seconds = round(
-                    time.monotonic() - started, 3
+            if not self._shutdown and self._stage_current(request):
+                self._last_error = f"{type(err).__name__}: {err}"
+                self._publish_stage_failed(
+                    stage, str(request["reason"]), "planner_compute_failed"
                 )
-                self._last_error = (
-                    f"{type(err).__name__}: {err}"
-                )
-                self._last_reason = str(request["reason"])
-                failed = self._blocked_bundle(
-                    "planner_compute_failed"
-                )
-                failed.update(self._runtime_metadata())
-                for key in ("automatic", "combined"):
-                    failed[key].update(
-                        self._runtime_metadata()
-                    )
-                self._cached_bundle = failed
-                self._notify()
-            _LOGGER.exception(
-                "DOEMS planner additive planner generation failed"
-            )
+            _LOGGER.exception("DOEMS %s stage calculation failed", stage)
             return
         finally:
-            self._last_compute_seconds = round(
-                time.monotonic() - started, 3
-            )
-            if self._active_signature == signature:
+            elapsed = round(time.monotonic() - started, 3)
+            self._last_compute_seconds = elapsed
+            if stage == "automatic":
+                self._automatic_last_compute_seconds = elapsed
+            else:
+                self._combined_last_compute_seconds = elapsed
+            if self._active_cancel_event is stop:
+                self._active_stage = None
                 self._active_signature = None
                 self._active_generation = None
                 self._active_cancel_event = None
 
-        if generation != self._generation:
+        if not self._stage_current(request) or self._shutdown:
             self._stale_discard_count += 1
             return
+        if stage == "automatic":
+            self._publish_automatic(request, bundle)
+        else:
+            self._publish_combined(request, bundle)
 
-        self._published_generation = generation
-        self._last_request_signature = signature
-        self._last_input_signature = (
-            str(bundle.get("planner_input_signature") or "")
-            or None
-        )
+    def _publish_automatic(
+        self, request: dict[str, Any], bundle: dict[str, Any]
+    ) -> None:
+        automatic = bundle.get("automatic") or {}
+        if not automatic.get("valid") or automatic.get("native_slot_count") != 288:
+            self._last_error = "automatic_stage_invalid"
+            self._publish_stage_failed(
+                "automatic", str(request["reason"]),
+                "planner_automatic_invalid",
+            )
+            return
+        self._automatic_context = {
+            "automatic": automatic,
+            "energy_slots": bundle["_prepared_energy_slots"],
+            "compute_kwargs": dict(request["compute_kwargs"]),
+            "cycle_id": request["cycle_id"],
+            "signature": request["request_signature"],
+            "auto_revision": self._auto_revision,
+        }
+        self._automatic_published_generation = int(request["generation"])
+        self._last_request_signature = str(request["request_signature"])
+        self._last_input_signature = str(
+            bundle.get("planner_input_signature") or ""
+        ) or None
+        self._last_cycle_id = str(request["cycle_id"])
+        self._last_reason = str(request["reason"])
+        self._last_error = None
+
+        # Publish the new Automatic separately. The previous Combined is
+        # retained only until this cycle's Combined replan is ready.
+        published = {
+            **self._cached_bundle,
+            "status": "automatic_ready_combined_pending",
+            "valid": False,
+            "automatic": automatic,
+            "runtime_version": RUNTIME_VERSION,
+        }
+        self._cached_bundle = published
+        self._enqueue_combined("automatic_completed")
+        metadata = self._runtime_metadata()
+        for key in ("automatic", "combined"):
+            if isinstance(published.get(key), dict):
+                published[key].update(metadata)
+        published.update(metadata)
+        self._notify()
+
+    def _publish_combined(
+        self, request: dict[str, Any], bundle: dict[str, Any]
+    ) -> None:
+        combined = bundle.get("combined") or {}
+        if not combined.get("valid") or combined.get("native_slot_count") != 288:
+            self._last_error = "combined_stage_invalid"
+            self._publish_stage_failed(
+                "combined", str(request["reason"]),
+                "planner_combined_invalid",
+            )
+            return
+
+        self._published_generation = int(request["generation"])
+        self._last_input_signature = str(
+            bundle.get("planner_input_signature") or ""
+        ) or None
         self._last_cycle_id = str(request["cycle_id"])
         self._last_reason = str(request["reason"])
         self._last_refreshed_at = dt_util.utcnow().isoformat()
         self._last_error = None
-
         metadata = self._runtime_metadata()
         metadata["planner_worker_active"] = False
-        bundle.update(metadata)
-        for key in ("automatic", "combined"):
-            snapshot = bundle.get(key)
-            if isinstance(snapshot, dict):
-                snapshot.update(metadata)
-        self._cached_bundle = bundle
+        metadata["planner_active_stage"] = None
+        metadata["planner_combined_pending"] = False
+        automatic = self._automatic_context["automatic"]
+        published = {
+            "status": "ready",
+            "valid": True,
+            "blockers": [],
+            "automatic": automatic,
+            "combined": combined,
+            "runtime_version": RUNTIME_VERSION,
+        }
+        published.update(metadata)
+        automatic.update(metadata)
+        combined.update(metadata)
+        self._cached_bundle = published
         self._notify()
 
     def snapshot(self, planner: str = "combined") -> dict[str, Any]:
