@@ -16,6 +16,7 @@ from .const import (
     DOMAIN,
     PLATFORMS,
 )
+from .automatic_combined_planner import DOEMSPlannerManager
 from .battery_contract import DOEMSBatteryInputContract
 from .energy_coordinator import DOEMSEnergyCoordinator
 from .manual_plan_lifecycle import DOEMSManualPlanLifecycle
@@ -25,8 +26,8 @@ from .manual_plan_services import (
 )
 from .manual_plan_store import DOEMSManualPlanStore
 from .manual_soc_projection import DOEMSManualSOCProjection
+from .planner_migration import async_migrate_planner_architecture
 from .prices_runtime import DOEMSRegisteredPricesManager
-from .r5_preview import DOEMSR5PreviewManager
 from .solar_forecast import SolarForecastManager
 from .solar_foundation import SolarFoundationManager
 
@@ -54,6 +55,7 @@ async def _async_remove_legacy_solar_freeze_storage(hass: HomeAssistant) -> None
 async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> bool:
     """Set up DOEMS components from one config entry."""
     await _async_remove_legacy_solar_freeze_storage(hass)
+    await async_migrate_planner_architecture(hass, entry)
 
     coordinator: DOEMSEnergyCoordinator | None = None
     if entry.options.get(CONF_ENERGY_FORECAST_ENABLED, False):
@@ -91,7 +93,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
     )
     await manual_soc_projection.async_setup()
 
-    r5_preview = DOEMSR5PreviewManager(
+    planner = DOEMSPlannerManager(
         hass=hass,
         entry=entry,
         energy=coordinator,
@@ -100,7 +102,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
         battery=battery_input,
         plans=manual_plan_store,
     )
-    await r5_preview.async_setup()
+    await planner.async_setup()
 
     entry.runtime_data = coordinator
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
@@ -112,7 +114,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
         "manual_plan_store": manual_plan_store,
         "manual_plan_lifecycle": manual_plan_lifecycle,
         "manual_soc_projection": manual_soc_projection,
-        "r5_preview": r5_preview,
+        "planner": planner,
     }
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -167,9 +169,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> bo
     if isinstance(manual_plan_lifecycle, DOEMSManualPlanLifecycle):
         await manual_plan_lifecycle.async_shutdown()
 
-    r5_preview = entry_data.get("r5_preview")
-    if isinstance(r5_preview, DOEMSR5PreviewManager):
-        await r5_preview.async_shutdown()
+    planner = entry_data.get("planner")
+    if isinstance(planner, DOEMSPlannerManager):
+        await planner.async_shutdown()
 
     manual_soc_projection = entry_data.get("manual_soc_projection")
     if isinstance(manual_soc_projection, DOEMSManualSOCProjection):
