@@ -86,6 +86,6 @@ def test_quarter_trigger_and_manual_event_stage_routing_are_separate():
     assert "self._manual_plans_snapshot()" in manager
     assert "prebuilt_energy_slots" in runtime
     assert 'stage="automatic"' in manager
-    assert 'stage="combined"' in manager
+    assert '"stage": "combined"' in manager
     assert "make_planner_work_guard(stop)" in manager
     assert "await self.hass.async_add_executor_job(compute)" in manager
