@@ -47,7 +47,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class DOEMSPlannerManager:
-    """Publish one cached Automatic/Combined Planner bundle."""
+    """Serial Automatic -> Combined planner; manual-only refreshes Combined."""
 
     def __init__(
         self,
@@ -92,6 +92,15 @@ class DOEMSPlannerManager:
         self._cancel_count = 0
         self._budget_exceeded_count = 0
         self._last_compute_seconds: float | None = None
+        self._auto_revision = 0
+        self._manual_revision = 0
+        self._active_stage: str | None = None
+        self._automatic_context: dict[str, Any] | None = None
+        self._automatic_published_generation = 0
+        self._automatic_compute_count = 0
+        self._combined_compute_count = 0
+        self._automatic_last_compute_seconds: float | None = None
+        self._combined_last_compute_seconds: float | None = None
 
     async def async_setup(self) -> None:
         if self.energy is not None:
@@ -174,7 +183,14 @@ class DOEMSPlannerManager:
 
     @callback
     def _source_changed(self, reason: str) -> None:
-        if not self._shutdown:
+        if self._shutdown:
+            return
+        if reason == "manual_plan_changed":
+            # A manual edit may never restart/cancel an active Automatic run.
+            self.hass.async_create_task(
+                self.async_request_manual_refresh(reason)
+            )
+        else:
             self.hass.async_create_task(
                 self.async_request_refresh(reason)
             )
@@ -321,6 +337,17 @@ class DOEMSPlannerManager:
             "planner_budget_exceeded_count": self._budget_exceeded_count,
             "planner_last_compute_seconds": self._last_compute_seconds,
             "planner_compute_budget_seconds": PLANNER_COMPUTE_BUDGET_SECONDS,
+            "planner_automatic_compute_count": self._automatic_compute_count,
+            "planner_combined_compute_count": self._combined_compute_count,
+            "planner_automatic_last_compute_seconds": self._automatic_last_compute_seconds,
+            "planner_combined_last_compute_seconds": self._combined_last_compute_seconds,
+            "planner_automatic_published_generation": self._automatic_published_generation,
+            "planner_manual_revision": self._manual_revision,
+            "planner_active_stage": self._active_stage,
+            "planner_combined_pending": bool(
+                self._pending_request is not None
+                and self._pending_request.get("stage") == "combined"
+            ),
         }
 
     def _freeze_request(
@@ -363,10 +390,9 @@ class DOEMSPlannerManager:
             }
             for point in self.solar.points
         ]
-        plans = [
-            {**self.plans.get_plan(slot), "slot": slot}
-            for slot in range(1, PLAN_SLOT_COUNT + 1)
-        ]
+        # Automatic remains independent of R2-R4 Plan Store content.
+        # The latest three manual slots are captured ONLY for Combined.
+        plans: list[dict[str, Any]] = []
         price_rows = [
             dict(item)
             for item in self.prices.planner_timeline_slots(
