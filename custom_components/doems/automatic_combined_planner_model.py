@@ -397,7 +397,6 @@ def _simulate(
                 "automatic_floor_soc_percent": round(
                     automatic_floor, 6
                 ),
-                "home_discharge_floor_soc_percent": MIN_SOC_PERCENT,
                 "charge_headroom_kwh": round(
                     min(
                         charge_left,
