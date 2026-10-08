@@ -243,9 +243,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # A release tag may already exist from an earlier successful run on
+          # this same release branch. Move it to this *validated* commit before
+          # publishing fresh assets; otherwise HACS can install stale code.
+          if gh api "repos/${{ github.repository }}/git/ref/tags/0.2.0-alpha.7.1.4" >/dev/null 2>&1; then
+            gh api -X PATCH "repos/${{ github.repository }}/git/refs/tags/0.2.0-alpha.7.1.4" -f sha="${{ github.sha }}" -F force=true >/dev/null
+          fi
           if gh release view 0.2.0-alpha.7.1.4 >/dev/null 2>&1; then
             gh release edit 0.2.0-alpha.7.1.4 --title "DOEMS 0.2.0-alpha.7.1.4 - Automatic SOC Reserve Policy Fix" --notes-file RELEASE_NOTES_0.2.0-alpha.7.1.4.md --prerelease
             gh release upload 0.2.0-alpha.7.1.4 doems.zip SHA256SUMS.txt --clobber
           else
             gh release create 0.2.0-alpha.7.1.4 doems.zip SHA256SUMS.txt --target reset-0.2.0-alpha.7.1.4 --title "DOEMS 0.2.0-alpha.7.1.4 - Automatic SOC Reserve Policy Fix" --notes-file RELEASE_NOTES_0.2.0-alpha.7.1.4.md --prerelease
           fi
+          published_sha="$(gh api "repos/${{ github.repository }}/git/ref/tags/0.2.0-alpha.7.1.4" --jq '.object.sha')"
+          test "$published_sha" = "${{ github.sha }}"
