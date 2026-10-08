@@ -10,6 +10,7 @@ from threading import Event
 from typing import Any, Mapping, Sequence
 
 from .energy_forecast import EnergyBaselineForecast
+from .planner_diagnostics import PlannerDiagnostics
 from .automatic_combined_planner_model import (
     PlannerComputeBudgetExceeded,
     PlannerComputeCancelled,
@@ -142,6 +143,7 @@ def compute_planner_bundle(
     settings: Mapping[str, Any],
     check_work: Callable[[], None] | None = None,
     stage: str = "both",
+    diagnostics: PlannerDiagnostics | None = None,
     automatic_snapshot: Mapping[str, Any] | None = None,
     prebuilt_energy_slots: Sequence[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
@@ -152,6 +154,9 @@ def compute_planner_bundle(
     exact same prepared 288 quarter inputs, so manual-only changes never
     re-run the Automatic policy or its Energy forecast.
     """
+    if diagnostics is not None:
+        diagnostics.enter("energy_forecast_build")
+        diagnostics.context.update({"energy_record_count": len(energy_records), "energy_profile": energy_profile, "solar_slot_count": len(solar_slots), "price_slot_count": len(price_by_start), "prebuilt_energy": prebuilt_energy_slots is not None})
     if check_work is not None:
         check_work()
     if prebuilt_energy_slots is None:
@@ -192,10 +197,13 @@ def compute_planner_bundle(
         check_work=check_work,
         stage=stage,
         automatic_snapshot=automatic_snapshot,
+        diagnostics=diagnostics,
     )
 
     if check_work is not None:
         check_work()
+    if diagnostics is not None:
+        diagnostics.enter("publication_preparation")
     signature = planner_input_signature(
         reference=reference,
         energy_slots=energy_slots,
@@ -227,3 +235,4 @@ def compute_planner_bundle(
     if stage == "automatic":
         bundle["_prepared_energy_slots"] = energy_slots
     return bundle
+

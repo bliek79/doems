@@ -902,6 +902,8 @@ def _planner_attributes(
         "planner_automatic_compute_count",
         "planner_combined_compute_count",
         "planner_automatic_last_compute_seconds",
+        "planner_automatic_diagnostics",
+        "planner_combined_diagnostics",
         "planner_combined_last_compute_seconds",
         "planner_automatic_published_generation",
         "planner_manual_revision",
@@ -1108,4 +1110,5 @@ class DOEMSCombinedSOCProjectionTimelineSensor(_DOEMSPlannerBase):
             "physical_execution_enabled": False,
             "points": points,
         }
+
 

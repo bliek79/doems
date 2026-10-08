@@ -4,7 +4,7 @@ from __future__ import annotations
 
 DOMAIN = "doems"
 NAME = "DOEMS"
-VERSION = "0.2.0-alpha.7.1.5"
+VERSION = "0.2.0-alpha.7.1.6"
 
 CONF_INSTANCE_NAME = "instance_name"
 DEFAULT_INSTANCE_NAME = NAME
@@ -134,3 +134,4 @@ FOUNDATION_PHASE = "solar_p3_0_foundation"
 CANONICAL_HOME_POWER_ENTITY = "sensor.doems_source_home_power"
 
 PUBLIC_OBJECT_ID_PREFIX = "doems_"
+

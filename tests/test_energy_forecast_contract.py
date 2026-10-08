@@ -23,7 +23,7 @@ def _load_pure_module(name: str):
 
 def test_manifest_and_clean_identity_contract() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["domain"] == "doems" and manifest["name"] == "DOEMS" and manifest["version"] == "0.2.0-alpha.7.1.5"
+    assert manifest["domain"] == "doems" and manifest["name"] == "DOEMS" and manifest["version"] == "0.2.0-alpha.7.1.6"
     for path in INTEGRATION.rglob("*"):
         if not path.is_file() or path.suffix not in {".py", ".json", ".yaml", ".yml"}: continue
         text = path.read_text(encoding="utf-8")
@@ -106,3 +106,4 @@ def test_startup_source_recovery_refresh_is_one_shot_and_component_scoped() -> N
     assert "coordinator.source_entities" in text
     assert "coordinator._notify()" in text
     assert "remove_listener()" in text
+

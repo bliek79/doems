@@ -15,6 +15,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import dt as dt_util
 
 from .battery_contract import DOEMSBatteryInputContract
+from .planner_diagnostics import PlannerDiagnostics
 from .const import (
     CONF_PLANNER_MAX_CHARGE_POWER_W,
     CONF_PLANNER_MAX_DISCHARGE_POWER_W,
@@ -101,6 +102,8 @@ class DOEMSPlannerManager:
         self._combined_compute_count = 0
         self._automatic_last_compute_seconds: float | None = None
         self._combined_last_compute_seconds: float | None = None
+        self._automatic_diagnostics: dict[str, Any] | None = None
+        self._combined_diagnostics: dict[str, Any] | None = None
 
     async def async_setup(self) -> None:
         if self.energy is not None:
@@ -337,6 +340,8 @@ class DOEMSPlannerManager:
             "planner_budget_exceeded_count": self._budget_exceeded_count,
             "planner_last_compute_seconds": self._last_compute_seconds,
             "planner_compute_budget_seconds": PLANNER_COMPUTE_BUDGET_SECONDS,
+            "planner_automatic_diagnostics": self._automatic_diagnostics,
+            "planner_combined_diagnostics": self._combined_diagnostics,
             "planner_automatic_compute_count": self._automatic_compute_count,
             "planner_combined_compute_count": self._combined_compute_count,
             "planner_automatic_last_compute_seconds": self._automatic_last_compute_seconds,
@@ -666,6 +671,20 @@ class DOEMSPlannerManager:
         signature = str(request["request_signature"])
         stop = Event()
         started = time.monotonic()
+        diagnostics = PlannerDiagnostics(stage, generation)
+
+        def record_measurement() -> None:
+            elapsed = round(time.monotonic() - started, 3)
+            self._last_compute_seconds = elapsed
+            value = diagnostics.snapshot()
+            value["manager_elapsed_seconds"] = elapsed
+            if stage == "automatic":
+                self._automatic_last_compute_seconds = elapsed
+                self._automatic_diagnostics = value
+            else:
+                self._combined_last_compute_seconds = elapsed
+                self._combined_diagnostics = value
+
         self._active_stage = stage
         self._active_signature = signature
         self._active_generation = generation
@@ -677,6 +696,23 @@ class DOEMSPlannerManager:
             self._combined_compute_count += 1
         try:
             def compute() -> dict[str, Any]:
+                diagnostics.start()
+                outcome = "completed"
+                try:
+                    return measured_compute()
+                except PlannerComputeBudgetExceeded:
+                    outcome = "budget_exceeded"
+                    raise
+                except PlannerComputeCancelled:
+                    outcome = "cancelled"
+                    raise
+                except Exception:
+                    outcome = "failed"
+                    raise
+                finally:
+                    diagnostics.finish(outcome)
+
+            def measured_compute() -> dict[str, Any]:
                 # Independent 20-second work budget per stage, so Combined
                 # can never invalidate the already completed Automatic run.
                 guard = make_planner_work_guard(stop)
@@ -685,10 +721,12 @@ class DOEMSPlannerManager:
                         **request["compute_kwargs"],
                         stage="automatic",
                         check_work=guard,
+                        diagnostics=diagnostics,
                     )
                 return compute_planner_bundle(
                     **request["compute_kwargs"],
                     check_work=guard,
+                    diagnostics=diagnostics,
                 )
 
             bundle = await self.hass.async_add_executor_job(compute)
@@ -696,6 +734,7 @@ class DOEMSPlannerManager:
             self._cancel_count += 1
             return
         except PlannerComputeBudgetExceeded as err:
+            record_measurement()
             self._budget_exceeded_count += 1
             if not self._shutdown and self._stage_current(request):
                 self._last_error = str(err)
@@ -703,12 +742,13 @@ class DOEMSPlannerManager:
                     stage, str(request["reason"]),
                     "planner_compute_budget_exceeded",
                 )
-            _LOGGER.warning("DOEMS %s stage work budget exceeded", stage)
+            _LOGGER.warning("DOEMS %s stage work budget exceeded: %s", stage, diagnostics.snapshot())
             return
         except asyncio.CancelledError:
             stop.set()
             raise
         except Exception as err:
+            record_measurement()
             if not self._shutdown and self._stage_current(request):
                 self._last_error = f"{type(err).__name__}: {err}"
                 self._publish_stage_failed(
@@ -717,12 +757,7 @@ class DOEMSPlannerManager:
             _LOGGER.exception("DOEMS %s stage calculation failed", stage)
             return
         finally:
-            elapsed = round(time.monotonic() - started, 3)
-            self._last_compute_seconds = elapsed
-            if stage == "automatic":
-                self._automatic_last_compute_seconds = elapsed
-            else:
-                self._combined_last_compute_seconds = elapsed
+            record_measurement()
             if self._active_cancel_event is stop:
                 self._active_stage = None
                 self._active_signature = None
@@ -832,3 +867,4 @@ class DOEMSPlannerManager:
 
     def bundle_snapshot(self) -> dict[str, Any]:
         return self._cached_bundle
+

@@ -317,8 +317,8 @@ def test_alpha7_1_permanent_option_defaults_and_version() -> None:
     const = (INTEGRATION / "const.py").read_text(encoding="utf-8")
     manifest = (INTEGRATION / "manifest.json").read_text(encoding="utf-8")
 
-    assert 'VERSION = "0.2.0-alpha.7.1.5"' in const
-    assert '"version": "0.2.0-alpha.7.1.5"' in manifest
+    assert 'VERSION = "0.2.0-alpha.7.1.6"' in const
+    assert '"version": "0.2.0-alpha.7.1.6"' in manifest
     assert 'DEFAULT_PLANNER_SOFTWARE_RESERVE_PERCENT = 5.0' in const
     assert 'DEFAULT_PLANNER_MAX_CHARGE_POWER_W = 3500.0' in const
     assert 'DEFAULT_PLANNER_MAX_DISCHARGE_POWER_W = 3500.0' in const
@@ -362,3 +362,4 @@ def test_alpha7_1_1_dashboard_header_is_not_entity_bound() -> None:
     assert "entity: sensor.doems_combined_planner\n    triggers_update:" not in header
     assert "const combinedEntity = hass.states['sensor.doems_combined_planner'];" in header
     assert "Niet beschikbaar" in header
+

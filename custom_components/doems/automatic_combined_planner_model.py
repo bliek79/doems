@@ -11,6 +11,8 @@ from datetime import datetime, timedelta
 from collections.abc import Callable
 from typing import Any, Mapping, Sequence
 
+from .planner_diagnostics import PlannerDiagnostics
+
 from .manual_soc_projection_model import (
     CHARGE_EFFICIENCY,
     DISCHARGE_EFFICIENCY,
@@ -591,7 +593,10 @@ def _build_planner(
     minimum_trade_margin_eur_per_kwh: float,
     combined: bool,
     check_work: Callable[[], None] | None = None,
+    diagnostics: PlannerDiagnostics | None = None,
 ) -> dict[str, Any]:
+    if diagnostics is not None:
+        diagnostics.enter("model_setup")
     base_floor = MIN_SOC_PERCENT + software_reserve_percent
     reserve_profile, usable_pairs = _dynamic_reserve_profile(
         axis,
@@ -615,6 +620,8 @@ def _build_planner(
         if check_work is not None:
             check_work()
         simulation_count += 1
+        if diagnostics is not None:
+            diagnostics.count("simulation_count")
         return _simulate(
             axis=axis,
             commitments=commitments,
@@ -632,6 +639,8 @@ def _build_planner(
             compact=not detailed,
         )
 
+    if diagnostics is not None:
+        diagnostics.enter("safety_charging")
     initial = simulate()
     safety_needed = any(
         float(row["end_soc_percent"])
@@ -649,6 +658,8 @@ def _build_planner(
     # Re-simulate after every addition so manual commitments and target clamps
     # remain hard constraints in Combined.
     for _ in range(FORECAST_SLOTS):
+        if diagnostics is not None:
+            diagnostics.count("safety_iterations")
         route = simulate()
         breach = next(
             (
@@ -685,6 +696,8 @@ def _build_planner(
             max_input = float(route[index]["charge_headroom_kwh"])
             old = safety.get(index, 0.0)
             safety[index] = old + max_input
+            if diagnostics is not None:
+                diagnostics.count("safety_trials")
             trial = simulate()
             gain_soc = (
                 float(trial[breach]["end_soc_percent"])
@@ -720,6 +733,8 @@ def _build_planner(
             for row in rows
         )
 
+    if diagnostics is not None:
+        diagnostics.enter("economic_home_planning")
     economic_charge_kwh = 0.0
     economic_trial_count = 0
     route = simulate()
@@ -778,6 +793,8 @@ def _build_planner(
             ):
                 continue
             trade_charge[index] = previous + amount
+            if diagnostics is not None:
+                diagnostics.count("economic_trials")
             trial = simulate()
             economic_trial_count += 1
             trial_cost = route_cost(trial)
@@ -796,6 +813,8 @@ def _build_planner(
         route = best_route
         current_cost = best_cost
 
+    if diagnostics is not None:
+        diagnostics.enter("export_trade_planning")
     # Safety does not disable trade route-wide.  Evaluate one best ordinary
     # arbitrage pair in the remaining free route.
     route = simulate()
@@ -861,6 +880,8 @@ def _build_planner(
             else:
                 trade_charge.pop(charge_index, None)
 
+    if diagnostics is not None:
+        diagnostics.enter("final_route_and_output")
     final = simulate(detailed=True)
     candidates: list[dict[str, Any]] = []
     candidate_fields = (
@@ -1067,6 +1088,7 @@ def build_planner_bundle(
     ),
     check_work: Callable[[], None] | None = None,
     stage: str = "both",
+    diagnostics: PlannerDiagnostics | None = None,
     automatic_snapshot: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build only the requested stage; preserve the legacy both-stage API.
@@ -1078,6 +1100,8 @@ def build_planner_bundle(
         raise ValueError("invalid_planner_stage")
     if stage == "combined" and not (automatic_snapshot or {}).get("valid"):
         raise ValueError("automatic_stage_required_for_combined")
+    if diagnostics is not None:
+        diagnostics.enter("model_validation")
     blockers: list[str] = []
     try:
         soc = float(start_soc_percent)
@@ -1178,12 +1202,15 @@ def build_planner_bundle(
             minimum_trade_margin_eur_per_kwh=margin,
             check_work=check_work,
             combined=False,
+            diagnostics=diagnostics,
         )
     else:
         automatic = dict(automatic_snapshot or {})
 
     if stage in ("combined", "both"):
         if not commitments and automatic.get("valid"):
+            if diagnostics is not None:
+                diagnostics.enter("automatic_route_reuse")
             # No manual commitments: Combined is the same physical/economic
             # route. Avoid a second full 288-slot optimization entirely.
             combined = {
@@ -1206,6 +1233,7 @@ def build_planner_bundle(
                 minimum_trade_margin_eur_per_kwh=margin,
                 check_work=check_work,
                 combined=True,
+                diagnostics=diagnostics,
             )
     else:
         combined = {}
@@ -1222,3 +1250,4 @@ def build_planner_bundle(
         "combined": combined,
         "physical_execution_enabled": False,
     }
+
