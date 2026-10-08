@@ -317,8 +317,8 @@ def test_alpha7_1_permanent_option_defaults_and_version() -> None:
     const = (INTEGRATION / "const.py").read_text(encoding="utf-8")
     manifest = (INTEGRATION / "manifest.json").read_text(encoding="utf-8")
 
-    assert 'VERSION = "0.2.0-alpha.7.1"' in const
-    assert '"version": "0.2.0-alpha.7.1"' in manifest
+    assert 'VERSION = "0.2.0-alpha.7.1.1"' in const
+    assert '"version": "0.2.0-alpha.7.1.1"' in manifest
     assert 'DEFAULT_PLANNER_SOFTWARE_RESERVE_PERCENT = 5.0' in const
     assert 'DEFAULT_PLANNER_MAX_CHARGE_POWER_W = 3500.0' in const
     assert 'DEFAULT_PLANNER_MAX_DISCHARGE_POWER_W = 3500.0' in const
@@ -345,3 +345,20 @@ def test_alpha7_1_temporary_planner_modules_are_retired() -> None:
     assert "shadow_only" not in active
     assert "observational_only" not in active
     assert "doems_r5_1_" not in active
+
+
+def test_alpha7_1_1_registry_migration_keeps_existing_permanent_target() -> None:
+    migration = (INTEGRATION / "planner_migration.py").read_text(encoding="utf-8")
+    assert "registry.async_remove(old_entity_id)" in migration
+    assert "permanent target" in migration
+    assert "raise RuntimeError(\n            \"DOEMS planner identity migration collision" not in migration
+
+
+def test_alpha7_1_1_dashboard_header_is_not_entity_bound() -> None:
+    dashboard = (ROOT / "examples" / "doems_planner_dashboard.yaml").read_text(
+        encoding="utf-8"
+    )
+    header = dashboard.split("  - type: custom:button-card", 2)[1]
+    assert "entity: sensor.doems_combined_planner\n    triggers_update:" not in header
+    assert "const combinedEntity = hass.states['sensor.doems_combined_planner'];" in header
+    assert "Niet beschikbaar" in header
