@@ -185,8 +185,13 @@ def _simulate(
     trade_charge: Mapping[int, float] | None = None,
     trade_discharge: Mapping[int, float] | None = None,
     check_work: Callable[[], None] | None = None,
+    compact: bool = False,
 ) -> list[dict[str, Any]]:
-    """Simulate one native route with manual commitments taking hard priority."""
+    """Simulate one native route with manual commitments taking hard priority.
+
+    Trial routes contain only fields needed for optimization; public output
+    retains the complete established native-slot contract.
+    """
     safety = safety or {}
     trade_charge = trade_charge or {}
     trade_discharge = trade_discharge or {}
@@ -353,6 +358,45 @@ def _simulate(
 
         soc = max(MIN_SOC_PERCENT, min(MAX_SOC_PERCENT, soc))
         prices = slot["prices"]
+        if compact:
+            # Repeated economic/safety candidate trials do not need 30+
+            # descriptive public fields, timestamps, labels and rounding.
+            # Preserve exactly the numeric precision used by the full route.
+            rows.append(
+                {
+                    "index": index,
+                    "end_soc_percent": round(soc, 6),
+                    "manual_slots": sorted(set(manual_slots)),
+                    "charge_headroom_kwh": round(
+                        remaining_grid_charge_headroom, 6
+                    ),
+                    "discharge_headroom_kwh": round(
+                        min(
+                            discharge_left,
+                            max(
+                                0.0,
+                                (soc - automatic_floor)
+                                / 100.0
+                                * capacity_kwh
+                                * discharge_efficiency,
+                            ),
+                        ),
+                        6,
+                    ),
+                    "grid_to_home_kwh": round(
+                        max(0.0, deficit - home_discharge), 6
+                    ),
+                    "charge_from_grid_kwh": round(
+                        safety_charge + arbitrage_charge, 6
+                    ),
+                    "solar_export_kwh": round(
+                        max(0.0, surplus - solar_charge), 6
+                    ),
+                    "import_price": prices.get("import_price"),
+                    "export_price": prices.get("export_price"),
+                }
+            )
+            continue
         actions: list[str] = []
         if safety_charge > _EPS:
             actions.append("veiligheidsladen")
@@ -566,7 +610,7 @@ def _build_planner(
     roundtrip = charge_efficiency * discharge_efficiency
     simulation_count = 0
 
-    def simulate() -> list[dict[str, Any]]:
+    def simulate(*, detailed: bool = False) -> list[dict[str, Any]]:
         nonlocal simulation_count
         if check_work is not None:
             check_work()
@@ -585,6 +629,7 @@ def _build_planner(
             trade_charge=trade_charge,
             trade_discharge=trade_discharge,
             check_work=check_work,
+            compact=not detailed,
         )
 
     initial = simulate()
@@ -816,7 +861,7 @@ def _build_planner(
             else:
                 trade_charge.pop(charge_index, None)
 
-    final = simulate()
+    final = simulate(detailed=True)
     candidates: list[dict[str, Any]] = []
     candidate_fields = (
         (
