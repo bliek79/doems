@@ -896,7 +896,7 @@ def build_planner_bundle(
         DEFAULT_MINIMUM_TRADE_MARGIN_EUR_PER_KWH
     ),
 ) -> dict[str, Any]:
-    """Build automatic base and combined planners without mutating R0-R4 state."""
+    """Build Automatic and Combined Planner results without mutating R0-R4 state."""
     blockers: list[str] = []
     try:
         soc = float(start_soc_percent)
@@ -983,7 +983,7 @@ def build_planner_bundle(
             "physical_execution_enabled": False,
         }
 
-    automatic_base = _build_planner(
+    automatic = _build_planner(
         axis=axis,
         commitments=[],
         start_soc_percent=soc,
@@ -1013,10 +1013,10 @@ def build_planner_bundle(
     return {
         "status": "ready",
         "valid": bool(
-            automatic_base.get("valid") and combined.get("valid")
+            automatic.get("valid") and combined.get("valid")
         ),
         "blockers": [],
-        "automatic": automatic_base,
+        "automatic": automatic,
         "combined": combined,
         "physical_execution_enabled": False,
     }
