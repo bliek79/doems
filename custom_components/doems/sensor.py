@@ -895,6 +895,18 @@ def _planner_attributes(
         "planner_last_refreshed_at",
         "planner_worker_active",
         "planner_last_error",
+        "planner_cancel_count",
+        "planner_budget_exceeded_count",
+        "planner_last_compute_seconds",
+        "planner_compute_budget_seconds",
+        "planner_automatic_compute_count",
+        "planner_combined_compute_count",
+        "planner_automatic_last_compute_seconds",
+        "planner_combined_last_compute_seconds",
+        "planner_automatic_published_generation",
+        "planner_manual_revision",
+        "planner_active_stage",
+        "planner_combined_pending",
     )
     attrs = {key: snapshot.get(key) for key in keys}
     attrs["planner_type"] = planner_type
