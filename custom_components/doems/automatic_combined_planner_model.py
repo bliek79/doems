@@ -261,6 +261,20 @@ def _simulate(
 
         safety_charge = charge(float(safety.get(index, 0.0)))
         arbitrage_charge = charge(float(trade_charge.get(index, 0.0)))
+        # Available automatic grid-charge room must be measured at the actual
+        # charging step, before household discharge and manual commitments.
+        # Using end-of-slot SOC invents headroom when the battery was full
+        # during the charge phase, causing futile expensive safety trials.
+        remaining_grid_charge_headroom = min(
+            charge_left,
+            max(
+                0.0,
+                (MAX_SOC_PERCENT - soc)
+                / 100.0
+                * capacity_kwh
+                / charge_efficiency,
+            ),
+        )
 
         # Normal household self-consumption is physical discharge down to
         # the *technical* device minimum. The higher software planning target
@@ -398,17 +412,7 @@ def _simulate(
                     automatic_floor, 6
                 ),
                 "charge_headroom_kwh": round(
-                    min(
-                        charge_left,
-                        max(
-                            0.0,
-                            (MAX_SOC_PERCENT - soc)
-                            / 100.0
-                            * capacity_kwh
-                            / charge_efficiency,
-                        ),
-                    ),
-                    6,
+                    remaining_grid_charge_headroom, 6
                 ),
                 "discharge_headroom_kwh": round(
                     min(
