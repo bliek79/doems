@@ -1066,8 +1066,18 @@ def build_planner_bundle(
         DEFAULT_MINIMUM_TRADE_MARGIN_EUR_PER_KWH
     ),
     check_work: Callable[[], None] | None = None,
+    stage: str = "both",
+    automatic_snapshot: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Build Automatic and Combined Planner results without mutating R0-R4 state."""
+    """Build only the requested stage; preserve the legacy both-stage API.
+
+    Automatic never consumes manual commitments. Combined receives those
+    commitments as hard constraints. With none, it reuses Automatic exactly.
+    """
+    if stage not in ("automatic", "combined", "both"):
+        raise ValueError("invalid_planner_stage")
+    if stage == "combined" and not (automatic_snapshot or {}).get("valid"):
+        raise ValueError("automatic_stage_required_for_combined")
     blockers: list[str] = []
     try:
         soc = float(start_soc_percent)
@@ -1154,39 +1164,58 @@ def build_planner_bundle(
             "physical_execution_enabled": False,
         }
 
-    automatic = _build_planner(
-        axis=axis,
-        commitments=[],
-        start_soc_percent=soc,
-        capacity_kwh=capacity,
-        software_reserve_percent=reserve,
-        charge_efficiency=charge_eff,
-        discharge_efficiency=discharge_eff,
-        max_charge_power_w=max_charge,
-        max_discharge_power_w=max_discharge,
-        minimum_trade_margin_eur_per_kwh=margin,
-        check_work=check_work,
-        combined=False,
-    )
-    combined = _build_planner(
-        axis=axis,
-        commitments=commitments,
-        start_soc_percent=soc,
-        capacity_kwh=capacity,
-        software_reserve_percent=reserve,
-        charge_efficiency=charge_eff,
-        discharge_efficiency=discharge_eff,
-        max_charge_power_w=max_charge,
-        max_discharge_power_w=max_discharge,
-        minimum_trade_margin_eur_per_kwh=margin,
-        check_work=check_work,
-        combined=True,
-    )
+    if stage in ("automatic", "both"):
+        automatic = _build_planner(
+            axis=axis,
+            commitments=[],
+            start_soc_percent=soc,
+            capacity_kwh=capacity,
+            software_reserve_percent=reserve,
+            charge_efficiency=charge_eff,
+            discharge_efficiency=discharge_eff,
+            max_charge_power_w=max_charge,
+            max_discharge_power_w=max_discharge,
+            minimum_trade_margin_eur_per_kwh=margin,
+            check_work=check_work,
+            combined=False,
+        )
+    else:
+        automatic = dict(automatic_snapshot or {})
+
+    if stage in ("combined", "both"):
+        if not commitments and automatic.get("valid"):
+            # No manual commitments: Combined is the same physical/economic
+            # route. Avoid a second full 288-slot optimization entirely.
+            combined = {
+                **automatic,
+                "mode": "combined_planner",
+                "manual_commitment_count": 0,
+                "manual_commitment_slots": [],
+            }
+        else:
+            combined = _build_planner(
+                axis=axis,
+                commitments=commitments,
+                start_soc_percent=soc,
+                capacity_kwh=capacity,
+                software_reserve_percent=reserve,
+                charge_efficiency=charge_eff,
+                discharge_efficiency=discharge_eff,
+                max_charge_power_w=max_charge,
+                max_discharge_power_w=max_discharge,
+                minimum_trade_margin_eur_per_kwh=margin,
+                check_work=check_work,
+                combined=True,
+            )
+    else:
+        combined = {}
 
     return {
         "status": "ready",
         "valid": bool(
-            automatic.get("valid") and combined.get("valid")
+            automatic.get("valid") if stage == "automatic"
+            else combined.get("valid") if stage == "combined"
+            else automatic.get("valid") and combined.get("valid")
         ),
         "blockers": [],
         "automatic": automatic,
