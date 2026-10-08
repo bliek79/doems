@@ -132,15 +132,22 @@ def test_stress_288_quarters_has_bounded_trial_count_and_runtime():
     assert elapsed < 18, f"288-slot dual-planner stress took {elapsed:.2f}s"
 
 
-def test_worker_recovery_contract_keeps_latest_request_and_cache_atomic():
+def test_worker_recovery_contract_preserves_serial_stages_and_latest_manual():
     from pathlib import Path
     source = (Path(__file__).resolve().parents[1]
               / "custom_components/doems/automatic_combined_planner.py").read_text()
     assert 'self._active_cancel_event.set()' in source
-    assert 'self._active_generation == self._generation' in source
-    assert 'self._cached_bundle.get("status") == "ready"' in source
+    assert 'async_request_manual_refresh' in source
+    assert 'self._active_stage == "automatic"' in source
+    assert 'self._pending_request = request' in source
+    assert 'self._manual_revision += 1' in source
+    assert 'self._auto_revision += 1' in source
+    assert 'self._enqueue_combined("automatic_completed")' in source
+    assert 'self._manual_plans_snapshot()' in source
     assert 'except PlannerComputeBudgetExceeded as err:' in source
     assert 'except PlannerComputeCancelled:' in source
-    assert 'self._pending_request = request' in source
     assert 'await self.hass.async_add_executor_job(compute)' in source
     assert 'self._cached_bundle = bundle' in source
+    assert 'self._publish_automatic(request, bundle)' in source
+    assert 'self._publish_combined(request, bundle)' in source
+    assert 'if stage == "automatic":' in source
