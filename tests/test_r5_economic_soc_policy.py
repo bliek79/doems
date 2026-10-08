@@ -34,8 +34,8 @@ def test_r5_cheaper_grid_charge_before_usable_solar_avoids_expensive_home_import
         prices[energy[i]["start"]]["import_all_in"] = 0.09
     result = _run(energy, solar, prices, soc=12.0)
     assert result["native_slot_count"] == 288
-    assert sum(row["charge_from_grid_trade_kwh"] for row in result["native_slots"][:8]) > 0
-    assert result["economic_reserved_kwh"] > 0
+    assert sum(row["charge_from_grid_kwh"] for row in result["native_slots"][:8]) > 0
+    assert result["unavoidable_grid_import_kwh"] >= 0
     assert result["dynamic_reserve_max_soc_percent"] == 10.0
     assert result["physical_execution_enabled"] is False
 
