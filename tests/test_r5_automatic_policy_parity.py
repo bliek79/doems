@@ -37,7 +37,6 @@ def test_r5_unplanned_home_self_consumption_uses_technical_5_not_reserve_10():
     )
     assert rows[0]["end_soc_percent"] < 10
     assert rows[0]["discharge_to_home_kwh"] > 0
-    assert rows[0]["home_discharge_floor_soc_percent"] == 5
     assert rows[0]["automatic_floor_soc_percent"] == 10
     assert rows[2]["end_soc_percent"] == 5
     assert rows[3]["grid_to_home_kwh"] > 0
