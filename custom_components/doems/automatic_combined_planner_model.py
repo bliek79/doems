@@ -12,6 +12,7 @@ from collections.abc import Callable
 from typing import Any, Mapping, Sequence
 
 from .planner_diagnostics import PlannerDiagnostics
+from .safety_planner import prepare_safety_slots, replay_safety
 
 from .manual_soc_projection_model import (
     CHARGE_EFFICIENCY,
@@ -641,77 +642,95 @@ def _build_planner(
 
     if diagnostics is not None:
         diagnostics.enter("safety_charging")
-    initial = simulate()
-    safety_needed = any(
-        float(row["end_soc_percent"])
-        < float(reserve_floor_end[index]) - 1e-6
-        for index, row in enumerate(initial)
+    # Port of alpha39 ems_alpha36/planner_preview.py cheapest-energy safety:
+    # carry actual SOC, select the cheapest feasible earlier window, and find
+    # sufficient allocation by binary search rather than assuming linear gain.
+    # Quarter resolution and Combined manual clamps remain authoritative.
+    safety_slots = prepare_safety_slots(
+        axis, commitments, capacity_kwh, charge_efficiency,
+        discharge_efficiency, max_charge_power_w, max_discharge_power_w,
     )
 
-    # Technical SOC (5%) is the normal household discharge limit above.
-    # Unlike alpha.7.1.3, reserve breaches below the independently configured
-    # technical + software planning target can now really be detected. Safety
-    # precharge finds the cheapest feasible slot no later than each breach.
-    # It never depends on the trade/export margin or the next usable-solar
-    # marker and never changes the 288-slot time base.
-    #
-    # Re-simulate after every addition so manual commitments and target clamps
-    # remain hard constraints in Combined.
-    for _ in range(FORECAST_SLOTS):
+    def safety_replay(stop: int | None = None) -> tuple[list[float], list[float]]:
+        nonlocal simulation_count
+        if check_work is not None:
+            check_work()
+        if stop is None:
+            simulation_count += 1
+        if diagnostics is not None:
+            if stop is None:
+                diagnostics.count("simulation_count")
+            diagnostics.count("safety_replays")
+            diagnostics.counts["safety_replayed_slots"] = (
+                diagnostics.counts.get("safety_replayed_slots", 0)
+                + (len(axis) if stop is None else stop + 1)
+            )
+        return replay_safety(
+            safety_slots, safety, start_soc_percent, capacity_kwh,
+            charge_efficiency, discharge_efficiency,
+            stop=stop, check_work=check_work,
+        )
+
+    route_soc, headroom = safety_replay()
+    safety_needed = any(
+        soc < reserve_floor_end[index] - 1e-6
+        for index, soc in enumerate(route_soc)
+    )
+    for _ in range(FORECAST_SLOTS * 4):
         if diagnostics is not None:
             diagnostics.count("safety_iterations")
-        route = simulate()
-        breach = next(
-            (
-                index
-                for index, row in enumerate(route)
-                if float(row["end_soc_percent"])
-                < float(reserve_floor_end[index]) - 1e-6
-            ),
-            None,
-        )
+        breach = next((index for index, soc in enumerate(route_soc)
+                       if soc < reserve_floor_end[index] - 1e-6), None)
         if breach is None:
             break
-
-        required_soc = float(reserve_floor_end[breach])
-        need_soc = required_soc - float(route[breach]["end_soc_percent"])
+        required_soc = reserve_floor_end[breach]
+        current_soc = route_soc[breach]
         candidates = [
-            index
-            for index, row in enumerate(route[: breach + 1])
-            if not row["manual_slots"]
-            and row.get("import_price") is not None
-            and float(row["charge_headroom_kwh"]) > _EPS
-            and trade_charge.get(index, 0.0) <= _EPS
-            and trade_discharge.get(index, 0.0) <= _EPS
+            index for index in range(breach + 1)
+            if not safety_slots[index][4]
+            and safety_slots[index][5] is not None
+            and headroom[index] > _EPS
         ]
-        candidates.sort(
-            key=lambda index: (
-                float(route[index]["import_price"]),
-                -index,
-            )
-        )
-
+        candidates.sort(key=lambda index: (float(safety_slots[index][5]), -index))
         made = False
         for index in candidates:
-            max_input = float(route[index]["charge_headroom_kwh"])
-            old = safety.get(index, 0.0)
-            safety[index] = old + max_input
+            maximum = headroom[index]
+            previous = safety.get(index, 0.0)
+            safety[index] = previous + maximum
             if diagnostics is not None:
                 diagnostics.count("safety_trials")
-            trial = simulate()
-            gain_soc = (
-                float(trial[breach]["end_soc_percent"])
-                - float(route[breach]["end_soc_percent"])
-            )
-            safety[index] = old
-            if gain_soc <= 1e-6:
+            trial_soc, _ = safety_replay(breach)
+            achieved = trial_soc[-1]
+            safety[index] = previous
+            if achieved <= current_soc + 1e-6:
                 continue
-            add = (
-                max_input
-                if gain_soc <= need_soc
-                else max_input * need_soc / gain_soc
-            )
-            safety[index] = old + add
+            allocation = maximum
+            if achieved > required_soc:
+                # Alpha39 sequential repair first tries only the deficit.
+                # Verify this on the real path; use Alpha80 binary search when
+                # intervening discharge/clamps consume part of that addition.
+                minimum = min(maximum, (required_soc - current_soc)
+                              / 100.0 * capacity_kwh / charge_efficiency)
+                safety[index] = previous + minimum
+                if diagnostics is not None:
+                    diagnostics.count("safety_allocation_probes")
+                probe_soc, _ = safety_replay(breach)
+                if probe_soc[-1] >= required_soc - 1e-9:
+                    allocation = minimum
+                else:
+                    low, high = minimum, maximum
+                    for _binary in range(18):
+                        safety[index] = previous + (low + high) / 2.0
+                        if diagnostics is not None:
+                            diagnostics.count("safety_allocation_probes")
+                        probe_soc, _ = safety_replay(breach)
+                        if probe_soc[-1] >= required_soc:
+                            high = (low + high) / 2.0
+                        else:
+                            low = (low + high) / 2.0
+                    allocation = high
+            safety[index] = previous + allocation
+            route_soc, headroom = safety_replay()
             made = True
             break
         if not made:
