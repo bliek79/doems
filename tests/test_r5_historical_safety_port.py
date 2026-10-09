@@ -93,4 +93,33 @@ def test_non_linear_safety_allocation_finishes_and_meets_reserve():
     assert min(r['end_soc_percent'] for r in route) >= 10 - .00001
     assert result['automatic']['safety_schedule_sufficient']
     assert trace.counts['safety_allocation_probes'] > 0
-    assert trace.counts['safety_replayed_slots'] < trace.counts['safety_replays'] * 288
+    assert trace.counts['safety_composed_probes'] > 0
+    assert trace.counts['safety_replayed_slots'] < 100000
+
+
+def test_composed_deadline_probe_matches_full_replay_for_random_clamps():
+    safety = _load('safety_planner')
+    rng = random.Random(481)
+    for _ in range(40):
+        cap, ce, de = rng.uniform(2, 15), rng.uniform(.7, 1), rng.uniform(.7, 1)
+        start = rng.uniform(5, 100)
+        slots = [(rng.uniform(0, 1), rng.uniform(0, 1),
+                  rng.uniform(.1, 1), rng.uniform(.1, 1), (), .2)
+                 for _ in range(288)]
+        for i in range(40, 220, 30):
+            slots[i] = (*slots[i][:4], ((bool(rng.randrange(2)), rng.uniform(0, .8), rng.uniform(5, 100)),), .2)
+        schedule = {i: rng.uniform(0, 1) for i in range(288)}
+        route, _ = safety.replay_safety(slots, schedule, start, cap, ce, de)
+        deadline = rng.randrange(288)
+        probe = safety.prepare_deadline_probe(slots, schedule, route, start, cap, ce, de, deadline)
+        for index in {0, deadline, rng.randrange(deadline + 1)}:
+            for charge in (0, .2, 1.4):
+                changed = dict(schedule, **{})
+                changed[index] = charge
+                expected, _ = safety.replay_safety(slots, changed, start, cap, ce, de, stop=deadline)
+                assert probe(index, charge) == pytest.approx(expected[-1], abs=1e-8)
+    manual_slots = [(0., .1, .8, .8, ((True, .2, 70.),), .2)]
+    probe = safety.prepare_deadline_probe(manual_slots, {}, [20.], 20., 7.1, .92, .92, 0)
+    expected, _ = safety.replay_safety(manual_slots, {0: .4}, 20., 7.1, .92, .92)
+    assert probe(0, .4) == pytest.approx(expected[0], abs=1e-8)
+

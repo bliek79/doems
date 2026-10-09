@@ -12,7 +12,7 @@ from collections.abc import Callable
 from typing import Any, Mapping, Sequence
 
 from .planner_diagnostics import PlannerDiagnostics
-from .safety_planner import prepare_safety_slots, replay_safety
+from .safety_planner import prepare_safety_slots, replay_safety, prepare_deadline_probe
 
 from .manual_soc_projection_model import (
     CHARGE_EFFICIENCY,
@@ -692,6 +692,21 @@ def _build_planner(
             and headroom[index] > _EPS
         ]
         candidates.sort(key=lambda index: (float(safety_slots[index][5]), -index))
+        deadline_probe = prepare_deadline_probe(
+            safety_slots, safety, route_soc, start_soc_percent, capacity_kwh,
+            charge_efficiency, discharge_efficiency, breach,
+        )
+
+        def probe_soc_at(index: int) -> float:
+            if deadline_probe is None:
+                values, _ = safety_replay(breach)
+                return values[-1]
+            if check_work is not None:
+                check_work()
+            if diagnostics is not None:
+                diagnostics.count("safety_composed_probes")
+            return deadline_probe(index, safety.get(index, 0.0))
+
         made = False
         for index in candidates:
             maximum = headroom[index]
@@ -699,8 +714,7 @@ def _build_planner(
             safety[index] = previous + maximum
             if diagnostics is not None:
                 diagnostics.count("safety_trials")
-            trial_soc, _ = safety_replay(breach)
-            achieved = trial_soc[-1]
+            achieved = probe_soc_at(index)
             safety[index] = previous
             if achieved <= current_soc + 1e-6:
                 continue
@@ -714,8 +728,7 @@ def _build_planner(
                 safety[index] = previous + minimum
                 if diagnostics is not None:
                     diagnostics.count("safety_allocation_probes")
-                probe_soc, _ = safety_replay(breach)
-                if probe_soc[-1] >= required_soc - 1e-9:
+                if probe_soc_at(index) >= required_soc - 1e-9:
                     allocation = minimum
                 else:
                     low, high = minimum, maximum
@@ -723,8 +736,7 @@ def _build_planner(
                         safety[index] = previous + (low + high) / 2.0
                         if diagnostics is not None:
                             diagnostics.count("safety_allocation_probes")
-                        probe_soc, _ = safety_replay(breach)
-                        if probe_soc[-1] >= required_soc:
+                        if probe_soc_at(index) >= required_soc:
                             high = (low + high) / 2.0
                         else:
                             low = (low + high) / 2.0

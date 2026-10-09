@@ -11,6 +11,61 @@ from __future__ import annotations
 from typing import Any, Callable, Mapping, Sequence
 
 
+def prepare_deadline_probe(slots, schedule, route_soc, start_soc, capacity,
+                           charge_eff, discharge_eff, deadline):
+    """Compose exact scalar transitions between manual target clamps.
+
+    Each quarter maps stored energy to clamp(stored + offset, floor, ceiling).
+    Compositions retain this form. A changed charge at one quarter therefore
+    needs one local transition and one composed suffix, without route replay.
+    Manual target transitions remain explicit between composed segments.
+    """
+    floor = .05 * capacity
+    suffixes = [None] * (deadline + 1)
+    operations = []
+    for index in range(deadline, -1, -1):
+        suffixes[index] = tuple(operations)
+        surplus, deficit, charge_limit, discharge_limit, manual, _ = slots[index]
+        incoming = min(charge_limit, surplus + max(0.0, schedule.get(index, 0.0))) * charge_eff
+        outgoing = min(deficit, discharge_limit) / discharge_eff
+        local_upper = max(floor, capacity - outgoing)
+        if manual:
+            operations.insert(0, ("manual", manual))
+        if operations and operations[0][0] != "manual":
+            offset, lower, upper = operations[0]
+            operations[0] = (incoming - outgoing + offset,
+                             min(upper, max(lower, floor + offset)),
+                             min(upper, max(lower, local_upper + offset)))
+        else:
+            operations.insert(0, (incoming - outgoing, floor, local_upper))
+
+    def apply_manual(stored, manual):
+        for charging, requested, target in manual:
+            target_stored = target / 100.0 * capacity
+            if charging:
+                stored += min(requested, max(0.0, target_stored - stored) / charge_eff) * charge_eff
+            else:
+                stored -= min(requested, max(0.0, stored - target_stored) * discharge_eff) / discharge_eff
+        return max(floor, min(capacity, stored))
+
+    def probe(index, charge):
+        stored = (start_soc if index == 0 else route_soc[index - 1]) / 100.0 * capacity
+        surplus, deficit, charge_limit, discharge_limit, manual, _ = slots[index]
+        incoming = min(charge_limit, surplus + max(0.0, charge)) * charge_eff
+        outgoing = min(deficit, discharge_limit) / discharge_eff
+        stored = max(floor, min(capacity, stored + incoming) - outgoing)
+        stored = apply_manual(stored, manual)
+        for operation in suffixes[index]:
+            if operation[0] == "manual":
+                stored = apply_manual(stored, operation[1])
+            else:
+                delta, low, high = operation
+                stored = min(high, max(low, stored + delta))
+        return stored / capacity * 100.0
+
+    return probe
+
+
 def prepare_safety_slots(
     axis: Sequence[Mapping[str, Any]],
     commitments: Sequence[Mapping[str, Any]],

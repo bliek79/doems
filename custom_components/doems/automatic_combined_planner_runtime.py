@@ -17,7 +17,7 @@ from .automatic_combined_planner_model import (
     build_planner_bundle,
 )
 
-RUNTIME_VERSION = "automatic_combined_sequential_historical_safety_v3"
+RUNTIME_VERSION = "automatic_combined_sequential_exact_safety_v4"
 PLANNER_POLICY_VERSION = "manual_priority_parity_v1"
 PLANNER_COMPUTE_BUDGET_SECONDS = 20.0
 
