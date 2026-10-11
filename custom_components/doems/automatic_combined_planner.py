@@ -141,7 +141,7 @@ class DOEMSPlannerManager:
                 )
             )
         self._source_unsubs.append(
-            self.plans.add_listener(
+            self.plans.add_manual_listener(
                 partial(self._source_changed, "manual_plan_changed")
             )
         )

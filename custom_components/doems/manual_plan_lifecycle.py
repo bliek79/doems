@@ -41,7 +41,7 @@ class DOEMSManualPlanLifecycle:
 
     async def async_setup(self) -> None:
         await self.async_evaluate()
-        self._remove_store_listener = self.store.add_listener(
+        self._remove_store_listener = self.store.add_manual_listener(
             self._handle_store_change
         )
         self._schedule_next_expiry()
