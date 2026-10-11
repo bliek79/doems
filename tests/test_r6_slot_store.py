@@ -125,7 +125,6 @@ def test_r6_direct_manual_edit_claims_automatic_slot(monkeypatch):
         claimed = store.get_plan(1)
         assert claimed["origin"] == "manual"
         assert claimed["lifecycle_status"] == "concept"
-        assert claimed["planner_identity"] if False else True
         assert "planner_identity" not in claimed
         assert claimed["target_soc"] == 73.0
         await store.async_sync_automatic_plans(_candidates(), now=NOW)

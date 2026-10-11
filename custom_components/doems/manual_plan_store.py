@@ -410,6 +410,23 @@ class DOEMSManualPlanStore:
                 if plan.get("planner_identity"):
                     identities.add(str(plan["planner_identity"]))
 
+        # Reserve slots holding *future* proposals with stable identities
+        # before placing new candidates. A newly available earlier candidate
+        # must not shuffle still-valid existing automatic assignments.
+        wanted_ids = {
+            str(item.get("planner_identity"))
+            for item in proposals
+            if item.get("origin") == AUTO_ORIGIN
+            and item.get("planner_identity")
+            and (_aware_utc(item.get("start_time")) or clock) > clock
+        }
+        reserved_matches: set[int] = {
+            slot for slot in range(1, PLAN_SLOT_COUNT + 1)
+            if current[slot].get("origin") == AUTO_ORIGIN
+            and current[slot].get("planner_identity") in wanted_ids
+            and reusable(slot)
+        }
+
         for candidate in proposals:
             identity = candidate.get("planner_identity")
             start = _aware_utc(candidate.get("start_time"))
@@ -442,7 +459,9 @@ class DOEMSManualPlanStore:
             if selected is None:
                 selected = next((
                     slot for slot in range(1, PLAN_SLOT_COUNT + 1)
-                    if slot not in occupied and reusable(slot)
+                    if slot not in occupied
+                    and slot not in reserved_matches
+                    and reusable(slot)
                 ), None)
             if selected is None:
                 skipped.append(str(identity))

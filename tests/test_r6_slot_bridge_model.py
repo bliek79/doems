@@ -123,7 +123,7 @@ def test_r6_manual_overlap_splits_window_but_never_becomes_auto_proposal():
     proposals = model.build_automatic_slot_proposals(_combined(rows), now=NOW)["proposals"]
     assert len(proposals) == 2
     assert [p["max_runtime_h"] for p in proposals] == [0.25, 0.25]
-    assert all("2026-10-12T12:15:00" not in p["planner_identity"] for p in proposals)
+    assert [p["start_time"] for p in proposals] == [rows[0]["start"], rows[2]["start"]]
 
 
 def test_r6_pv_and_home_energy_never_become_explicit_control_actions():
