@@ -1,9 +1,9 @@
-name: DOEMS CI and 0.2.0-alpha.7.1.8 Exact Safety Deadline Probes
+name: DOEMS CI and 0.2.0-alpha.7.1.9 Solar Per-Array Performance Factor Restore
 
 on:
   pull_request:
   push:
-    branches: [reset-0.2.0-alpha.7.1.8]
+    branches: [reset-0.2.0-alpha.7.1.9]
   workflow_dispatch:
 
 permissions:
@@ -29,9 +29,9 @@ jobs:
               json.loads(path.read_text(encoding='utf-8'))
               print(f'valid: {path}')
           PY
-      - name: Validate 0.2.0-alpha.7.1.8 planner migration hotfix
+      - name: Validate 0.2.0-alpha.7.1.9 Solar factor restore
         run: |
-          test -f RELEASE_NOTES_0.2.0-alpha.7.1.8.md
+          test -f RELEASE_NOTES_0.2.0-alpha.7.1.9.md
           test -f examples/prices_p4_forecast_card.yaml
           test -f custom_components/doems/prices.py
           test -f custom_components/doems/prices_model.py
@@ -41,8 +41,12 @@ jobs:
           test ! -f scripts/build_brand_assets.py
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
-          grep -F 'VERSION = "0.2.0-alpha.7.1.8"' custom_components/doems/const.py
-          grep -F '"version": "0.2.0-alpha.7.1.8"' custom_components/doems/manifest.json
+          grep -F 'VERSION = "0.2.0-alpha.7.1.9"' custom_components/doems/const.py
+          test -f tests/test_reset_solar_array_performance_recovery.py
+          grep -F 'SOLAR_DEFAULT_PERFORMANCE_FACTOR = 0.90' custom_components/doems/const.py
+          grep -F '"performance_factor_percent"' custom_components/doems/config_flow.py
+          grep -F '"array_performance_factors": array_performance_factors' custom_components/doems/solar_forecast.py
+          grep -F '"version": "0.2.0-alpha.7.1.9"' custom_components/doems/manifest.json
           grep -F 'build_prices_sensors' custom_components/doems/sensor.py
           grep -F 'DOEMSRegisteredPricesManager' custom_components/doems/__init__.py
           grep -F 'GAS_SOURCE_ENERGYZERO_MARKET_ACTION' custom_components/doems/const.py
@@ -174,8 +178,8 @@ jobs:
           test "$(git hash-object custom_components/doems/datetime.py)" = "bcb95caa993f38cdf42f20df5108fbd6b5aadfc2"
           test "$(git hash-object custom_components/doems/services.yaml)" = "f5f4807397b64b2c73faaecaea88324d53426592"
 
-  publish-reset-alpha718:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/reset-0.2.0-alpha.7.1.8'
+  publish-reset-alpha719:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/reset-0.2.0-alpha.7.1.9'
     needs: validate
     runs-on: ubuntu-latest
     steps:
@@ -184,7 +188,7 @@ jobs:
           fetch-depth: 0
       - name: Build release archive
         run: |
-          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.2.0-alpha.7.1.8.md
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.2.0-alpha.7.1.9.md
           sha256sum doems.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - name: Verify Prices P4 runtime is packaged
@@ -201,7 +205,7 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/battery_contract_model.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/config_flow.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/sensor.py'
-          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.7.1.8.md'
+          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.7.1.9.md'
       - name: Verify Manual Plan Store is packaged
         run: |
           unzip -l doems.zip | grep -F 'custom_components/doems/manual_plan_model.py'
@@ -210,20 +214,20 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/number.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/datetime.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/services.yaml'
-          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.7.1.8.md'
+          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.7.1.9.md'
       - name: Verify Manual SOC Replanning is packaged
         run: |
           unzip -l doems.zip | grep -F 'custom_components/doems/manual_soc_projection_model.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/manual_soc_projection.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/sensor.py'
-          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.7.1.8.md'
+          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.7.1.9.md'
       - name: Verify Manual Lifecycle Expiry is packaged
         run: |
           unzip -l doems.zip | grep -F 'custom_components/doems/manual_plan_lifecycle_model.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/manual_plan_lifecycle.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/manual_plan_store.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/sensor.py'
-          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.7.1.8.md'
+          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.7.1.9.md'
       - name: Verify planner architecture and dashboard are packaged
         run: |
           unzip -l doems.zip | grep -F 'custom_components/doems/automatic_combined_planner_model.py'
@@ -233,27 +237,27 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/prices.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/sensor.py'
           unzip -l doems.zip | grep -F 'examples/doems_planner_dashboard.yaml'
-          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.7.1.8.md'
+          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.7.1.9.md'
       - name: Verify exact existing DOEMS brand icon is packaged
         run: |
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/icon.png'
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
-      - name: Publish 0.2.0-alpha.7.1.8 Exact Safety Deadline Probes
+      - name: Publish 0.2.0-alpha.7.1.9 Solar Per-Array Performance Factor Restore
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           # Published tags are immutable; retries must target the same commit.
-          if gh api "repos/${{ github.repository }}/git/ref/tags/0.2.0-alpha.7.1.8" >/dev/null 2>&1; then
-            existing_sha="$(gh api "repos/${{ github.repository }}/git/ref/tags/0.2.0-alpha.7.1.8" --jq '.object.sha')"
+          if gh api "repos/${{ github.repository }}/git/ref/tags/0.2.0-alpha.7.1.9" >/dev/null 2>&1; then
+            existing_sha="$(gh api "repos/${{ github.repository }}/git/ref/tags/0.2.0-alpha.7.1.9" --jq '.object.sha')"
             test "$existing_sha" = "${{ github.sha }}"
           fi
-          if gh release view 0.2.0-alpha.7.1.8 >/dev/null 2>&1; then
-            gh release edit 0.2.0-alpha.7.1.8 --title "DOEMS 0.2.0-alpha.7.1.8 - Exact Safety Deadline Probes" --notes-file RELEASE_NOTES_0.2.0-alpha.7.1.8.md --prerelease
-            gh release upload 0.2.0-alpha.7.1.8 doems.zip SHA256SUMS.txt --clobber
+          if gh release view 0.2.0-alpha.7.1.9 >/dev/null 2>&1; then
+            gh release edit 0.2.0-alpha.7.1.9 --title "DOEMS 0.2.0-alpha.7.1.9 - Solar Per-Array Performance Factor Restore" --notes-file RELEASE_NOTES_0.2.0-alpha.7.1.9.md --prerelease
+            gh release upload 0.2.0-alpha.7.1.9 doems.zip SHA256SUMS.txt --clobber
           else
-            gh release create 0.2.0-alpha.7.1.8 doems.zip SHA256SUMS.txt --target reset-0.2.0-alpha.7.1.8 --title "DOEMS 0.2.0-alpha.7.1.8 - Exact Safety Deadline Probes" --notes-file RELEASE_NOTES_0.2.0-alpha.7.1.8.md --prerelease
+            gh release create 0.2.0-alpha.7.1.9 doems.zip SHA256SUMS.txt --target reset-0.2.0-alpha.7.1.9 --title "DOEMS 0.2.0-alpha.7.1.9 - Solar Per-Array Performance Factor Restore" --notes-file RELEASE_NOTES_0.2.0-alpha.7.1.9.md --prerelease
           fi
-          published_sha="$(gh api "repos/${{ github.repository }}/git/ref/tags/0.2.0-alpha.7.1.8" --jq '.object.sha')"
+          published_sha="$(gh api "repos/${{ github.repository }}/git/ref/tags/0.2.0-alpha.7.1.9" --jq '.object.sha')"
           test "$published_sha" = "${{ github.sha }}"
 
