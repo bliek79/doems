@@ -29,6 +29,7 @@ from .manual_plan_store import DOEMSManualPlanStore
 from .manual_soc_projection import DOEMSManualSOCProjection
 from .planner_migration import async_migrate_planner_architecture
 from .prices_runtime import DOEMSRegisteredPricesManager
+from .solar_actual import SolarActualQuarterManager
 from .solar_forecast import SolarForecastManager
 from .solar_foundation import SolarFoundationManager
 
@@ -67,6 +68,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
     await foundation.async_setup()
     solar_forecast = SolarForecastManager(hass, foundation)
     await solar_forecast.async_setup()
+    solar_actual = SolarActualQuarterManager(hass, foundation, solar_forecast)
+    await solar_actual.async_setup()
 
     prices: DOEMSRegisteredPricesManager | None = None
     if entry.options.get(CONF_PRICES_ENABLED, False):
@@ -113,6 +116,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
         "energy_forecast_enabled": coordinator is not None,
         "solar_foundation": foundation,
         "solar_forecast": solar_forecast,
+        "solar_actual": solar_actual,
         "prices": prices,
         "battery_input": battery_input,
         "manual_plan_store": manual_plan_store,
@@ -185,6 +189,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> bo
     manual_soc_projection = entry_data.get("manual_soc_projection")
     if isinstance(manual_soc_projection, DOEMSManualSOCProjection):
         await manual_soc_projection.async_shutdown()
+
+    solar_actual = entry_data.get("solar_actual")
+    if isinstance(solar_actual, SolarActualQuarterManager):
+        await solar_actual.async_shutdown()
 
     solar_forecast = entry_data.get("solar_forecast")
     if isinstance(solar_forecast, SolarForecastManager):

@@ -20,6 +20,7 @@ from .const import (
     NAME,
     VERSION,
 )
+from .solar_actual import SolarActualQuarterManager
 from .solar_forecast import OPEN_METEO_SOLAR_ENDPOINT, SolarForecastManager
 from .solar_forecast_model import (
     SOLAR_FORECAST_MODEL,
@@ -42,9 +43,10 @@ def _device_info(entry: ConfigEntry) -> DeviceInfo:
 def build_solar_sensors(
     entry: ConfigEntry,
     manager: SolarForecastManager,
+    actual: SolarActualQuarterManager | None = None,
 ) -> list[SensorEntity]:
     """Build the public provider-neutral Solar P3.1 sensor contract."""
-    return [
+    entities: list[SensorEntity] = [
         DOEMSSolarSourceStatusSensor(entry, manager),
         DOEMSSolarForecastTimelineSensor(entry, manager),
         DOEMSSolarForecastNextQuarterSensor(entry, manager),
@@ -52,6 +54,9 @@ def build_solar_sensors(
         DOEMSSolarForecastDailySensor(entry, manager, "tomorrow"),
         DOEMSSolarForecastModelSensor(entry, manager),
     ]
+    if actual is not None:
+        entities.append(DOEMSSolarActualQuarterSensor(entry, actual))
+    return entities
 
 
 class DOEMSSolarBaseSensor(SensorEntity):
@@ -78,6 +83,79 @@ class DOEMSSolarBaseSensor(SensorEntity):
     @callback
     def _handle_update(self) -> None:
         self.async_write_ha_state()
+
+
+class DOEMSSolarActualQuarterSensor(SensorEntity):
+    """Expose the last completed Solar quarter and its start-locked forecast."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+    _attr_name = "DOEMS Solar Actual Quarter"
+    _attr_unique_id = "doems_solar_actual_quarter"
+    _attr_suggested_object_id = "doems_solar_actual_quarter"
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_icon = "mdi:solar-panel-large"
+
+    def __init__(self, entry: ConfigEntry, actual: SolarActualQuarterManager) -> None:
+        self.actual = actual
+        self._remove_listener = None
+        self._attr_device_info = _device_info(entry)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._remove_listener = self.actual.async_add_listener(self._handle_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._remove_listener is not None:
+            self._remove_listener()
+            self._remove_listener = None
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> float | None:
+        result = self.actual.last_quarter
+        return result.energy_kwh if result and result.measurement_valid else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        result = self.actual.last_quarter
+        if result is None:
+            return {
+                "resolution_minutes": SOLAR_RESOLUTION_MINUTES,
+                "source_entity": self.actual.source_entity,
+                "status": (
+                    "waiting_for_first_quarter"
+                    if self.actual.enabled
+                    else "actual_source_not_configured"
+                ),
+                "measurement_valid": False,
+                "physical_execution_authority": False,
+            }
+        return {
+            "resolution_minutes": SOLAR_RESOLUTION_MINUTES,
+            "period_start": result.start.isoformat(),
+            "period_end": result.end.isoformat(),
+            "coverage": result.coverage,
+            "measurement_valid": result.measurement_valid,
+            "status": result.status,
+            "source_entity": result.source_entity,
+            "forecast_kwh": result.forecast_kwh,
+            "forecast_captured_at": (
+                result.forecast_captured_at.isoformat()
+                if result.forecast_captured_at is not None
+                else None
+            ),
+            "forecast_locked_at_start": result.forecast_locked_at_start,
+            "forecast_error_kwh": result.forecast_error_kwh,
+            "forecast_absolute_error_kwh": result.forecast_absolute_error_kwh,
+            "forecast_error_percent": result.forecast_error_percent,
+            "physical_execution_authority": False,
+        }
 
 
 class DOEMSSolarSourceStatusSensor(DOEMSSolarBaseSensor):
