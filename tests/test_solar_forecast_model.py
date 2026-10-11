@@ -81,22 +81,82 @@ def test_generic_1_to_n_arrays_and_multiple_inverter_groups_aggregate_independen
             {"group_id": "inv_b", "name": "B", "ac_limit_kw": 1.0},
         ],
         "arrays": [
-            {"array_id": "arr_1", "group_id": "inv_a", "dc_kwp": 2.0},
-            {"array_id": "arr_2", "group_id": "inv_a", "dc_kwp": 1.0},
-            {"array_id": "arr_3", "group_id": "inv_b", "dc_kwp": 2.0},
+            {"array_id": "arr_1", "group_id": "inv_a", "dc_kwp": 2.0, "performance_factor": 1.0},
+            {"array_id": "arr_2", "group_id": "inv_a", "dc_kwp": 1.0, "performance_factor": 1.0},
+            {"array_id": "arr_3", "group_id": "inv_b", "dc_kwp": 2.0, "performance_factor": 1.0},
         ],
     }
     point = m.build_forecast_point(
         foundation,
         start=datetime(2026, 9, 16, 12, 0, tzinfo=timezone.utc),
         irradiance_by_array={"arr_1": 1000.0, "arr_2": 1000.0, "arr_3": 1000.0},
-        performance_factor=1.0,
     )
     assert point.array_ids == ("arr_1", "arr_2", "arr_3")
     assert dict(point.group_kw) == {"inv_a": 2.0, "inv_b": 1.0}
     assert set(point.clipped_groups) == {"inv_a", "inv_b"}
     assert point.total_kw == 3.0
     assert point.total_kwh == 0.75
+
+
+
+def test_missing_array_factor_keeps_backward_compatible_090_default() -> None:
+    m = _load("solar_forecast_model")
+    foundation = {
+        "status": "ready",
+        "enabled": True,
+        "inverter_groups": [{"group_id": "inv_a", "ac_limit_kw": 0.0}],
+        "arrays": [{"array_id": "arr_1", "group_id": "inv_a", "dc_kwp": 1.0}],
+    }
+    point = m.build_forecast_point(
+        foundation,
+        start=datetime(2026, 9, 16, 12, 0, tzinfo=timezone.utc),
+        irradiance_by_array={"arr_1": 1000.0},
+    )
+    assert point.array_kw == (0.9,)
+    assert point.array_kwh == (0.225,)
+
+
+def test_array_specific_082_and_067_factors_are_applied_before_aggregation() -> None:
+    m = _load("solar_forecast_model")
+    foundation = {
+        "status": "ready",
+        "enabled": True,
+        "inverter_groups": [{"group_id": "inv_a", "ac_limit_kw": 10.0}],
+        "arrays": [
+            {"array_id": "arr_n", "group_id": "inv_a", "dc_kwp": 2.96, "performance_factor": 0.82},
+            {"array_id": "arr_s", "group_id": "inv_a", "dc_kwp": 1.48, "performance_factor": 0.67},
+        ],
+    }
+    point = m.build_forecast_point(
+        foundation,
+        start=datetime(2026, 9, 16, 12, 0, tzinfo=timezone.utc),
+        irradiance_by_array={"arr_n": 1000.0, "arr_s": 1000.0},
+    )
+    assert point.array_kw == (2.4272, 0.9916)
+    assert point.array_kwh == (0.6068, 0.2479)
+    assert point.total_kw == 3.4188
+    assert point.total_kwh == 0.8547
+
+
+def test_array_factor_is_applied_before_group_ac_cap_scaling() -> None:
+    m = _load("solar_forecast_model")
+    foundation = {
+        "status": "ready",
+        "enabled": True,
+        "inverter_groups": [{"group_id": "inv_a", "ac_limit_kw": 1.2}],
+        "arrays": [
+            {"array_id": "arr_a", "group_id": "inv_a", "dc_kwp": 1.0, "performance_factor": 1.0},
+            {"array_id": "arr_b", "group_id": "inv_a", "dc_kwp": 1.0, "performance_factor": 0.5},
+        ],
+    }
+    point = m.build_forecast_point(
+        foundation,
+        start=datetime(2026, 9, 16, 12, 0, tzinfo=timezone.utc),
+        irradiance_by_array={"arr_a": 1000.0, "arr_b": 1000.0},
+    )
+    assert point.clipped_groups == ("inv_a",)
+    assert point.array_kw == (0.8, 0.4)
+    assert point.total_kw == 1.2
 
 
 def test_timeline_fails_closed_when_one_array_slot_is_missing() -> None:
