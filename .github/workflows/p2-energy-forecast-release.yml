@@ -166,12 +166,13 @@ jobs:
           ! grep -F 'sensor.doems_ems_plan72_hours' examples/doems_planner_dashboard.yaml
           ! grep -F 'doems_r5_1_' examples/doems_planner_dashboard.yaml
           ! grep -F 'observational_only' examples/doems_planner_dashboard.yaml
+          # R6 expands only the 3 slot/listener wrappers below; all other R0-R5 digests remain frozen.
           test "$(git hash-object custom_components/doems/manual_plan_model.py)" = "ffc7f7e9aa73078d72e8df88f5359590aa812657"
-          test "$(git hash-object custom_components/doems/manual_plan_store.py)" = "5791e34874fab8c026da423e4a107ad07bae43e6"
+          test "$(git hash-object custom_components/doems/manual_plan_store.py)" = "7060f9f4ba7792ab3417e5dc96a37833d9f713a1"
           test "$(git hash-object custom_components/doems/manual_plan_services.py)" = "1826839068587491ed6b51caffd464861af009f7"
-          test "$(git hash-object custom_components/doems/manual_plan_lifecycle.py)" = "89f677a4ac84651bb5367c26b839263c7cd1dc9e"
+          test "$(git hash-object custom_components/doems/manual_plan_lifecycle.py)" = "11fdea475cb7b8ead9deba0df76e4dfb25db9994"
           test "$(git hash-object custom_components/doems/manual_plan_lifecycle_model.py)" = "e592db6ebb51028ea8e63c2a4d0b3110a4b140e3"
-          test "$(git hash-object custom_components/doems/manual_soc_projection.py)" = "4278cb90407c2fd9b5a0c5649b6af1908e8a80aa"
+          test "$(git hash-object custom_components/doems/manual_soc_projection.py)" = "3d085b57bc17e7620975490e60ce46ec49808a17"
           test "$(git hash-object custom_components/doems/manual_soc_projection_model.py)" = "1321c50ef460d54331c3b16dc0f93cf2eb0432e0"
           test "$(git hash-object custom_components/doems/number.py)" = "16496b112b3808eff63a1c2ddd1aee6dacf0b599"
           test "$(git hash-object custom_components/doems/select.py)" = "15ebee184502e321a2b64bdd09829fdeefeab1a4"

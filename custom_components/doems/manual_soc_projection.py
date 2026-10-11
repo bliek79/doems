@@ -40,7 +40,7 @@ class DOEMSManualSOCProjection:
         for source in (self.energy, self.solar, self.prices, self.battery):
             if source is not None and hasattr(source, "async_add_listener"):
                 self._source_unsubs.append(source.async_add_listener(self._source_changed))
-        self._source_unsubs.append(self.plans.add_listener(self._source_changed))
+        self._source_unsubs.append(self.plans.add_manual_listener(self._source_changed))
 
     async def async_shutdown(self) -> None:
         for unsub in self._source_unsubs:

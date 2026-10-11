@@ -134,7 +134,9 @@ def test_alpha3_store_is_persistent_manual_only_and_execution_free() -> None:
     assert "async_call(" not in store
     assert "async_call(" not in services
     assert "third_party_control" not in store + services
-    assert "automatic_72h_planner" not in store + services
+    # R6 shares the existing slots. Manual services themselves stay manual-only.
+    assert "automatic_72h_planner" in store
+    assert "automatic_72h_planner" not in services
     assert "DOEMSScheduler" not in store
     assert "scheduler_result" not in store
     assert "soc_projection_active" in (INTEGRATION / "sensor.py").read_text(encoding="utf-8")

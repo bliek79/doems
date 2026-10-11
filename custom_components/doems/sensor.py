@@ -560,7 +560,7 @@ class DOEMSBatteryInputStatusSensor(SensorEntity):
 
 
 class DOEMSManualPlanStatusSensor(SensorEntity):
-    """Status and diagnostics for one persistent manual Plan Store slot."""
+    """Status and diagnostics for an existing shared Manual/R6 slot."""
 
     _attr_should_poll = False
     _attr_has_entity_name = False
@@ -600,10 +600,18 @@ class DOEMSManualPlanStatusSensor(SensorEntity):
             "lifecycle_reason": plan.get("lifecycle_reason"),
             "lifecycle_updated_at": plan.get("lifecycle_updated_at"),
             "origin": plan.get("origin"),
+            "purpose": plan.get("purpose"),
+            "planned_end_time": plan.get("planned_end_time"),
+            "planned_energy_kwh": plan.get("planned_energy_kwh"),
+            "planner_identity": plan.get("planner_identity"),
+            "planner_signature": plan.get("planner_signature"),
+            "price_sources": plan.get("price_sources"),
+            "all_prices_known": plan.get("all_prices_known"),
             "last_terminal_event": self.store.last_terminal_event(self.slot),
             "schedule_blockers": self.store.schedule_blockers(self.slot),
             "persistent": True,
-            "manual_only": True,
+            "manual_only": plan.get("origin") != "automatic_72h_planner",
+            "r6_automatic_proposal": plan.get("origin") == "automatic_72h_planner",
             "soc_projection_active": True,
             "scheduler_enabled": False,
             "physical_execution_enabled": False,
