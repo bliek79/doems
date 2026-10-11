@@ -15,6 +15,7 @@ from .const import (
     CONF_SOLAR_LONGITUDE,
     CONF_SOLAR_TOTAL_ACTUAL_POWER_ENTITY,
     SOLAR_FOUNDATION_SCHEMA_VERSION,
+    SOLAR_DEFAULT_PERFORMANCE_FACTOR,
     SOLAR_LOCATION_HOME_ASSISTANT,
     SOLAR_LOCATION_OVERRIDE,
     SOLAR_PROVIDER,
@@ -95,12 +96,15 @@ def validate_solar_foundation(
         dc_kwp = _float(array.get("dc_kwp"))
         tilt_deg = _float(array.get("tilt_deg"))
         azimuth_deg = _float(array.get("azimuth_deg"))
+        performance_factor = _float(array.get("performance_factor", SOLAR_DEFAULT_PERFORMANCE_FACTOR))
         if dc_kwp is None or dc_kwp <= 0:
             blockers.append(f"array_dc_kwp_invalid:{array_id or '?'}")
         if tilt_deg is None or not 0 <= tilt_deg <= 90:
             blockers.append(f"array_tilt_invalid:{array_id or '?'}")
         if azimuth_deg is None or not 0 <= azimuth_deg < 360:
             blockers.append(f"array_azimuth_invalid:{array_id or '?'}")
+        if performance_factor is None or not 0.0 <= performance_factor <= 1.0:
+            blockers.append(f"array_performance_factor_invalid:{array_id or '?'}")
         actual = str(array.get("actual_power_entity") or "")
         if actual:
             if actual in actual_entities:
@@ -125,6 +129,8 @@ def build_solar_foundation_snapshot(
     longitude = ha_longitude if location_source == SOLAR_LOCATION_HOME_ASSISTANT else _float(options.get(CONF_SOLAR_LONGITUDE))
     groups = [dict(item) for item in options.get(CONF_SOLAR_INVERTER_GROUPS, []) if isinstance(item, dict)]
     arrays = [dict(item) for item in options.get(CONF_SOLAR_ARRAYS, []) if isinstance(item, dict)]
+    for item in arrays:
+        item.setdefault("performance_factor", SOLAR_DEFAULT_PERFORMANCE_FACTOR)
     blockers = validate_solar_foundation(options, ha_latitude=ha_latitude, ha_longitude=ha_longitude)
 
     total_dc_kwp = round(sum(float(item.get("dc_kwp", 0.0)) for item in arrays if _float(item.get("dc_kwp")) is not None), 6)
@@ -148,6 +154,7 @@ def build_solar_foundation_snapshot(
                 "dc_kwp": item.get("dc_kwp"),
                 "tilt_deg": item.get("tilt_deg"),
                 "azimuth_deg": item.get("azimuth_deg"),
+                "performance_factor": item.get("performance_factor", SOLAR_DEFAULT_PERFORMANCE_FACTOR),
                 "actual_power_entity": item.get("actual_power_entity") or None,
             }
             for item in arrays
@@ -175,6 +182,7 @@ def build_solar_foundation_snapshot(
         "total_actual_configured": total_actual is not None,
         "total_actual_power_entity": total_actual,
         "per_array_actual_count": per_array_actual_count,
+        "default_performance_factor": SOLAR_DEFAULT_PERFORMANCE_FACTOR,
         "inverter_groups": groups,
         "arrays": arrays,
         "blockers": blockers,

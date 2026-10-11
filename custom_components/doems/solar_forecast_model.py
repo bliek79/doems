@@ -7,8 +7,11 @@ from datetime import datetime, timedelta, timezone
 import math
 from typing import Any, Mapping, Sequence
 
+from .const import SOLAR_DEFAULT_PERFORMANCE_FACTOR
+
 SOLAR_FORECAST_MODEL = "open_meteo_gti_physical_v0.1"
-SOLAR_PERFORMANCE_FACTOR = 0.90
+# Backward-compatible default only. Runtime calculation is per-array.
+SOLAR_PERFORMANCE_FACTOR = SOLAR_DEFAULT_PERFORMANCE_FACTOR
 SOLAR_RESOLUTION_MINUTES = 15
 SOLAR_HORIZON_HOURS = 72
 SOLAR_FORECAST_SLOTS = SOLAR_HORIZON_HOURS * 60 // SOLAR_RESOLUTION_MINUTES
@@ -76,7 +79,7 @@ def array_power_kw(
     factor = _finite_float(performance_factor, name="performance_factor")
     if capacity <= 0.0:
         raise ValueError("dc_capacity_kwp_invalid")
-    if factor < 0.0:
+    if not 0.0 <= factor <= 1.0:
         raise ValueError("performance_factor_invalid")
     return round(max(0.0, irradiance) / 1000.0 * capacity * factor, 6)
 
@@ -112,7 +115,6 @@ def build_forecast_point(
     *,
     start: datetime,
     irradiance_by_array: Mapping[str, float | int],
-    performance_factor: float = SOLAR_PERFORMANCE_FACTOR,
 ) -> SolarForecastPoint:
     """Build one generic 1..N Solar slot and enforce AC limits per inverter group."""
     if start.tzinfo is None:
@@ -158,7 +160,13 @@ def build_forecast_point(
 
         gti = _finite_float(irradiance_by_array[array_id], name=f"irradiance:{array_id}")
         dc_kwp = _finite_float(array.get("dc_kwp"), name=f"dc_kwp:{array_id}")
-        raw_power[array_id] = array_power_kw(gti, dc_kwp, performance_factor)
+        factor = _finite_float(
+            array.get("performance_factor", SOLAR_PERFORMANCE_FACTOR),
+            name=f"performance_factor:{array_id}",
+        )
+        if not 0.0 <= factor <= 1.0:
+            raise ValueError(f"performance_factor_invalid:{array_id}")
+        raw_power[array_id] = array_power_kw(gti, dc_kwp, factor)
         gti_values[array_id] = max(0.0, gti)
         group_members[group_id].append(array_id)
         array_ids.append(array_id)
@@ -202,7 +210,6 @@ def build_forecast_timeline(
     *,
     starts: Sequence[datetime],
     irradiance_by_array: Mapping[str, Mapping[datetime, float | int]],
-    performance_factor: float = SOLAR_PERFORMANCE_FACTOR,
 ) -> list[SolarForecastPoint]:
     """Build an aligned generic Solar timeline without nearest-neighbour padding."""
     arrays = foundation.get("arrays")
@@ -225,7 +232,6 @@ def build_forecast_timeline(
                 foundation,
                 start=start,
                 irradiance_by_array=slot_gti,
-                performance_factor=performance_factor,
             )
         )
     return points
