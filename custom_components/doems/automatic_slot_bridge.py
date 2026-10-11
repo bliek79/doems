@@ -38,6 +38,8 @@ class DOEMSAutoSlotBridge:
         self._timer_unsub: Callable[[], None] | None = None
         self._tasks: set[asyncio.Task[Any]] = set()
         self._manual_serial = 0
+        self._manual_pending = False
+        self._manual_required_revision = 0
         self._shutdown = False
         self.last_result: dict[str, Any] = {"status": "startup"}
 
@@ -79,6 +81,12 @@ class DOEMSAutoSlotBridge:
     @callback
     def _manual_changed(self) -> None:
         self._manual_serial += 1
+        # A user edit immediately invalidates the previously published
+        # Combined for R6 writes, even before the R5 replan task is scheduled.
+        self._manual_pending = True
+        self._manual_required_revision = max(
+            self._manual_required_revision, self.planner._manual_revision + 1
+        )
         # A new Combined publication triggers the actual slot revision.
         # Only repair expiry scheduling here, never use stale Combined rows.
         self._arm_expiry_timer()
@@ -142,6 +150,11 @@ class DOEMSAutoSlotBridge:
                 or bundle["combined"].get("native_slot_count") != 288
                 or bundle.get("planner_published_generation")
                    != self.planner._generation
+                or (
+                    self._manual_pending
+                    and int(bundle.get("planner_manual_revision") or -1)
+                        < self._manual_required_revision
+                )
             ):
                 self.last_result = {
                     "status": "waiting_full_r5_bundle",
@@ -175,6 +188,7 @@ class DOEMSAutoSlotBridge:
             result = await self.store.async_sync_automatic_plans(
                 list(proposal_result["proposals"]), now=reference
             )
+            self._manual_pending = False
             self.last_result = {
                 "status": "ready",
                 "source_native_slots": 288,
