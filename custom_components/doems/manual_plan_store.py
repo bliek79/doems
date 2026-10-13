@@ -318,6 +318,55 @@ class DOEMSManualPlanStore:
         self._notify()
 
 
+    async def async_promote_automatic_plan(
+        self,
+        slot: int,
+        *,
+        expected_identity: str,
+        expected_signature: str,
+        expected_updated_at: str | None,
+        gate_approved: bool,
+        now: datetime | None = None,
+    ) -> bool:
+        """R7: atomic guarded *software-only* concept -> pending transition.
+
+        R7 owns the prior Safety/Prestart decision. This method additionally
+        guards slot ownership/revision and the exact start window. It must never
+        call a battery service, start a plan, or notify Manual/R5 listeners.
+        """
+        self._validate_slot(slot)
+        reference = now or dt_util.now()
+        if reference.tzinfo is None:
+            raise ValueError("now must be timezone-aware")
+        current = self._plans[slot]
+        start = _aware_utc(current.get("start_time"))
+        deadline = _automatic_expiry(current)
+        clock = reference.astimezone(timezone.utc)
+        if (
+            gate_approved is not True
+            or current.get("origin") != AUTO_ORIGIN
+            or current.get("lifecycle_status") != "concept"
+            or current.get("execution_mode") != "gepland"
+            or current.get("action") not in {"laden", "ontladen"}
+            or not expected_identity
+            or current.get("planner_identity") != expected_identity
+            or not expected_signature
+            or current.get("planner_signature") != expected_signature
+            or current.get("lifecycle_updated_at") != expected_updated_at
+            or start is None
+            or deadline is None
+            or not start <= clock <= deadline
+        ):
+            return False
+        # No await before the ownership/window check and in-memory mutation:
+        # a concurrent Manual or R6 task cannot claim this slot between them.
+        current["lifecycle_status"] = "pending"
+        current["lifecycle_reason"] = "r7_scheduler_prestart_safe"
+        current["lifecycle_updated_at"] = reference.isoformat()
+        await self._async_save()
+        self._notify_automatic()
+        return True
+
     async def async_release_expired_automatic_plans(
         self, *, now: datetime | None = None
     ) -> dict[str, Any]:

@@ -40,6 +40,7 @@ from .energy_forecast import EnergyBaselineForecast, ceil_quarter
 from .prices import DOEMSPricesManager
 from .prices_sensor import build_prices_sensors
 from .automatic_combined_planner import DOEMSPlannerManager
+from .r7_runtime import DOEMSR7Scheduler
 from .solar_actual import SolarActualQuarterManager
 from .solar_forecast import SolarForecastManager
 from .solar_sensor import build_solar_sensors
@@ -135,6 +136,10 @@ async def async_setup_entry(
                 DOEMSCombinedSOCProjectionTimelineSensor(entry, planner),
             ]
         )
+
+    r7_scheduler = entry_data.get("r7_scheduler")
+    if isinstance(r7_scheduler, DOEMSR7Scheduler):
+        entities.append(DOEMSR7SchedulerStatusSensor(entry, r7_scheduler))
 
     async_add_entities(entities)
 
@@ -1128,3 +1133,41 @@ class DOEMSCombinedSOCProjectionTimelineSensor(_DOEMSPlannerBase):
         }
 
 
+
+
+class DOEMSR7SchedulerStatusSensor(SensorEntity):
+    """R7-only non-actuating Scheduler/Safety/Prestart audit surface."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+    _attr_name = "DOEMS R7 Scheduler Status"
+    _attr_unique_id = "doems_r7_scheduler_status"
+    _attr_suggested_object_id = "doems_r7_scheduler_status"
+    _attr_icon = "mdi:shield-check-outline"
+
+    def __init__(self, entry: ConfigEntry, scheduler: DOEMSR7Scheduler) -> None:
+        self.scheduler = scheduler
+        self._remove_listener = None
+        self._attr_device_info = _device_info(entry)
+
+    @property
+    def native_value(self) -> str:
+        return str(self.scheduler.last_result.get("status") or "startup")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return dict(self.scheduler.last_result)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._remove_listener = self.scheduler.async_add_listener(self._handle_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._remove_listener is not None:
+            self._remove_listener()
+            self._remove_listener = None
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
