@@ -18,6 +18,7 @@ from .const import (
 )
 from .automatic_combined_planner import DOEMSPlannerManager
 from .automatic_slot_bridge import DOEMSAutoSlotBridge
+from .r7_runtime import DOEMSR7Scheduler
 from .battery_contract import DOEMSBatteryInputContract
 from .energy_coordinator import DOEMSEnergyCoordinator
 from .manual_plan_lifecycle import DOEMSManualPlanLifecycle
@@ -111,6 +112,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
     r6_slot_bridge = DOEMSAutoSlotBridge(hass, planner, manual_plan_store)
     await r6_slot_bridge.async_setup()
 
+    r7_scheduler = DOEMSR7Scheduler(hass, planner, r6_slot_bridge, manual_plan_store, battery_input)
+    await r7_scheduler.async_setup()
+
     entry.runtime_data = coordinator
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "energy_forecast_enabled": coordinator is not None,
@@ -124,6 +128,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
         "manual_soc_projection": manual_soc_projection,
         "planner": planner,
         "r6_slot_bridge": r6_slot_bridge,
+        "r7_scheduler": r7_scheduler,
     }
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -173,6 +178,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> bo
     battery_input = entry_data.get("battery_input")
     if isinstance(battery_input, DOEMSBatteryInputContract):
         await battery_input.async_shutdown()
+
+    r7_scheduler = entry_data.get("r7_scheduler")
+    if isinstance(r7_scheduler, DOEMSR7Scheduler):
+        await r7_scheduler.async_shutdown()
 
     r6_slot_bridge = entry_data.get("r6_slot_bridge")
     if isinstance(r6_slot_bridge, DOEMSAutoSlotBridge):
