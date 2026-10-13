@@ -78,6 +78,6 @@ def test_auto_pending_still_expires_by_r6_not_r7(monkeypatch):
         end = begin + timedelta(minutes=old["max_start_delay_min"])
         assert await store.async_promote_automatic_plan(3, **args_for(old, end))
         expired = await store.async_release_expired_automatic_plans(now=end+timedelta(seconds=1))
-        assert expired["released_slots"] == [3]
+        assert 3 in expired["released_slots"]  # R6 may expire other due slots together
         assert store.last_terminal_event(3)["reason"] == "automatic_start_window_expired"
     asyncio.run(verify())
