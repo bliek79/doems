@@ -1136,13 +1136,13 @@ class DOEMSCombinedSOCProjectionTimelineSensor(_DOEMSPlannerBase):
 
 
 class DOEMSR7SchedulerStatusSensor(SensorEntity):
-    """R7-only non-actuating Scheduler/Safety/Prestart audit surface."""
+    """Non-actuating Scheduler/Safety/Prestart status sensor."""
 
     _attr_should_poll = False
     _attr_has_entity_name = False
-    _attr_name = "DOEMS R7 Scheduler Status"
-    _attr_unique_id = "doems_r7_scheduler_status"
-    _attr_suggested_object_id = "doems_r7_scheduler_status"
+    _attr_name = "DOEMS Scheduler Status"
+    _attr_unique_id = "doems_scheduler_status"
+    _attr_suggested_object_id = "doems_scheduler_status"
     _attr_icon = "mdi:shield-check-outline"
 
     def __init__(self, entry: ConfigEntry, scheduler: DOEMSR7Scheduler) -> None:
