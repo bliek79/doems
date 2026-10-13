@@ -1,4 +1,4 @@
-# Complete optional R7 read-only dashboard card.
+# Complete optional Scheduler read-only dashboard card.
 # Install alongside (not instead of) existing R6 plan editing card.
 # R8 and physical execution remain disabled.
 type: custom:layout-card
@@ -12,12 +12,12 @@ layout:
   grid-column-gap: 8px
 cards:
   - type: custom:button-card
-    entity: sensor.doems_r7_scheduler_status
+    entity: sensor.doems_scheduler_status
     view_layout:
       grid-area: scheduler
     show_icon: true
     icon: mdi:shield-check-outline
-    name: "DOEMS R7 · SCHEDULER / SAFETY / PRESTART"
+    name: "DOEMS · SCHEDULER / SAFETY / PRESTART"
     show_label: true
     show_state: true
     tap_action:

@@ -46,6 +46,11 @@ _ENTITY_MIGRATIONS = (
         "doems_combined_soc_projection_timeline",
         "sensor.doems_combined_soc_projection_timeline",
     ),
+    (
+        "doems_r7_scheduler_status",
+        "doems_scheduler_status",
+        "sensor.doems_scheduler_status",
+    ),
 )
 
 _RETIRED_UNIQUE_IDS = (
