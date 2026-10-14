@@ -4,6 +4,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
 import math
 
+from .automatic_plan_contract import validate_automatic_plan
+
 AUTO_ORIGIN = "automatic_72h_planner"
 TERMINAL = {"actief", "voltooid", "geannuleerd", "fout", "verlopen"}
 
@@ -137,9 +139,10 @@ def evaluate_r7(*, now: datetime, plans: Mapping[int, Mapping[str, Any]],
             prestart_blockers.append("automatic_identity_missing")
         if selected.get("execution_mode") != "gepland":
             prestart_blockers.append("execution_mode_invalid")
-        runtime = _num(selected.get("max_runtime_h"))
-        if runtime is None or not 0.5 <= runtime <= 12:
-            prestart_blockers.append("runtime_invalid")
+        # An R6 automatic segment may be exactly one native 15-minute slot.
+        # Share the *same* contract as the Plan Store; Manual keeps 0.5 h.
+        for issue in validate_automatic_plan(selected, now=now, require_due=True):
+            prestart_blockers.append(f"automatic_contract_{issue}")
     can_promote = bool(auto_concept and not safety_blockers and not prestart_blockers)
     if selected is None:
         status = "wachtend" if wakes else "idle"
