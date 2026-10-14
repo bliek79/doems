@@ -16,6 +16,7 @@ from .manual_plan_lifecycle_model import (
     MANUAL_RELEASE_REASON,
     evaluate_manual_plan_expiry,
 )
+from .automatic_plan_contract import validate_automatic_plan
 from .manual_plan_model import (
     CONTROL_FIELDS,
     LIFECYCLE_STATUSES,
@@ -162,11 +163,23 @@ class DOEMSManualPlanStore:
 
     def plan_status(self, slot: int) -> str:
         self._validate_slot(slot)
-        return manual_plan_status(self._plans[slot], now=dt_util.now())
+        plan = self._plans[slot]
+        if plan.get("origin") == AUTO_ORIGIN:
+            lifecycle = str(plan.get("lifecycle_status") or "concept").lower()
+            if plan.get("action") in (None, "geen"):
+                return "leeg"
+            if lifecycle in {"actief", "voltooid", "geannuleerd", "fout", "verlopen", "concept"}:
+                return lifecycle
+            return "ongeldig" if validate_automatic_plan(plan) else "gepland"
+        return manual_plan_status(plan, now=dt_util.now())
 
     def schedule_blockers(self, slot: int) -> list[str]:
         self._validate_slot(slot)
         plan = self._plans[slot]
+        if plan.get("origin") == AUTO_ORIGIN:
+            # R6 proposals are already scheduled by the 288-quarter planner.
+            # Do not run Manual's 0.5 h or future-start-only gate on them.
+            return validate_automatic_plan(plan)
         candidate = deepcopy(plan)
         candidate["execution_mode"] = "gepland"
         return validate_manual_plan(
@@ -348,6 +361,7 @@ class DOEMSManualPlanStore:
             or current.get("lifecycle_status") != "concept"
             or current.get("execution_mode") != "gepland"
             or current.get("action") not in {"laden", "ontladen"}
+            or validate_automatic_plan(current, now=reference, require_due=True)
             or not expected_identity
             or current.get("planner_identity") != expected_identity
             or not expected_signature
