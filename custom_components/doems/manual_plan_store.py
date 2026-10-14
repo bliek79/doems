@@ -14,6 +14,8 @@ from homeassistant.util import dt as dt_util
 from .manual_plan_lifecycle_model import (
     MANUAL_EXPIRY_REASON,
     MANUAL_RELEASE_REASON,
+    MANUAL_CONCEPT_EXPIRY_REASON,
+    MANUAL_CONCEPT_RELEASE_REASON,
     evaluate_manual_plan_expiry,
 )
 from .automatic_plan_contract import validate_automatic_plan
@@ -252,7 +254,7 @@ class DOEMSManualPlanStore:
         *,
         now: datetime | None = None,
     ) -> dict[str, Any]:
-        """Release valid manual pending plans after their complete start window.
+        """Release valid Manual pending plans and scheduled concepts after their complete start window.
 
         The active slot becomes immediately reusable. A compact audit event is
         persisted outside the active slot so expiry evidence is retained without
@@ -277,11 +279,21 @@ class DOEMSManualPlanStore:
             if evaluation.get("expired") is not True:
                 continue
 
+            previous_lifecycle = str(current.get("lifecycle_status") or "")
+            reason = (
+                MANUAL_CONCEPT_EXPIRY_REASON
+                if previous_lifecycle == "concept" else MANUAL_EXPIRY_REASON
+            )
+            released_reason = (
+                MANUAL_CONCEPT_RELEASE_REASON
+                if previous_lifecycle == "concept" else MANUAL_RELEASE_REASON
+            )
             event = {
                 "slot": slot,
                 "status": "verlopen",
-                "reason": MANUAL_EXPIRY_REASON,
-                "released_reason": MANUAL_RELEASE_REASON,
+                "previous_lifecycle_status": previous_lifecycle,
+                "reason": reason,
+                "released_reason": released_reason,
                 "expired_at": reference.isoformat(),
                 "start_time": current.get("start_time"),
                 "start_window_end": evaluation.get("window_end"),
@@ -296,7 +308,7 @@ class DOEMSManualPlanStore:
             events.append(event)
 
             cleared = new_manual_plan()
-            cleared["lifecycle_reason"] = MANUAL_RELEASE_REASON
+            cleared["lifecycle_reason"] = released_reason
             cleared["lifecycle_updated_at"] = reference.isoformat()
             self._plans[slot] = cleared
             released_slots.append(slot)
@@ -456,7 +468,10 @@ class DOEMSManualPlanStore:
             return (
                 plan.get("action") in (None, "geen")
                 and lifecycle == "concept"
-                and plan.get("lifecycle_reason") in (None, "manual_clear", "automatic_expired_released")
+                and plan.get("lifecycle_reason") in (
+                    None, "manual_clear", "automatic_expired_released",
+                    MANUAL_RELEASE_REASON, MANUAL_CONCEPT_RELEASE_REASON,
+                )
             )
 
         frozen: dict[int, dict[str, Any]] = {}

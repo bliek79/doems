@@ -1,9 +1,9 @@
-name: DOEMS CI and 0.2.0-alpha.7.1.15 R7 Quarter-Hour Contract Fix Validated
+name: DOEMS CI and 0.2.0-alpha.7.1.16 Manual Concept Expiry Cleanup
 
 on:
   pull_request:
   push:
-    branches: [reset-0.2.0-alpha.7.1.15]
+    branches: [reset-0.2.0-alpha.7.1.16]
   workflow_dispatch:
 
 permissions:
@@ -29,9 +29,9 @@ jobs:
               json.loads(path.read_text(encoding='utf-8'))
               print(f'valid: {path}')
           PY
-      - name: Validate 0.2.0-alpha.7.1.15 R7 R6 integration and frozen baseline
+      - name: Validate 0.2.0-alpha.7.1.16 R7 R6 integration and frozen baseline
         run: |
-          test -f RELEASE_NOTES_0.2.0-alpha.7.1.15.md
+          test -f RELEASE_NOTES_0.2.0-alpha.7.1.16.md
           test -f examples/prices_p4_forecast_card.yaml
           test -f custom_components/doems/prices.py
           test -f custom_components/doems/prices_model.py
@@ -41,7 +41,7 @@ jobs:
           test ! -f scripts/build_brand_assets.py
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
-          grep -F 'VERSION = "0.2.0-alpha.7.1.15"' custom_components/doems/const.py
+          grep -F 'VERSION = "0.2.0-alpha.7.1.16"' custom_components/doems/const.py
           test -f tests/test_reset_solar_array_performance_recovery.py
           test -f custom_components/doems/solar_actual.py
           test -f tests/test_solar_actual_quarter_validation.py
@@ -82,7 +82,7 @@ jobs:
           grep -F 'DOEMSAutoSlotBridge' custom_components/doems/__init__.py
           grep -F '"performance_factor_percent"' custom_components/doems/config_flow.py
           grep -F '"array_performance_factors": array_performance_factors' custom_components/doems/solar_forecast.py
-          grep -F '"version": "0.2.0-alpha.7.1.15"' custom_components/doems/manifest.json
+          grep -F '"version": "0.2.0-alpha.7.1.16"' custom_components/doems/manifest.json
           grep -F 'build_prices_sensors' custom_components/doems/sensor.py
           grep -F 'DOEMSRegisteredPricesManager' custom_components/doems/__init__.py
           grep -F 'GAS_SOURCE_ENERGYZERO_MARKET_ACTION' custom_components/doems/const.py
@@ -152,6 +152,12 @@ jobs:
           grep -F 'async_release_expired_manual_plans' custom_components/doems/manual_plan_store.py
           grep -F 'MANUAL_EXPIRY_REASON = "manual_start_window_expired"' custom_components/doems/manual_plan_lifecycle_model.py
           grep -F 'MANUAL_RELEASE_REASON = "manual_expired_released"' custom_components/doems/manual_plan_lifecycle_model.py
+          grep -F 'MANUAL_CONCEPT_EXPIRY_REASON = "manual_concept_start_window_expired"' custom_components/doems/manual_plan_lifecycle_model.py
+          grep -F 'MANUAL_CONCEPT_RELEASE_REASON = "manual_concept_expired_released"' custom_components/doems/manual_plan_lifecycle_model.py
+          grep -F 'previous_lifecycle_status' custom_components/doems/manual_plan_store.py
+          test -f tests/test_manual_concept_model.py
+          test -f tests/test_manual_concept_store_integration.py
+          ! grep -R -F 'async_call(' custom_components/doems/manual_plan_store.py custom_components/doems/manual_plan_lifecycle.py custom_components/doems/manual_plan_lifecycle_model.py
           grep -F 'async_track_point_in_utc_time' custom_components/doems/manual_plan_lifecycle.py
           grep -F '"physical_execution_authority": False' custom_components/doems/manual_plan_lifecycle.py
           grep -F '"scheduler_active": False' custom_components/doems/manual_plan_lifecycle.py
@@ -202,12 +208,12 @@ jobs:
           ! grep -F 'sensor.doems_ems_plan72_hours' examples/doems_planner_dashboard.yaml
           ! grep -F 'doems_r5_1_' examples/doems_planner_dashboard.yaml
           ! grep -F 'observational_only' examples/doems_planner_dashboard.yaml
-          # R7 repairs only Automatic validation in Plan Store; other frozen R0-R6 digests remain unchanged.
+          # Manual concept expiry is user-approved. Frozen unrelated R0-R6 digests stay unchanged.
           test "$(git hash-object custom_components/doems/manual_plan_model.py)" = "ffc7f7e9aa73078d72e8df88f5359590aa812657"
-          test "$(git hash-object custom_components/doems/manual_plan_store.py)" = "ebb7434cc1fd194b71735bc6c9cf7b527828322f"
+          test "$(git hash-object custom_components/doems/manual_plan_store.py)" = "01a895d2acb2369a66483796567a64fe0dfbc333"
           test "$(git hash-object custom_components/doems/manual_plan_services.py)" = "1826839068587491ed6b51caffd464861af009f7"
-          test "$(git hash-object custom_components/doems/manual_plan_lifecycle.py)" = "11fdea475cb7b8ead9deba0df76e4dfb25db9994"
-          test "$(git hash-object custom_components/doems/manual_plan_lifecycle_model.py)" = "e592db6ebb51028ea8e63c2a4d0b3110a4b140e3"
+          test "$(git hash-object custom_components/doems/manual_plan_lifecycle.py)" = "4d69c84ba7608bde36089f00c14cbc79e46b46a3"
+          test "$(git hash-object custom_components/doems/manual_plan_lifecycle_model.py)" = "3a8688ac9a18dba133136d4124b8772c8e49222e"
           test "$(git hash-object custom_components/doems/manual_soc_projection.py)" = "3d085b57bc17e7620975490e60ce46ec49808a17"
           test "$(git hash-object custom_components/doems/manual_soc_projection_model.py)" = "1321c50ef460d54331c3b16dc0f93cf2eb0432e0"
           test "$(git hash-object custom_components/doems/number.py)" = "16496b112b3808eff63a1c2ddd1aee6dacf0b599"
@@ -215,8 +221,8 @@ jobs:
           test "$(git hash-object custom_components/doems/datetime.py)" = "bcb95caa993f38cdf42f20df5108fbd6b5aadfc2"
           test "$(git hash-object custom_components/doems/services.yaml)" = "f5f4807397b64b2c73faaecaea88324d53426592"
 
-  publish-reset-alpha7115:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/reset-0.2.0-alpha.7.1.15'
+  publish-reset-alpha7116:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/reset-0.2.0-alpha.7.1.16'
     needs: validate
     runs-on: ubuntu-latest
     steps:
@@ -225,7 +231,7 @@ jobs:
           fetch-depth: 0
       - name: Build release archive
         run: |
-          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.2.0-alpha.7.1.15.md
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.2.0-alpha.7.1.16.md
           sha256sum doems.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
       - name: Verify Prices P4 runtime is packaged
@@ -246,7 +252,7 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/r7_runtime.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/automatic_plan_contract.py'
           unzip -l doems.zip | grep -F 'examples/doems_scheduler_status_card.yaml'
-          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.7.1.15.md'
+          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.7.1.16.md'
       - name: Verify Manual Plan Store is packaged
         run: |
           unzip -l doems.zip | grep -F 'custom_components/doems/manual_plan_model.py'
@@ -255,20 +261,21 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/number.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/datetime.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/services.yaml'
-          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.7.1.15.md'
+          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.7.1.16.md'
       - name: Verify Manual SOC Replanning is packaged
         run: |
           unzip -l doems.zip | grep -F 'custom_components/doems/manual_soc_projection_model.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/manual_soc_projection.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/sensor.py'
-          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.7.1.15.md'
+          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.7.1.16.md'
       - name: Verify Manual Lifecycle Expiry is packaged
         run: |
           unzip -l doems.zip | grep -F 'custom_components/doems/manual_plan_lifecycle_model.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/manual_plan_lifecycle.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/manual_plan_store.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/manual_plan_store.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/sensor.py'
-          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.7.1.15.md'
+          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.7.1.16.md'
       - name: Verify planner architecture and dashboard are packaged
         run: |
           unzip -l doems.zip | grep -F 'custom_components/doems/automatic_combined_planner_model.py'
@@ -278,27 +285,27 @@ jobs:
           unzip -l doems.zip | grep -F 'custom_components/doems/prices.py'
           unzip -l doems.zip | grep -F 'custom_components/doems/sensor.py'
           unzip -l doems.zip | grep -F 'examples/doems_planner_dashboard.yaml'
-          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.7.1.15.md'
+          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.7.1.16.md'
       - name: Verify exact existing DOEMS brand icon is packaged
         run: |
           unzip -l doems.zip | grep -F 'custom_components/doems/brand/icon.png'
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
-      - name: Publish 0.2.0-alpha.7.1.15 R7 Quarter-Hour Contract Fix Validated
+      - name: Publish 0.2.0-alpha.7.1.16 Manual Concept Expiry Cleanup
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           # Published tags are immutable; retries must target the same commit.
-          if gh api "repos/${{ github.repository }}/git/ref/tags/0.2.0-alpha.7.1.15" >/dev/null 2>&1; then
-            existing_sha="$(gh api "repos/${{ github.repository }}/git/ref/tags/0.2.0-alpha.7.1.15" --jq '.object.sha')"
+          if gh api "repos/${{ github.repository }}/git/ref/tags/0.2.0-alpha.7.1.16" >/dev/null 2>&1; then
+            existing_sha="$(gh api "repos/${{ github.repository }}/git/ref/tags/0.2.0-alpha.7.1.16" --jq '.object.sha')"
             test "$existing_sha" = "${{ github.sha }}"
           fi
-          if gh release view 0.2.0-alpha.7.1.15 >/dev/null 2>&1; then
-            gh release edit 0.2.0-alpha.7.1.15 --title "DOEMS 0.2.0-alpha.7.1.15 - R7 Quarter-Hour Contract Fix Validated" --notes-file RELEASE_NOTES_0.2.0-alpha.7.1.15.md --prerelease
-            gh release upload 0.2.0-alpha.7.1.15 doems.zip SHA256SUMS.txt --clobber
+          if gh release view 0.2.0-alpha.7.1.16 >/dev/null 2>&1; then
+            gh release edit 0.2.0-alpha.7.1.16 --title "DOEMS 0.2.0-alpha.7.1.16 - Manual Concept Expiry Cleanup" --notes-file RELEASE_NOTES_0.2.0-alpha.7.1.16.md --prerelease
+            gh release upload 0.2.0-alpha.7.1.16 doems.zip SHA256SUMS.txt --clobber
           else
-            gh release create 0.2.0-alpha.7.1.15 doems.zip SHA256SUMS.txt --target reset-0.2.0-alpha.7.1.15 --title "DOEMS 0.2.0-alpha.7.1.15 - R7 Quarter-Hour Contract Fix Validated" --notes-file RELEASE_NOTES_0.2.0-alpha.7.1.15.md --prerelease
+            gh release create 0.2.0-alpha.7.1.16 doems.zip SHA256SUMS.txt --target reset-0.2.0-alpha.7.1.16 --title "DOEMS 0.2.0-alpha.7.1.16 - Manual Concept Expiry Cleanup" --notes-file RELEASE_NOTES_0.2.0-alpha.7.1.16.md --prerelease
           fi
-          published_sha="$(gh api "repos/${{ github.repository }}/git/ref/tags/0.2.0-alpha.7.1.15" --jq '.object.sha')"
+          published_sha="$(gh api "repos/${{ github.repository }}/git/ref/tags/0.2.0-alpha.7.1.16" --jq '.object.sha')"
           test "$published_sha" = "${{ github.sha }}"
 

@@ -1,4 +1,4 @@
-"""Timer/runtime bridge for DOEMS R4 manual plan lifecycle expiry."""
+"""Timer/runtime bridge for DOEMS Manual plan lifecycle expiry."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from .manual_plan_store import DOEMSManualPlanStore
 
 
 class DOEMSManualPlanLifecycle:
-    """Release only valid expired manual pending plans.
+    """Release valid expired Manual pending plans and complete planned concepts.
 
     This runtime owns time/lifecycle cleanup only. It has no Scheduler,
     automatic planning, Safety, Prestart or physical battery authority.

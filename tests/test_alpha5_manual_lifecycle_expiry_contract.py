@@ -75,12 +75,12 @@ def test_alpha5_after_window_end_expires() -> None:
     assert result["blockers"] == []
 
 
-def test_alpha5_only_manual_pending_scheduled_is_applicable() -> None:
+def test_alpha5_only_manual_pending_or_complete_planned_concept_is_applicable() -> None:
     m = _load("manual_plan_lifecycle_model")
     start = datetime(2026, 10, 7, 10, 0, tzinfo=timezone.utc)
     now = start + timedelta(hours=1)
 
-    for lifecycle in ("concept", "actief", "voltooid", "geannuleerd", "fout", "verlopen"):
+    for lifecycle in ("actief", "voltooid", "geannuleerd", "fout", "verlopen"):
         plan = _pending_plan(start)
         plan["lifecycle_status"] = lifecycle
         result = m.evaluate_manual_plan_expiry(plan, now=now, slot=1)
@@ -132,7 +132,9 @@ def test_alpha5_store_release_is_atomic_reusable_and_audited_by_contract() -> No
 
     assert "async_release_expired_manual_plans" in store
     assert '"status": "verlopen"' in store
-    assert '"reason": MANUAL_EXPIRY_REASON' in store
+    assert '"reason": reason' in store
+    assert "MANUAL_EXPIRY_REASON" in store
+    assert "MANUAL_CONCEPT_EXPIRY_REASON" in store
     assert 'cleared = new_manual_plan()' in store
     assert '"terminal_events": deepcopy(' in store
     assert "self._notify()" in store
