@@ -1,4 +1,7 @@
-"""Pure manual Plan Store lifecycle/expiry semantics for DOEMS R4."""
+"""Manual Plan Store lifecycle/expiry semantics, including planned concepts.
+
+This pure model never mutates slots or dispatches physical execution.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +10,8 @@ from typing import Any, Mapping, Sequence
 
 MANUAL_EXPIRY_REASON = "manual_start_window_expired"
 MANUAL_RELEASE_REASON = "manual_expired_released"
+MANUAL_CONCEPT_EXPIRY_REASON = "manual_concept_start_window_expired"
+MANUAL_CONCEPT_RELEASE_REASON = "manual_concept_expired_released"
 
 
 def _aware_datetime(value: Any) -> datetime | None:
@@ -42,9 +47,9 @@ def evaluate_manual_plan_expiry(
 ) -> dict[str, Any]:
     """Evaluate one slot without mutating it.
 
-    Only manual-origin pending scheduled plans are expiry candidates. The
-    complete start window remains valid through its exact end. Expiry starts
-    only when now is strictly later than start + max_start_delay.
+    Manual scheduled pending and complete scheduled concepts may expire.
+    Incomplete concepts (including missing start times) and direct-mode
+    concepts are preserved. Exact start-window end stays valid.
     """
     if now.tzinfo is None:
         raise ValueError("now must be timezone-aware")
@@ -61,12 +66,22 @@ def evaluate_manual_plan_expiry(
         "blockers": [],
     }
 
-    if origin != "manual" or lifecycle != "pending":
+    if origin != "manual" or lifecycle not in {"pending", "concept"}:
+        return base
+
+    action = str(plan.get("action") or "")
+    execution_mode = str(plan.get("execution_mode") or "")
+    # Keep unfinished Manual drafts and direct actions, regardless of their
+    # stale stored date. A complete scheduled concept has an explicit action,
+    # scheduled execution mode and a non-empty start-time candidate.
+    if lifecycle == "concept" and (
+        action not in {"laden", "ontladen"}
+        or execution_mode != "gepland"
+        or not plan.get("start_time")
+    ):
         return base
 
     blockers: list[str] = []
-    action = str(plan.get("action") or "")
-    execution_mode = str(plan.get("execution_mode") or "")
     start = _aware_datetime(plan.get("start_time"))
     delay = _delay_minutes(plan.get("max_start_delay_min"))
 
@@ -115,7 +130,7 @@ def next_manual_expiry_deadline(
     *,
     now: datetime,
 ) -> dict[str, Any]:
-    """Return the earliest valid manual pending expiry boundary."""
+    """Return the earliest valid Manual pending/concept expiry boundary."""
     if now.tzinfo is None:
         raise ValueError("now must be timezone-aware")
 
