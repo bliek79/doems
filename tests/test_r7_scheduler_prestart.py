@@ -4,10 +4,25 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 import importlib.util
 from pathlib import Path
+import sys
+import types
 
 ROOT = Path(__file__).resolve().parents[1]
 COMPONENT = ROOT / "custom_components" / "doems"
-spec = importlib.util.spec_from_file_location("r7_model_tested", COMPONENT / "r7_model.py")
+# Load pure model through its real package for shared R6 contract imports,
+# without executing the Home Assistant integration entrypoint.
+for package, location in (
+    ("custom_components", ROOT / "custom_components"),
+    ("custom_components.doems", COMPONENT),
+):
+    module = sys.modules.get(package)
+    if module is None:
+        module = types.ModuleType(package)
+        sys.modules[package] = module
+    module.__path__ = [str(location)]
+spec = importlib.util.spec_from_file_location(
+    "custom_components.doems.r7_model_tested", COMPONENT / "r7_model.py"
+)
 model = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(model)
 NOW = datetime(2026, 10, 13, 13, 15, tzinfo=timezone.utc)
@@ -18,6 +33,7 @@ def plan(slot=1, **changes):
         "origin": model.AUTO_ORIGIN, "action": "laden", "execution_mode": "gepland",
         "start_time": NOW.isoformat(), "max_start_delay_min": 10,
         "max_runtime_h": 1, "power_w": 700, "target_soc": 70,
+        "planned_end_time": (NOW + timedelta(hours=1)).isoformat(),
         "lifecycle_status": "concept", "lifecycle_updated_at": "rev1",
         "planner_identity": f"identity-{slot}", "planner_signature": f"signature-{slot}",
     }
