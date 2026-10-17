@@ -32,6 +32,7 @@ def validate_execution_readiness(
     controller_conflict: bool | None = None,
     final_revalidation_safe: bool | None = None,
     handoff_ready: bool | None = None,
+    atomic_plan_revision_match: bool | None = None,
 ) -> dict[str, Any]:
     """Validate evidence only. Never mutate inputs or authorize execution.
 
@@ -109,7 +110,10 @@ def validate_execution_readiness(
         blockers.append("plan_parameters_invalid")
     # R7 has no revision value in its published selection result: do not
     # manufacture proof that a plan revision was atomically matched.
-    missing.append("atomic_plan_revision_evidence")
+    if atomic_plan_revision_match is None:
+        missing.append("atomic_plan_revision_evidence")
+    elif atomic_plan_revision_match is not True:
+        blockers.append("atomic_plan_revision_mismatch")
     status = "not_validated" if missing else ("not_ready" if blockers else "ready")
     return {
         "validation_status": status,
