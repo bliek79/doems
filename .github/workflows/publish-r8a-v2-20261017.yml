@@ -36,6 +36,10 @@ jobs:
             "custom_components/doems/manifest.json",
             "custom_components/doems/const.py",
             "tests/test_r8a_execution_readiness.py",
+            "tests/test_alpha5_2_status_hotfix_contract.py",
+            "tests/test_alpha7_1_planner_migration_contract.py",
+            "tests/test_alpha7_prices_release_contract.py",
+            "tests/test_energy_forecast_contract.py",
             "RELEASE_NOTES_0.2.0-alpha.8.0.2.md",
             ".github/workflows/publish-r8a-v2-20261017.yml",
           }
