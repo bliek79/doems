@@ -33,9 +33,16 @@ def validate_execution_readiness(
         blockers.append("scheduler_selection_mismatch")
     if scheduler.get("scheduler_ready") is not True:
         blockers.append("scheduler_not_ready")
-    if scheduler.get("safety_ready") is not True:
+    selected = (scheduler.get("scheduler_slots") or {}).get(slot) or (scheduler.get("scheduler_slots") or {}).get(str(slot)) or {}
+    if not selected or selected.get("lifecycle_updated_at") != plan.get("lifecycle_updated_at"):
+        blockers.append("scheduler_plan_revision_mismatch")
+    if scheduler.get("auto_execution_handoff_ready") is not True:
+        blockers.append("execution_handoff_not_ready")
+    if scheduler.get("auto_final_revalidation_safe") is not True:
+        blockers.append("final_revalidation_not_safe")
+    if scheduler.get("auto_safety_handoff_safe") is not True:
         blockers.append("safety_not_ready")
-    if scheduler.get("prestart_ready") is not True:
+    if scheduler.get("auto_prestart_safe") is not True:
         blockers.append("prestart_not_ready")
     if other_controller_active:
         blockers.append("other_controller_active")
@@ -68,7 +75,7 @@ def validate_execution_readiness(
     identity = plan.get("planner_identity") if plan.get("origin") == "automatic_72h_planner" else plan.get("lifecycle_updated_at")
     if not identity:
         blockers.append("plan_identity_missing")
-    if scheduler.get("plan_identity") is not None and scheduler["plan_identity"] != identity:
+    if plan.get("origin") == "automatic_72h_planner" and scheduler.get("auto_prestart_current_identity_match") is not True:
         blockers.append("plan_identity_changed")
 
     return {
