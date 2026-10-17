@@ -14,7 +14,7 @@ PLAN = {
 }
 R7 = {
     "scheduler_selected_slot": 2, "scheduler_ready": True,
-    "safety_ready": True, "prestart_ready": True,
+    "auto_safety_handoff_safe": True, "auto_prestart_safe": True,\n    "auto_execution_handoff_ready": True, "auto_final_revalidation_safe": True,\n    "scheduler_slots": {2: {"lifecycle_updated_at": PLAN["lifecycle_updated_at"]}},
 }
 
 
@@ -48,7 +48,7 @@ def test_concept_cannot_be_executed():
 
 
 def test_plan_identity_change_blocks():
-    result = check(scheduler={**R7, "plan_identity": "different"})
+    result = check(scheduler={**R7, "auto_prestart_current_identity_match": False}, plan={**PLAN, "origin": "automatic_72h_planner", "planner_identity": "planner-1"})
     assert "plan_identity_changed" in result["blockers"]
 
 
