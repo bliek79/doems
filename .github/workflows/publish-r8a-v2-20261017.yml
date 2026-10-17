@@ -1,0 +1,59 @@
+name: Publish isolated R8-A v2 candidate
+on:
+  push:
+    branches: [release-r8a-v2-isolated-20261017]
+permissions:
+  contents: write
+jobs:
+  validate-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Compile, full regressions and JSON
+        run: |
+          python -m pip install --upgrade pip pytest
+          python -m compileall -q custom_components/doems
+          pytest -q
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for p in Path("custom_components/doems").rglob("*.json"):
+              json.loads(p.read_text(encoding="utf-8"))
+          PY
+      - name: Enforce unchanged planner and runtime source
+        run: |
+          git diff --name-only a89efb2697e01995556a215a4a79e5eed3ff2334 HEAD > changed.txt
+          cat changed.txt
+          python - <<'PY'
+          from pathlib import Path
+          allowed = {
+            "custom_components/doems/ems_execution_readiness.py",
+            "custom_components/doems/manifest.json",
+            "custom_components/doems/const.py",
+            "tests/test_r8a_execution_readiness.py",
+            "RELEASE_NOTES_0.2.0-alpha.8.0.2.md",
+            ".github/workflows/publish-r8a-v2-20261017.yml",
+          }
+          actual = set(Path("changed.txt").read_text().splitlines())
+          assert actual <= allowed, sorted(actual - allowed)
+          assert {"custom_components/doems/ems_execution_readiness.py", "tests/test_r8a_execution_readiness.py"} <= actual
+          PY
+      - name: Package full baseline plus isolated R8-A
+        run: |
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.2.0-alpha.8.0.2.md
+          sha256sum doems.zip > SHA256SUMS.txt
+          unzip -t doems.zip
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_execution_readiness.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/automatic_combined_planner.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/manual_plan_store.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/r7_runtime.py'
+      - name: Publish candidate tag, title and release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create 0.2.0-alpha.8.0.2 doems.zip SHA256SUMS.txt --target "$GITHUB_SHA" --title "DOEMS 0.2.0-alpha.8.0.2 — R8-A isolated validation candidate" --notes-file RELEASE_NOTES_0.2.0-alpha.8.0.2.md --prerelease
