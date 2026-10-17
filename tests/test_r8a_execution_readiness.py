@@ -1,7 +1,16 @@
 """Contract tests for R8-A readiness: no device calls or execution claims."""
 from datetime import datetime, timezone
 
-from custom_components.doems.ems_execution_readiness import validate_execution_readiness
+import importlib.util
+from pathlib import Path
+
+spec = importlib.util.spec_from_file_location(
+    "ems_execution_readiness",
+    Path(__file__).resolve().parents[1] / "custom_components" / "doems" / "ems_execution_readiness.py",
+)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+validate_execution_readiness = module.validate_execution_readiness
 
 
 NOW = datetime(2026, 10, 17, 14, 5, tzinfo=timezone.utc)
