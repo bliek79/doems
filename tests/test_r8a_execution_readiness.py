@@ -14,7 +14,9 @@ PLAN = {
 }
 R7 = {
     "scheduler_selected_slot": 2, "scheduler_ready": True,
-    "auto_safety_handoff_safe": True, "auto_prestart_safe": True,\n    "auto_execution_handoff_ready": True, "auto_final_revalidation_safe": True,\n    "scheduler_slots": {2: {"lifecycle_updated_at": PLAN["lifecycle_updated_at"]}},
+    "auto_safety_handoff_safe": True, "auto_prestart_safe": True,
+    "auto_execution_handoff_ready": True, "auto_final_revalidation_safe": True,
+    "scheduler_slots": {2: {"lifecycle_updated_at": PLAN["lifecycle_updated_at"]}},
 }
 
 
