@@ -109,6 +109,34 @@ class DOEMSExecutionSupervisor:
                 restart_reconciled=not self._restart_reconciliation_required,
                 live_stop_test_passed=False,
             )
+            # An explicitly attached controller may monitor its own active session.
+            # Attachment alone never grants authority or starts a battery command.
+            if self._execution_controller is not None:
+                session = self._execution_controller.session
+                if session is not None or self._execution_controller.reconciliation_required:
+                    try:
+                        result["controller_watchdog"] = await self._execution_controller.monitor(
+                            now=now,
+                            soc_percent=battery.get("soc_percent"),
+                            sources_fresh=fresh,
+                            controller_exclusive=False,
+                            command_acknowledged=False,
+                            plan_identity_matches=bool(
+                                session and session.get("identity") == result.get("plan_identity")
+                            ),
+                            safety_clear=(
+                                scheduler.get("safety_status") == "safe"
+                                and not scheduler.get("safety_blockers")
+                            ),
+                        )
+                    except Exception as exc:
+                        result["controller_watchdog"] = {
+                            "decision": "stop_unconfirmed",
+                            "blockers": ["controller_stop_failed"],
+                        }
+                        result["safe_return_required"] = True
+                        result["status"] = "geblokkeerd"
+                        result["reason"] = "Apparaatstop niet bevestigd"
             # Shadow-only session assessment: never sends a device command.
             previous = self.last_result
             if previous.get("status") == "actief":
