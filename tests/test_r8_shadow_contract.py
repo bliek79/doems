@@ -8,7 +8,7 @@ SHADOW = (ROOT / "custom_components/doems/r8_shadow.py").read_text()
 
 
 def test_r8_sensor_registered():
-    assert 'doems_r8_shadow_execution' in SENSOR
+    assert 'doems_execution_status' in SENSOR
     assert 'DOEMSR8ShadowSensor(entry, r7_scheduler, manual_plan_store)' in SENSOR
 
 
@@ -31,7 +31,7 @@ def test_r8_shadow_decision_cases():
             "execution_authority": False}
     plan = {"action": "laden", "origin": "manual", "lifecycle_status": "pending",
             "power_w": 300, "target_soc": 80, "max_runtime_h": 1}
-    assert evaluate(base, plan)["status"] == "voorbereid_shadow"
+    assert evaluate(base, plan)["status"] == "voorbereid"
     assert evaluate({**base, "selected_slot": None}, plan)["status"] == "geen_actie"
     assert evaluate({**base, "safety_status": "blocked"}, plan)["status"] == "geblokkeerd"
     assert evaluate(base, {**plan, "action": "ontladen"})["status"] == "geblokkeerd"
