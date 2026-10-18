@@ -9,7 +9,7 @@ SHADOW = (ROOT / "custom_components/doems/r8_shadow.py").read_text()
 
 def test_r8_sensor_registered():
     assert 'doems_execution_status' in SENSOR
-    assert 'DOEMSR8ShadowSensor(entry, r7_scheduler, manual_plan_store)' in SENSOR
+    assert 'DOEMSR8ShadowSensor(entry, execution)' in SENSOR
 
 
 def test_no_physical_control_or_plan_mutation():
