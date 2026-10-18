@@ -15,6 +15,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .execution_model import evaluate_execution
+from .execution_anker_adapter import AnkerExecutionAdapter
 
 
 class DOEMSExecutionSupervisor:
@@ -28,6 +29,9 @@ class DOEMSExecutionSupervisor:
         self._task: asyncio.Task | None = None
         self._dirty = False
         self._restart_reconciliation_required = False
+        # The adapter is deliberately not granted authority by R8 installation.
+        # Control entities are not inferred from battery observation sensors.
+        self._physical_adapter: AnkerExecutionAdapter | None = None
         self.last_result: dict[str, Any] = {"status": "geen_actie", "execution_performed": False}
         self.history: list[dict[str, Any]] = []
 
@@ -111,6 +115,15 @@ class DOEMSExecutionSupervisor:
             if listener in self._listeners:
                 self._listeners.remove(listener)
         return remove
+
+    def execution_capabilities(self) -> dict[str, Any]:
+        """Publish the actual actuation boundary, not a simulated permission."""
+        return {
+            "battery_adapter_available": self._physical_adapter is not None,
+            "physical_execution_enabled": False,
+            "execution_authority": False,
+            "command_path_verified": False,
+        }
 
     async def async_shutdown(self) -> None:
         self._shutdown = True
