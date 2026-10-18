@@ -114,3 +114,13 @@ async def test_safe_return_requires_power_readback():
     adapter = AnkerExecutionAdapter(hass, {'operating_mode': 'select.mode', 'power_setpoint': 'number.power'}, authority=True)
     with pytest.raises(HomeAssistantError, match='power readback unavailable'):
         await adapter.safe_return()
+
+
+@pytest.mark.asyncio
+async def test_stop_denied_without_authority():
+    services = FakeServices()
+    hass = SimpleNamespace(services=services, states=SimpleNamespace(get=lambda _: None))
+    adapter = AnkerExecutionAdapter(hass, {})
+    with pytest.raises(HomeAssistantError, match='not authorized'):
+        await adapter.stop()
+    assert not services.calls
