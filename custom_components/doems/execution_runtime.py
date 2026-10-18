@@ -16,6 +16,7 @@ from homeassistant.util import dt as dt_util
 
 from .execution_model import evaluate_execution
 from .execution_anker_adapter import AnkerExecutionAdapter
+from .execution_control_path import observe_control_path
 
 
 class DOEMSExecutionSupervisor:
@@ -32,6 +33,7 @@ class DOEMSExecutionSupervisor:
         # The adapter is deliberately not granted authority by R8 installation.
         # Control entities are not inferred from battery observation sensors.
         self._physical_adapter: AnkerExecutionAdapter | None = None
+        self._control_entities: dict[str, str] = {}
         self.last_result: dict[str, Any] = {"status": "geen_actie", "execution_performed": False}
         self.history: list[dict[str, Any]] = []
 
@@ -92,6 +94,9 @@ class DOEMSExecutionSupervisor:
                 result["safe_return_required"] = True
                 result["execution_performed"] = False
                 result["blockers"] = list(dict.fromkeys([*result.get("blockers", []), "restart_requires_reconciliation"]))
+            result["control_path"] = (observe_control_path(self.hass, self._control_entities, now)
+                                      if self._control_entities else {"ready": False, "blockers": ["control_path_not_configured"]})
+            result["command_path_verified"] = False
             previous = self.last_result
             self.last_result = result
             changed = (previous.get("status"), previous.get("plan_identity"), previous.get("blockers"),
