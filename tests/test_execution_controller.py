@@ -15,6 +15,7 @@ class FakeAdapter:
         self.starts.append(kwargs)
         if not kwargs["revalidate"]():
             raise HomeAssistantError("Validation failed")
+        return True
 
     async def stop(self):
         self.stops += 1
@@ -87,6 +88,7 @@ async def test_authority_lost_during_start_stops_and_blocks_reuse():
     async def start_then_revoke(**kwargs):
         adapter.starts.append(kwargs)
         authority["enabled"] = False
+        return True
 
     adapter.start = start_then_revoke
     with pytest.raises(HomeAssistantError, match="changed during start"):
@@ -94,4 +96,22 @@ async def test_authority_lost_during_start_stops_and_blocks_reuse():
                                target_soc=80, max_runtime_h=1, now=datetime.now(timezone.utc))
     assert adapter.stops == 1
     assert controller.session is None
+    assert controller.reconciliation_required is True
+
+
+@pytest.mark.asyncio
+async def test_unconfirmed_stop_keeps_session_and_reconciliation():
+    controller, adapter = build()
+    now = datetime.now(timezone.utc)
+    await controller.start(identity="plan-1", action="laden", power_w=500,
+                           target_soc=80, max_runtime_h=1, now=now)
+
+    async def unconfirmed_stop():
+        adapter.stops += 1
+        return False
+
+    adapter.stop = unconfirmed_stop
+    with pytest.raises(HomeAssistantError, match="stop not confirmed"):
+        await controller.stop()
+    assert controller.session is not None
     assert controller.reconciliation_required is True
