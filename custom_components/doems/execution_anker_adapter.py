@@ -7,7 +7,7 @@ cannot be used without explicit configured authority.
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from typing import Any, Callable, Mapping
 
 from homeassistant.exceptions import HomeAssistantError
@@ -110,5 +110,6 @@ class AnkerExecutionAdapter:
                     if self._state("power_setpoint") is not None:
                         await self._call("number", "set_value", "power_setpoint", {"value": 0})
                     await self._call("select", "select_option", "operating_mode", {"option": SELF_MODE})
-                finally:
-                    raise
+                except BaseException as cleanup_error:
+                    raise HomeAssistantError("Battery start failed; safe return also failed") from cleanup_error
+                raise
