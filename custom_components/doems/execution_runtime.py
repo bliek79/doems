@@ -19,6 +19,7 @@ from .execution_anker_adapter import AnkerExecutionAdapter
 from .execution_control_path import observe_control_path
 from .execution_handover import assess_handover
 from .execution_watchdog import evaluate_session
+from .execution_controller import ExecutionController
 
 
 class DOEMSExecutionSupervisor:
@@ -35,6 +36,7 @@ class DOEMSExecutionSupervisor:
         # The adapter is deliberately not granted authority by R8 installation.
         # Control entities are not inferred from battery observation sensors.
         self._physical_adapter: AnkerExecutionAdapter | None = None
+        self._execution_controller: ExecutionController | None = None
         self._control_entities: dict[str, str] = {}
         self.last_result: dict[str, Any] = {"status": "geen_actie", "execution_performed": False}
         self.history: list[dict[str, Any]] = []
@@ -99,6 +101,7 @@ class DOEMSExecutionSupervisor:
             result["control_path"] = (observe_control_path(self.hass, self._control_entities, now)
                                       if self._control_entities else {"ready": False, "blockers": ["control_path_not_configured"]})
             result["command_path_verified"] = False
+            result["controller_attached"] = self._execution_controller is not None
             result["handover"] = assess_handover(
                 control_path=result["control_path"],
                 command_contract_verified=False,
