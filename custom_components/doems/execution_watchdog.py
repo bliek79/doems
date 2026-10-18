@@ -6,7 +6,7 @@ from math import isfinite
 
 def evaluate_session(*, now, started_at, action, target_soc, max_runtime_h, soc_percent, sources_fresh, controller_exclusive, command_acknowledged, plan_identity_matches, safety_clear):
     blockers = []
-    if not isinstance(now, datetime) or not isinstance(started_at, datetime) or now.tzinfo is None or started_at.tzinfo is None or now < started_at:
+    if not isinstance(now, datetime) or not isinstance(started_at, datetime) or now.tzinfo is None or started_at.tzinfo is None or now.utcoffset() is None or started_at.utcoffset() is None or now < started_at:
         blockers.append("invalid_clock")
     try:
         target, runtime, soc = float(target_soc), float(max_runtime_h), float(soc_percent)
