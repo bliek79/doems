@@ -1,6 +1,17 @@
 """R8 execution controller: gate and session lifecycle tests."""
 from datetime import datetime, timedelta, timezone
 import pytest
+import asyncio
+import functools
+import inspect
+
+def run_async(fn):
+    """Run isolated async regression cases in CI without pytest-asyncio."""
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        return asyncio.run(fn(*args, **kwargs))
+    wrapper.__signature__ = inspect.signature(fn)
+    return wrapper
 # Load the isolated R8 modules without importing the full integration package.
 import importlib.util
 import pathlib
@@ -61,7 +72,7 @@ def build(authorized=lambda: True, revalidate=lambda _: True):
     return ExecutionController(adapter, authorized=authorized, revalidate=revalidate), adapter
 
 
-@pytest.mark.asyncio
+@run_async
 async def test_denied_authority_never_starts():
     controller, adapter = build(authorized=lambda: False)
     with pytest.raises(HomeAssistantError):
@@ -70,7 +81,7 @@ async def test_denied_authority_never_starts():
     assert not adapter.starts
 
 
-@pytest.mark.asyncio
+@run_async
 async def test_start_and_target_stop():
     controller, adapter = build()
     now = datetime.now(timezone.utc)
@@ -86,7 +97,7 @@ async def test_start_and_target_stop():
     assert controller.session is None
 
 
-@pytest.mark.asyncio
+@run_async
 async def test_restart_requires_verified_stop():
     controller, adapter = build()
     controller.require_restart_reconciliation()
@@ -98,7 +109,7 @@ async def test_restart_requires_verified_stop():
     assert controller.reconciliation_required is False
 
 
-@pytest.mark.asyncio
+@run_async
 async def test_lost_authority_triggers_stop():
     authority = {"enabled": True}
     controller, adapter = build(authorized=lambda: authority["enabled"])
@@ -114,7 +125,7 @@ async def test_lost_authority_triggers_stop():
     assert adapter.stops == 1
 
 
-@pytest.mark.asyncio
+@run_async
 async def test_authority_lost_during_start_stops_and_blocks_reuse():
     authority = {"enabled": True}
     controller, adapter = build(authorized=lambda: authority["enabled"])
@@ -133,7 +144,7 @@ async def test_authority_lost_during_start_stops_and_blocks_reuse():
     assert controller.reconciliation_required is True
 
 
-@pytest.mark.asyncio
+@run_async
 async def test_unconfirmed_stop_keeps_session_and_reconciliation():
     controller, adapter = build()
     now = datetime.now(timezone.utc)
@@ -151,7 +162,7 @@ async def test_unconfirmed_stop_keeps_session_and_reconciliation():
     assert controller.reconciliation_required is True
 
 
-@pytest.mark.asyncio
+@run_async
 @pytest.mark.parametrize("ack", [False, None])
 async def test_unconfirmed_start_attempts_stop_and_blocks_reuse(ack):
     controller, adapter = build()
@@ -169,7 +180,7 @@ async def test_unconfirmed_start_attempts_stop_and_blocks_reuse(ack):
     assert controller.reconciliation_required is True
 
 
-@pytest.mark.asyncio
+@run_async
 async def test_start_exception_attempts_stop_and_blocks_reuse():
     controller, adapter = build()
 
@@ -185,7 +196,7 @@ async def test_start_exception_attempts_stop_and_blocks_reuse():
     assert controller.reconciliation_required is True
 
 
-@pytest.mark.asyncio
+@run_async
 async def test_cancelled_start_attempts_stop_and_blocks_reuse():
     import asyncio
     controller, adapter = build()
@@ -202,7 +213,7 @@ async def test_cancelled_start_attempts_stop_and_blocks_reuse():
     assert controller.reconciliation_required is True
 
 
-@pytest.mark.asyncio
+@run_async
 async def test_failed_start_cleanup_does_not_clear_reconciliation():
     controller, adapter = build()
 
@@ -222,7 +233,7 @@ async def test_failed_start_cleanup_does_not_clear_reconciliation():
     assert controller.reconciliation_required is True
 
 
-@pytest.mark.asyncio
+@run_async
 async def test_cancelled_start_waits_for_cleanup_completion():
     import asyncio
     controller, adapter = build()
