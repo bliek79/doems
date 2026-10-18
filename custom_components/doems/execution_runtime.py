@@ -101,7 +101,7 @@ class DOEMSExecutionSupervisor:
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()
-        if self._task is not None:
+        if self._task is not None and self._task is not asyncio.current_task():
             self._task.cancel()
             await asyncio.gather(self._task, return_exceptions=True)
         self._listeners.clear()
