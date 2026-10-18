@@ -27,12 +27,16 @@ class ExecutionController:
             if not isinstance(now, datetime) or now.tzinfo is None or now.utcoffset() is None:
                 raise HomeAssistantError("Invalid start timestamp")
             self.reconciliation_required = True
-            await self.adapter.start(action=action, power_w=power_w,
-                                     revalidate=lambda: self._permitted(identity))
+            acknowledged = await self.adapter.start(action=action, power_w=power_w,
+                                                    revalidate=lambda: self._permitted(identity))
+            if acknowledged is not True:
+                raise HomeAssistantError("Start acknowledgement not confirmed")
             # A command acknowledged during the adapter transaction is not
             # sufficient if ownership or the selected plan changed meanwhile.
             if not self._permitted(identity):
-                await self.adapter.stop()
+                stopped = await self.adapter.stop()
+                if stopped is not True:
+                    raise HomeAssistantError("Start rollback stop not confirmed")
                 raise HomeAssistantError("Authority or selected plan changed during start")
             self.session = dict(identity=identity, action=action, power_w=power_w,
                                 target_soc=target_soc, max_runtime_h=max_runtime_h,
@@ -45,7 +49,9 @@ class ExecutionController:
             if self.session is None and not self.reconciliation_required:
                 return True
             self.reconciliation_required = True
-            await self.adapter.stop()
+            stopped = await self.adapter.stop()
+            if stopped is not True:
+                raise HomeAssistantError("Device stop not confirmed")
             self.session = None
             self.reconciliation_required = False
             return True
