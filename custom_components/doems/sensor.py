@@ -1181,9 +1181,9 @@ class DOEMSR8ShadowSensor(SensorEntity):
 
     _attr_should_poll = False
     _attr_has_entity_name = False
-    _attr_name = "DOEMS R8 Shadow Execution"
-    _attr_unique_id = "doems_r8_shadow_execution"
-    _attr_suggested_object_id = "doems_r8_shadow_execution"
+    _attr_name = "DOEMS Execution Status"
+    _attr_unique_id = "doems_execution_status"
+    _attr_suggested_object_id = "doems_execution_status"
     _attr_icon = "mdi:shield-check-outline"
 
     def __init__(self, entry: ConfigEntry, scheduler: DOEMSR7Scheduler,
@@ -1199,7 +1199,7 @@ class DOEMSR8ShadowSensor(SensorEntity):
         plan = self.store.get_plan(slot) if type(slot) is int and slot in (1, 2, 3) else None
         result = evaluate_r8_shadow(r7, plan)
         result["selected_origin"] = r7.get("selected_origin")
-        result["r7_status"] = r7.get("status")
+        result["scheduler_status"] = r7.get("status")
         return result
 
     @property
