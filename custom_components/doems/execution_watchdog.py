@@ -6,6 +6,11 @@ from math import isfinite
 
 def evaluate_session(*, now, started_at, action, target_soc, max_runtime_h, soc_percent, sources_fresh, controller_exclusive, command_acknowledged, plan_identity_matches, safety_clear):
     blockers = []
+    if isinstance(started_at, str):
+        try:
+            started_at = datetime.fromisoformat(started_at.replace('Z', '+00:00'))
+        except ValueError:
+            started_at = None
     if not isinstance(now, datetime) or not isinstance(started_at, datetime) or now.tzinfo is None or started_at.tzinfo is None or now.utcoffset() is None or started_at.utcoffset() is None or now < started_at:
         blockers.append("invalid_clock")
     try:
