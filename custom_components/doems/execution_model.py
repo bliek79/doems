@@ -88,7 +88,7 @@ def evaluate_execution(*, now: datetime, scheduler: Mapping[str, Any],
         ):
             if scheduler.get(field) != expected:
                 blockers.append(field + "_changed")
-        if plan.get("origin") == "automatic_72h_planner" and scheduler.get("selected_planner_identity") != plan.get("planner_identity"):
+        if scheduler.get("selected_origin") == "automatic_72h_planner" and scheduler.get("selected_planner_identity") != plan.get("planner_identity"):
             blockers.append("planner_identity_changed")
         if plan.get("lifecycle_status") != "pending":
             blockers.append("plan_not_pending")
