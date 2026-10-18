@@ -1,0 +1,33 @@
+name: Verify execution public names
+on:
+  push:
+    branches: [fix/execution-public-names-20261018]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Tests and syntax
+        run: |
+          python -m pip install pytest
+          python -m compileall -q custom_components/doems
+          pytest -q
+      - name: Frozen R7 and naming gate
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+          changed=set(subprocess.check_output(['git','diff','--name-only','HEAD~4','HEAD'],text=True).splitlines())
+          allowed={'custom_components/doems/sensor.py','custom_components/doems/r8_shadow.py','tests/test_r8_shadow_contract.py','.github/workflows/verify-execution-public-names.yml'}
+          assert changed <= allowed, changed-allowed
+          s=Path('custom_components/doems/sensor.py').read_text()
+          assert '_attr_unique_id = "doems_execution_status"' in s
+          assert '_attr_name = "DOEMS Execution Status"' in s
+          assert 'doems_r8_shadow_execution' not in s
+          assert 'voorbereid_shadow' not in Path('custom_components/doems/r8_shadow.py').read_text()
+          PY
