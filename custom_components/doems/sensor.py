@@ -42,6 +42,7 @@ from .prices_sensor import build_prices_sensors
 from .automatic_combined_planner import DOEMSPlannerManager
 from .r7_runtime import DOEMSR7Scheduler
 from .execution_model import evaluate_execution
+from .execution_runtime import DOEMSExecutionSupervisor
 from .solar_actual import SolarActualQuarterManager
 from .solar_forecast import SolarForecastManager
 from .solar_sensor import build_solar_sensors
@@ -141,8 +142,9 @@ async def async_setup_entry(
     r7_scheduler = entry_data.get("r7_scheduler")
     if isinstance(r7_scheduler, DOEMSR7Scheduler):
         entities.append(DOEMSR7SchedulerStatusSensor(entry, r7_scheduler))
-        if isinstance(manual_plan_store, DOEMSManualPlanStore):
-            entities.append(DOEMSR8ShadowSensor(entry, r7_scheduler, manual_plan_store))
+        execution = entry_data.get("execution")
+        if isinstance(execution, DOEMSExecutionSupervisor):
+            entities.append(DOEMSR8ShadowSensor(entry, execution))
 
     async_add_entities(entities)
 
@@ -1177,7 +1179,7 @@ class DOEMSR7SchedulerStatusSensor(SensorEntity):
 
 
 class DOEMSR8ShadowSensor(SensorEntity):
-    """Read-only shadow of the R7-selected action; no actuator calls."""
+    """Public execution supervisor status; never implies physical authority."""
 
     _attr_should_poll = False
     _attr_has_entity_name = False
@@ -1186,38 +1188,26 @@ class DOEMSR8ShadowSensor(SensorEntity):
     _attr_suggested_object_id = "doems_execution_status"
     _attr_icon = "mdi:shield-check-outline"
 
-    def __init__(self, entry: ConfigEntry, scheduler: DOEMSR7Scheduler,
-                 store: DOEMSManualPlanStore) -> None:
-        self.scheduler = scheduler
-        self.store = store
+    def __init__(self, entry: ConfigEntry, supervisor: DOEMSExecutionSupervisor) -> None:
+        self.supervisor = supervisor
         self._remove_listener = None
         self._attr_device_info = _device_info(entry)
 
-    def _result(self) -> dict[str, Any]:
-        r7 = dict(self.scheduler.last_result)
-        slot = r7.get("selected_slot")
-        plan = self.store.get_plan(slot) if type(slot) is int and slot in (1, 2, 3) else None
-        battery = self.scheduler.battery.snapshot() if self.scheduler.battery is not None else {"status": "blocked"}
-        result = evaluate_execution(now=dt_util.utcnow(), scheduler=r7, plan=plan, battery=battery,
-            source_fresh=self.scheduler._sources_fresh(dt_util.utcnow(), battery) if self.scheduler.battery is not None else False)
-        return result
-
     @property
     def native_value(self) -> str:
-        return str(self._result()["status"])
+        return str(self.supervisor.last_result.get("status", "geen_actie"))
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        return self._result()
+        return {**self.supervisor.last_result, "recent_events": self.supervisor.history[-10:]}
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
-        self._remove_listener = self.scheduler.async_add_listener(self._handle_update)
+        self._remove_listener = self.supervisor.async_add_listener(self._handle_update)
 
     async def async_will_remove_from_hass(self) -> None:
         if self._remove_listener is not None:
             self._remove_listener()
-            self._remove_listener = None
         await super().async_will_remove_from_hass()
 
     @callback
