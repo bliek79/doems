@@ -66,6 +66,10 @@ def evaluate_execution(*, now: datetime, scheduler: Mapping[str, Any],
         result["status"], result["reason"] = status, reason
         result["blockers"] = list(dict.fromkeys(blockers))
         return result
+    if prev.get("safe_return_required") and prev.get("status") == "geblokkeerd":
+        blockers.append("restart_requires_reconciliation")
+        result["safe_return_required"] = True
+        return finish("geblokkeerd", "Handmatige apparaatcontrole na herstart vereist")
     if prev.get("status") == "stoppen":
         result["safe_return_required"] = not device_stopped
         return finish("gestopt" if device_stopped else "stoppen",
