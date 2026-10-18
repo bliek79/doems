@@ -89,3 +89,21 @@ def test_active_identity_change_requires_stop():
                               source_fresh=True,previous=initial)
     assert result["status"]=="stoppen"
     assert result["safe_return_required"] is True
+
+def test_lost_controller_evidence_during_execution_requires_stop():
+    active=decide(physical_execution_enabled=True,execution_authority=True,
+                  controller_ready=True,controller_conflict=False,device_acknowledged=True)
+    result=decide(previous=active,physical_execution_enabled=True,
+                  execution_authority=True,controller_ready=False,
+                  controller_conflict=None,device_acknowledged=True)
+    assert result["status"]=="stoppen"
+    assert result["safe_return_required"] is True
+
+def test_lost_device_ack_during_execution_requires_stop():
+    active=decide(physical_execution_enabled=True,execution_authority=True,
+                  controller_ready=True,controller_conflict=False,device_acknowledged=True)
+    result=decide(previous=active,physical_execution_enabled=True,
+                  execution_authority=True,controller_ready=True,
+                  controller_conflict=False,device_acknowledged=False)
+    assert result["status"]=="stoppen"
+    assert result["safe_return_required"] is True
