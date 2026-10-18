@@ -45,3 +45,38 @@ async def test_invalid_action_denied_even_with_authority():
     with pytest.raises(HomeAssistantError, match="Invalid action"):
         await adapter.start(action="export", power_w=500, revalidate=lambda: True)
     assert not services.calls
+
+
+@pytest.mark.asyncio
+async def test_failed_start_requires_confirmed_safe_return(monkeypatch):
+    """A failed mode switch must not be reported as safely recovered without readback."""
+    services = FakeServices()
+    state = {
+        "select.mode": "Self-consumption",
+        "select.direction": "charge",
+        "number.power": "0",
+    }
+    hass = SimpleNamespace(
+        services=services,
+        states=SimpleNamespace(get=lambda entity: SimpleNamespace(state=state[entity])),
+    )
+    adapter = AnkerExecutionAdapter(hass, {
+        "operating_mode": "select.mode",
+        "action_direction": "select.direction",
+        "power_setpoint": "number.power",
+    }, authority=True)
+
+    async def fake_call(domain, service, entity, data):
+        if entity == "operating_mode" and data.get("option") != "Self-consumption":
+            raise HomeAssistantError("mode switch failed")
+        # Deliberately do not update power readback: a command is not an acknowledgement.
+
+    async def fake_wait(predicate, timeout=45):
+        if not predicate():
+            raise HomeAssistantError("Battery control acknowledgement timeout")
+
+    monkeypatch.setattr(adapter, "_call", fake_call)
+    monkeypatch.setattr(adapter, "_wait", fake_wait)
+    state["number.power"] = "400"
+    with pytest.raises(HomeAssistantError, match="safe return also failed"):
+        await adapter.start(action="laden", power_w=500, revalidate=lambda: True)
