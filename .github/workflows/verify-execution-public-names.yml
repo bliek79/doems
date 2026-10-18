@@ -9,6 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -22,7 +24,7 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           import subprocess
-          changed=set(subprocess.check_output(['git','diff','--name-only','HEAD~4','HEAD'],text=True).splitlines())
+          changed=set(subprocess.check_output(['git','diff','--name-only','0.2.0-alpha.8.0.3','HEAD'],text=True).splitlines())
           allowed={'custom_components/doems/sensor.py','custom_components/doems/r8_shadow.py','tests/test_r8_shadow_contract.py','.github/workflows/verify-execution-public-names.yml'}
           assert changed <= allowed, changed-allowed
           s=Path('custom_components/doems/sensor.py').read_text()
