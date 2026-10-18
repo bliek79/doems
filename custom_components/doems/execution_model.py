@@ -70,6 +70,10 @@ def evaluate_execution(*, now: datetime, scheduler: Mapping[str, Any],
         blockers.append("restart_requires_reconciliation")
         result["safe_return_required"] = True
         return finish("geblokkeerd", "Handmatige apparaatcontrole na herstart vereist")
+    if prev.get("status") == "start_wacht_op_bevestiging" and prev.get("plan_identity") != key:
+        blockers.append("pending_start_plan_changed")
+        result["safe_return_required"] = True
+        return finish("geblokkeerd", "Plan gewijzigd tijdens apparaatbevestiging; controle vereist")
     if prev.get("status") == "stoppen":
         result["safe_return_required"] = not device_stopped
         return finish("gestopt" if device_stopped else "stoppen",
