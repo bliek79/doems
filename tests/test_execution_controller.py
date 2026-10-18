@@ -115,3 +115,74 @@ async def test_unconfirmed_stop_keeps_session_and_reconciliation():
         await controller.stop()
     assert controller.session is not None
     assert controller.reconciliation_required is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("ack", [False, None])
+async def test_unconfirmed_start_attempts_stop_and_blocks_reuse(ack):
+    controller, adapter = build()
+
+    async def start_without_ack(**kwargs):
+        adapter.starts.append(kwargs)
+        return ack
+
+    adapter.start = start_without_ack
+    with pytest.raises(HomeAssistantError, match="Start acknowledgement"):
+        await controller.start(identity="plan-1", action="laden", power_w=500,
+                               target_soc=80, max_runtime_h=1, now=datetime.now(timezone.utc))
+    assert adapter.stops == 1
+    assert controller.session is None
+    assert controller.reconciliation_required is True
+
+
+@pytest.mark.asyncio
+async def test_start_exception_attempts_stop_and_blocks_reuse():
+    controller, adapter = build()
+
+    async def failed_start(**kwargs):
+        adapter.starts.append(kwargs)
+        raise HomeAssistantError("Device did not respond")
+
+    adapter.start = failed_start
+    with pytest.raises(HomeAssistantError, match="Device did not respond"):
+        await controller.start(identity="plan-1", action="laden", power_w=500,
+                               target_soc=80, max_runtime_h=1, now=datetime.now(timezone.utc))
+    assert adapter.stops == 1
+    assert controller.reconciliation_required is True
+
+
+@pytest.mark.asyncio
+async def test_cancelled_start_attempts_stop_and_blocks_reuse():
+    import asyncio
+    controller, adapter = build()
+
+    async def cancelled_start(**kwargs):
+        adapter.starts.append(kwargs)
+        raise asyncio.CancelledError()
+
+    adapter.start = cancelled_start
+    with pytest.raises(asyncio.CancelledError):
+        await controller.start(identity="plan-1", action="laden", power_w=500,
+                               target_soc=80, max_runtime_h=1, now=datetime.now(timezone.utc))
+    assert adapter.stops == 1
+    assert controller.reconciliation_required is True
+
+
+@pytest.mark.asyncio
+async def test_failed_start_cleanup_does_not_clear_reconciliation():
+    controller, adapter = build()
+
+    async def failed_start(**kwargs):
+        raise HomeAssistantError("Start failed")
+
+    async def failed_cleanup():
+        adapter.stops += 1
+        raise HomeAssistantError("Stop failed")
+
+    adapter.start = failed_start
+    adapter.stop = failed_cleanup
+    with pytest.raises(HomeAssistantError, match="Start failed"):
+        await controller.start(identity="plan-1", action="laden", power_w=500,
+                               target_soc=80, max_runtime_h=1, now=datetime.now(timezone.utc))
+    assert adapter.stops == 1
+    assert controller.reconciliation_required is True
