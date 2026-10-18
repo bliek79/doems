@@ -1,0 +1,32 @@
+name: Execution integration validation
+on:
+  push:
+    branches:
+      - feature/execution-complete-20261018
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install tests
+        run: python -m pip install --upgrade pip pytest pytest-asyncio homeassistant
+      - name: Compile integration
+        run: python -m compileall -q custom_components/doems
+      - name: Validate JSON
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for path in Path("custom_components/doems").rglob("*.json"):
+              json.loads(path.read_text())
+          PY
+      - name: Execution tests
+        run: python -m pytest -q tests/test_execution_model.py tests/test_execution_control_path.py tests/test_execution_anker_adapter.py
+      - name: Full regression
+        run: python -m pytest -q
