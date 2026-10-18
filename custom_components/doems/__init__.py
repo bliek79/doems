@@ -180,13 +180,13 @@ async def async_unload_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> bo
     if isinstance(prices, DOEMSRegisteredPricesManager):
         await prices.async_shutdown()
 
-    battery_input = entry_data.get("battery_input")
-    if isinstance(battery_input, DOEMSBatteryInputContract):
-        await battery_input.async_shutdown()
-
     execution = entry_data.get("execution")
     if isinstance(execution, DOEMSExecutionSupervisor):
         await execution.async_shutdown()
+
+    battery_input = entry_data.get("battery_input")
+    if isinstance(battery_input, DOEMSBatteryInputContract):
+        await battery_input.async_shutdown()
 
     r7_scheduler = entry_data.get("r7_scheduler")
     if isinstance(r7_scheduler, DOEMSR7Scheduler):
