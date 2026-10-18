@@ -70,11 +70,18 @@ class AnkerExecutionAdapter:
                 raise HomeAssistantError("Self-consumption mode not confirmed")
             return True
 
-    def _power_zero(self) -> bool:
+    def _power_matches(self, expected_w: int) -> bool:
+        """Require a finite numeric setpoint readback; never trust a service-call success."""
         try:
-            return abs(float(self._state("power_setpoint"))) <= 1
+            from math import isfinite
+
+            actual = float(self._state("power_setpoint"))
+            return isfinite(actual) and abs(actual - expected_w) <= 1
         except (ValueError, TypeError):
             return False
+
+    def _power_zero(self) -> bool:
+        return self._power_matches(0)
 
     async def start(self, *, action: str, power_w: int, revalidate: Callable[[], bool]) -> bool:
         """Two-stage mode switch, zero guard, 60s stable controls, final gate."""
@@ -105,8 +112,7 @@ class AnkerExecutionAdapter:
                     raise HomeAssistantError("Final revalidation failed before nonzero setpoint")
                 await self._call("number", "set_value", "power_setpoint", {"value": power_w})
                 self._last_commanded_setpoint = power_w
-                await self._wait(lambda: self._state("power_setpoint") is not None and
-                                 abs(float(self._state("power_setpoint")) - power_w) <= 1)
+                await self._wait(lambda: self._power_matches(power_w))
                 return True
             except BaseException:
                 # Always attempt safe return on failures, including cancellation.
