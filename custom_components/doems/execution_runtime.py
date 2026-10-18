@@ -27,6 +27,7 @@ class DOEMSExecutionSupervisor:
         self._shutdown = False
         self._task: asyncio.Task | None = None
         self._dirty = False
+        self._restart_reconciliation_required = False
         self.last_result: dict[str, Any] = {"status": "geen_actie", "execution_performed": False}
         self.history: list[dict[str, Any]] = []
 
@@ -36,10 +37,12 @@ class DOEMSExecutionSupervisor:
             self.history = [x for x in stored.get("history", [])[-30:] if isinstance(x, dict)]
             previous = stored.get("last_result")
             if isinstance(previous, dict) and previous.get("safe_return_required") is True:
+                self._restart_reconciliation_required = True
                 self.last_result = {"status": "geblokkeerd", "reason": "Herstart: veilige terugkeer nog niet bevestigd",
                                     "execution_performed": False, "safe_return_required": True,
                                     "blockers": ["restart_requires_reconciliation"]}
             elif isinstance(previous, dict) and previous.get("status") in ("actief", "stoppen", "start_wacht_op_bevestiging"):
+                self._restart_reconciliation_required = True
                 self.last_result = {"status": "geblokkeerd", "reason": "Herstart: apparaatstatus onafhankelijk controleren",
                                     "execution_performed": False, "safe_return_required": True,
                                     "blockers": ["restart_requires_reconciliation"]}
@@ -79,6 +82,12 @@ class DOEMSExecutionSupervisor:
             result = evaluate_execution(now=now, scheduler=scheduler, plan=plan,
                                         battery=battery, source_fresh=fresh,
                                         previous=self.last_result)
+            if self._restart_reconciliation_required:
+                result["status"] = "geblokkeerd"
+                result["reason"] = "Apparaatcontrole na herstart vereist"
+                result["safe_return_required"] = True
+                result["execution_performed"] = False
+                result["blockers"] = list(dict.fromkeys([*result.get("blockers", []), "restart_requires_reconciliation"]))
             previous = self.last_result
             self.last_result = result
             changed = (previous.get("status"), previous.get("plan_identity"), previous.get("blockers"),
