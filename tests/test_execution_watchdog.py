@@ -42,3 +42,11 @@ def test_changed_plan_stops():
 
 def test_missing_acknowledgement_stops():
     assert "command_ack_lost" in decision(command_acknowledged=False)["blockers"]
+
+
+def test_missing_start_timestamp_fails_closed():
+    assert 'invalid_clock' in decision(started_at=None)['blockers']
+
+
+def test_naive_start_timestamp_fails_closed():
+    assert 'invalid_clock' in decision(started_at=datetime(2026, 10, 18, 11, 0))['blockers']
