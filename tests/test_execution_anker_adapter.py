@@ -134,3 +134,15 @@ async def test_start_rejects_unavailable_operating_mode():
     with pytest.raises(HomeAssistantError, match='Operating mode unavailable'):
         await adapter.start(action='laden', power_w=500, revalidate=lambda: True)
     assert not services.calls
+
+
+@pytest.mark.asyncio
+async def test_start_requires_power_setpoint_before_mode_switch():
+    services = FakeServices()
+    def state(entity):
+        return SimpleNamespace(state='self_consumption') if entity == 'select.mode' else None
+    hass = SimpleNamespace(services=services, states=SimpleNamespace(get=state))
+    adapter = AnkerExecutionAdapter(hass, {'operating_mode': 'select.mode', 'power_setpoint': 'number.power'}, authority=True)
+    with pytest.raises(HomeAssistantError, match='Power setpoint unavailable'):
+        await adapter.start(action='laden', power_w=500, revalidate=lambda: True)
+    assert not services.calls
