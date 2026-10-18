@@ -151,8 +151,14 @@ def evaluate_execution(*, now: datetime, scheduler: Mapping[str, Any],
         return finish("voorbereid", "Scheduler en veiligheid akkoord; fysieke uitvoering uitgeschakeld")
     if not controller_ready or controller_conflict is None:
         blockers.append("controller_evidence_missing")
+        if previous_running:
+            result["safe_return_required"] = not device_stopped
+            return finish("gestopt" if device_stopped else "stoppen", "Controllerbevestiging verloren")
         return finish("geblokkeerd", "Controller niet onafhankelijk gevalideerd")
     if not device_acknowledged:
+        if previous_running:
+            result["safe_return_required"] = not device_stopped
+            return finish("gestopt" if device_stopped else "stoppen", "Apparaatbevestiging verloren")
         return finish("start_wacht_op_bevestiging", "Wacht op apparaatbevestiging")
     result["execution_performed"] = True
     result["started_at"] = prev.get("started_at") if previous_running else clock.isoformat()
