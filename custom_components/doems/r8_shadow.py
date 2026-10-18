@@ -23,7 +23,7 @@ def evaluate_r8_shadow(r7: Mapping[str, Any], plan: Mapping[str, Any] | None) ->
     }
     slot = r7.get("selected_slot")
     if type(slot) is not int or slot not in (1, 2, 3):
-        return {**base, "status": "geen_actie", "reason": "Geen R7-startklaar plan"}
+        return {**base, "status": "geen_actie", "reason": "Geen startklaar plan"}
     if not isinstance(plan, Mapping):
         return {**base, "status": "geblokkeerd", "blockers": ["selected_plan_missing"]}
     blockers: list[str] = []
@@ -51,12 +51,12 @@ def evaluate_r8_shadow(r7: Mapping[str, Any], plan: Mapping[str, Any] | None) ->
     if not blockers:
         # No independent prestart approval is claimed for pending plans.
         return {
-            **base, "status": "voorbereid_shadow",
-            "reason": "R7 selectie en Safety akkoord; geen fysieke uitvoering",
+            **base, "status": "voorbereid",
+            "reason": "Scheduler en veiligheid akkoord; fysieke uitvoering uitgeschakeld",
             "action": plan.get("action"),
             "power_w": plan.get("power_w"),
             "target_soc": plan.get("target_soc"),
             "max_runtime_h": plan.get("max_runtime_h"),
         }
     return {**base, "status": "geblokkeerd", "blockers": list(dict.fromkeys(blockers)),
-            "reason": "R7 selectie of veiligheidsvoorwaarden niet akkoord"}
+            "reason": "Schedulerselectie of veiligheidsvoorwaarden niet akkoord"}
