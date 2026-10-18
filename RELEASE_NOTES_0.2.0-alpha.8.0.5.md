@@ -11,3 +11,5 @@ This release provides a tested, installable execution-supervision update.
 - This is not a validated automatic physical execution release.
 
 Installation: install via HACS custom repository or unpack the supplied ZIP into the Home Assistant configuration directory and restart Home Assistant. Existing configuration is preserved.
+
+Release package is published only after the complete automated test suite passes.
