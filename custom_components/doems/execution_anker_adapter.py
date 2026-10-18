@@ -66,7 +66,9 @@ class AnkerExecutionAdapter:
                 errors.append(f"self_consumption: {err}")
             if errors:
                 raise HomeAssistantError("; ".join(errors))
-            return self._state("operating_mode") == SELF_MODE
+            if self._state("operating_mode") != SELF_MODE:
+                raise HomeAssistantError("Self-consumption mode not confirmed")
+            return True
 
     def _power_zero(self) -> bool:
         try:
