@@ -41,7 +41,7 @@ from .prices import DOEMSPricesManager
 from .prices_sensor import build_prices_sensors
 from .automatic_combined_planner import DOEMSPlannerManager
 from .r7_runtime import DOEMSR7Scheduler
-from .r8_shadow import evaluate_r8_shadow
+from .execution_model import evaluate_execution
 from .solar_actual import SolarActualQuarterManager
 from .solar_forecast import SolarForecastManager
 from .solar_sensor import build_solar_sensors
@@ -1197,9 +1197,9 @@ class DOEMSR8ShadowSensor(SensorEntity):
         r7 = dict(self.scheduler.last_result)
         slot = r7.get("selected_slot")
         plan = self.store.get_plan(slot) if type(slot) is int and slot in (1, 2, 3) else None
-        result = evaluate_r8_shadow(r7, plan)
-        result["selected_origin"] = r7.get("selected_origin")
-        result["scheduler_status"] = r7.get("status")
+        battery = self.scheduler.battery.snapshot() if self.scheduler.battery is not None else {"status": "blocked"}
+        result = evaluate_execution(now=dt_util.utcnow(), scheduler=r7, plan=plan, battery=battery,
+            source_fresh=self.scheduler._sources_fresh(dt_util.utcnow(), battery) if self.scheduler.battery is not None else False)
         return result
 
     @property
