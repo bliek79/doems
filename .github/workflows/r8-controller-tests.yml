@@ -1,0 +1,28 @@
+name: R8 controller regression tests
+
+on:
+  push:
+    branches:
+      - work/r8-independent-execution-20261018
+  pull_request:
+    paths:
+      - "custom_components/doems/execution_*.py"
+      - "tests/test_execution_controller.py"
+      - ".github/workflows/r8-controller-tests.yml"
+  workflow_dispatch:
+
+jobs:
+  controller:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pip pytest pytest-asyncio homeassistant
+      - name: Compile execution modules and regression tests
+        run: python -m compileall -q custom_components/doems/execution_controller.py custom_components/doems/execution_watchdog.py tests/test_execution_controller.py
+      - name: Run R8 controller regression tests
+        run: python -m pytest -q tests/test_execution_controller.py
