@@ -22,6 +22,7 @@ class AnkerExecutionAdapter:
         self.entities = dict(entities)
         self.authority = authority
         self._lock = asyncio.Lock()
+        self._last_commanded_setpoint: int | None = None
 
     def _require_authority(self) -> None:
         if not self.authority:
@@ -101,6 +102,7 @@ class AnkerExecutionAdapter:
                 if not revalidate():
                     raise HomeAssistantError("Final revalidation failed before nonzero setpoint")
                 await self._call("number", "set_value", "power_setpoint", {"value": power_w})
+                self._last_commanded_setpoint = power_w
                 await self._wait(lambda: self._state("power_setpoint") is not None and
                                  abs(float(self._state("power_setpoint")) - power_w) <= 1)
                 return True
