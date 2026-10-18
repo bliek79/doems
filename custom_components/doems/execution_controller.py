@@ -27,17 +27,22 @@ class ExecutionController:
             if not isinstance(now, datetime) or now.tzinfo is None or now.utcoffset() is None:
                 raise HomeAssistantError("Invalid start timestamp")
             self.reconciliation_required = True
-            acknowledged = await self.adapter.start(action=action, power_w=power_w,
-                                                    revalidate=lambda: self._permitted(identity))
-            if acknowledged is not True:
-                raise HomeAssistantError("Start acknowledgement not confirmed")
-            # A command acknowledged during the adapter transaction is not
-            # sufficient if ownership or the selected plan changed meanwhile.
-            if not self._permitted(identity):
-                stopped = await self.adapter.stop()
-                if stopped is not True:
-                    raise HomeAssistantError("Start rollback stop not confirmed")
-                raise HomeAssistantError("Authority or selected plan changed during start")
+            try:
+                acknowledged = await self.adapter.start(
+                    action=action, power_w=power_w,
+                    revalidate=lambda: self._permitted(identity))
+                if acknowledged is not True:
+                    raise HomeAssistantError("Start acknowledgement not confirmed")
+                if not self._permitted(identity):
+                    raise HomeAssistantError("Authority or selected plan changed during start")
+            except BaseException:
+                # A failed or cancelled start may already have reached the device.
+                # Keep the reconciliation fence raised until a separate verified stop.
+                try:
+                    await asyncio.shield(self.adapter.stop())
+                except BaseException:
+                    pass
+                raise
             self.session = dict(identity=identity, action=action, power_w=power_w,
                                 target_soc=target_soc, max_runtime_h=max_runtime_h,
                                 started_at=now.astimezone(timezone.utc).isoformat())
