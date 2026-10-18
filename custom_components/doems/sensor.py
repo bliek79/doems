@@ -41,6 +41,7 @@ from .prices import DOEMSPricesManager
 from .prices_sensor import build_prices_sensors
 from .automatic_combined_planner import DOEMSPlannerManager
 from .r7_runtime import DOEMSR7Scheduler
+from .ems_execution_readiness import validate_execution_readiness
 from .solar_actual import SolarActualQuarterManager
 from .solar_forecast import SolarForecastManager
 from .solar_sensor import build_solar_sensors
@@ -140,6 +141,8 @@ async def async_setup_entry(
     r7_scheduler = entry_data.get("r7_scheduler")
     if isinstance(r7_scheduler, DOEMSR7Scheduler):
         entities.append(DOEMSR7SchedulerStatusSensor(entry, r7_scheduler))
+        if isinstance(manual_plan_store, DOEMSManualPlanStore):
+            entities.append(DOEMSR8AReadinessSensor(entry, r7_scheduler, manual_plan_store))
 
     async_add_entities(entities)
 
@@ -1157,6 +1160,93 @@ class DOEMSR7SchedulerStatusSensor(SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         return dict(self.scheduler.last_result)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._remove_listener = self.scheduler.async_add_listener(self._handle_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._remove_listener is not None:
+            self._remove_listener()
+            self._remove_listener = None
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
+
+
+class DOEMSR8AReadinessSensor(SensorEntity):
+    """R8-A read-only observation of the current R7-selected plan.
+
+    Missing handoff, revision and final revalidation evidence is not invented.
+    No plan mutations, timer registration, or device/service calls.
+    """
+
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+    _attr_name = "DOEMS R8A Execution Readiness"
+    _attr_unique_id = "doems_r8a_execution_readiness"
+    _attr_suggested_object_id = "doems_r8a_execution_readiness"
+    _attr_icon = "mdi:shield-search"
+
+    def __init__(self, entry: ConfigEntry, scheduler: DOEMSR7Scheduler,
+                 store: DOEMSManualPlanStore) -> None:
+        self.scheduler = scheduler
+        self.store = store
+        self._remove_listener = None
+        self._attr_device_info = _device_info(entry)
+
+    def _assessment(self) -> dict[str, Any]:
+        r7 = dict(self.scheduler.last_result)
+        slot = r7.get("selected_slot")
+        if type(slot) is not int or slot not in (1, 2, 3):
+            return {
+                "validation_status": "not_validated",
+                "technical_ready": False,
+                "execution_authorized": False,
+                "execution_performed": False,
+                "blockers": ["no_r7_selected_plan"],
+                "missing_evidence": ["selected_plan"],
+                "selected_slot": None,
+                "checked_at": dt_util.utcnow().isoformat(),
+                "native_resolution_minutes": 15,
+                "native_horizon_hours": 72,
+                "native_slot_count": 288,
+            }
+        plan = dict(self.store.get_plan(slot) or {})
+        plan["slot"] = slot
+        # A sensor read is not an atomic scheduler/store transaction.
+        # Keep this explicitly unverified; R8-A must fail closed.
+        result = validate_execution_readiness(
+            plan=plan,
+            r7=r7,
+            checked_at=dt_util.utcnow(),
+            snapshot_identity=str(r7.get("last_promotion") or r7.get("next_wake_at") or ""),
+            controller_conflict=None,
+            final_revalidation_safe=None,
+            handoff_ready=None,
+            atomic_plan_revision_match=None,
+        )
+        return {
+            **result,
+            "blockers": list(result["blockers"]),
+            "missing_evidence": list(result["missing_evidence"]),
+            "selected_slot": slot,
+            "selected_origin": r7.get("selected_origin"),
+            "r7_status": r7.get("status"),
+            "native_resolution_minutes": 15,
+            "native_horizon_hours": 72,
+            "native_slot_count": 288,
+        }
+
+    @property
+    def native_value(self) -> str:
+        return str(self._assessment()["validation_status"])
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return self._assessment()
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
