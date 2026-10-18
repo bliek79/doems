@@ -99,7 +99,10 @@ def evaluate_execution(
         blockers.append("battery_direction_conflict")
     if plan.get("action") not in ("laden", "ontladen"):
         blockers.append("action_invalid")
-    power, target, runtime, soc = (_number(plan.get(k)) for k in ("power_w", "target_soc", "max_runtime_h")) + (_number(battery.get("soc_percent")),)
+    power = _number(plan.get("power_w"))
+    target = _number(plan.get("target_soc"))
+    runtime = _number(plan.get("max_runtime_h"))
+    soc = _number(battery.get("soc_percent"))
     if power is None or not 100 <= power <= 3500:
         blockers.append("power_invalid")
     if target is None or not 5 <= target <= 100:
