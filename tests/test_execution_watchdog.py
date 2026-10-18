@@ -50,3 +50,15 @@ def test_missing_start_timestamp_fails_closed():
 
 def test_naive_start_timestamp_fails_closed():
     assert 'invalid_clock' in decision(started_at=datetime(2026, 10, 18, 11, 0))['blockers']
+
+
+def test_persisted_iso_start_timestamp_continues():
+    assert decision(started_at="2026-10-18T11:45:00+00:00")["decision"] == "continue"
+
+
+def test_persisted_zulu_start_timestamp_continues():
+    assert decision(started_at="2026-10-18T11:45:00Z")["decision"] == "continue"
+
+
+def test_corrupt_persisted_start_timestamp_fails_closed():
+    assert "invalid_clock" in decision(started_at="not-a-timestamp")["blockers"]
