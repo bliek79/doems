@@ -186,3 +186,38 @@ async def test_failed_start_cleanup_does_not_clear_reconciliation():
                                target_soc=80, max_runtime_h=1, now=datetime.now(timezone.utc))
     assert adapter.stops == 1
     assert controller.reconciliation_required is True
+
+
+@pytest.mark.asyncio
+async def test_cancelled_start_waits_for_cleanup_completion():
+    import asyncio
+    controller, adapter = build()
+    cleanup_started = asyncio.Event()
+    cleanup_release = asyncio.Event()
+    cleanup_finished = asyncio.Event()
+
+    async def cancelled_start(**kwargs):
+        raise asyncio.CancelledError()
+
+    async def delayed_stop():
+        adapter.stops += 1
+        cleanup_started.set()
+        await cleanup_release.wait()
+        cleanup_finished.set()
+        return True
+
+    adapter.start = cancelled_start
+    adapter.stop = delayed_stop
+    task = asyncio.create_task(controller.start(
+        identity="plan-1", action="laden", power_w=500,
+        target_soc=80, max_runtime_h=1, now=datetime.now(timezone.utc)))
+    await asyncio.wait_for(cleanup_started.wait(), timeout=2)
+    assert not task.done()
+    assert controller.reconciliation_required is True
+    cleanup_release.set()
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(task, timeout=2)
+    assert cleanup_finished.is_set()
+    assert adapter.stops == 1
+    assert controller.session is None
+    assert controller.reconciliation_required is True
