@@ -38,8 +38,15 @@ class ExecutionController:
             except BaseException:
                 # A failed or cancelled start may already have reached the device.
                 # Keep the reconciliation fence raised until a separate verified stop.
+                # Await cleanup to completion even if the start task is cancelled.
+                cleanup = asyncio.create_task(self.adapter.stop())
                 try:
-                    await asyncio.shield(self.adapter.stop())
+                    await asyncio.shield(cleanup)
+                except asyncio.CancelledError:
+                    try:
+                        await cleanup
+                    except BaseException:
+                        pass
                 except BaseException:
                     pass
                 raise
