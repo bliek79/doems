@@ -1,13 +1,28 @@
 """R8 execution controller: gate and session lifecycle tests."""
 from datetime import datetime, timedelta, timezone
-from types import SimpleNamespace
 import pytest
-from homeassistant.exceptions import HomeAssistantError
 # Load the isolated R8 modules without importing the full integration package.
 import importlib.util
 import pathlib
 import sys
 import types
+
+# Main's full pytest job intentionally does not install Home Assistant.
+# Only the exception type is needed by the isolated controller unit tests.
+try:
+    from homeassistant.exceptions import HomeAssistantError
+except ModuleNotFoundError as exc:
+    if exc.name != "homeassistant":
+        raise
+    _ha = types.ModuleType("homeassistant")
+    _ha.__path__ = []
+    _ha_exceptions = types.ModuleType("homeassistant.exceptions")
+    class HomeAssistantError(Exception):
+        pass
+    _ha_exceptions.HomeAssistantError = HomeAssistantError
+    _ha.exceptions = _ha_exceptions
+    sys.modules["homeassistant"] = _ha
+    sys.modules["homeassistant.exceptions"] = _ha_exceptions
 
 _COMPONENTS = pathlib.Path(__file__).resolve().parents[1] / "custom_components" / "doems"
 for _pkg, _path in (("custom_components", _COMPONENTS.parent),
