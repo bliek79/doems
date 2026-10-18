@@ -124,3 +124,13 @@ async def test_stop_denied_without_authority():
     with pytest.raises(HomeAssistantError, match='not authorized'):
         await adapter.stop()
     assert not services.calls
+
+
+@pytest.mark.asyncio
+async def test_start_rejects_unavailable_operating_mode():
+    services = FakeServices()
+    hass = SimpleNamespace(services=services, states=SimpleNamespace(get=lambda _: None))
+    adapter = AnkerExecutionAdapter(hass, {'operating_mode': 'select.mode'}, authority=True)
+    with pytest.raises(HomeAssistantError, match='Operating mode unavailable'):
+        await adapter.start(action='laden', power_w=500, revalidate=lambda: True)
+    assert not services.calls
