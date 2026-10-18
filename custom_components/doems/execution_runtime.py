@@ -18,6 +18,7 @@ from .execution_model import evaluate_execution
 from .execution_anker_adapter import AnkerExecutionAdapter
 from .execution_control_path import observe_control_path
 from .execution_handover import assess_handover
+from .execution_watchdog import evaluate_session
 
 
 class DOEMSExecutionSupervisor:
@@ -105,7 +106,22 @@ class DOEMSExecutionSupervisor:
                 restart_reconciled=not self._restart_reconciliation_required,
                 live_stop_test_passed=False,
             )
+            # Shadow-only session assessment: never sends a device command.
             previous = self.last_result
+            if previous.get("status") == "actief":
+                result["session_watchdog"] = evaluate_session(
+                    now=now,
+                    started_at=previous.get("started_at"),
+                    action=previous.get("action"),
+                    target_soc=previous.get("target_soc"),
+                    max_runtime_h=previous.get("max_runtime_h"),
+                    soc_percent=battery.get("soc_percent"),
+                    sources_fresh=fresh,
+                    controller_exclusive=False,
+                    command_acknowledged=False,
+                    plan_identity_matches=previous.get("plan_identity") == result.get("plan_identity"),
+                    safety_clear=scheduler.get("safety_status") == "safe" and not scheduler.get("safety_blockers"),
+                )
             self.last_result = result
             changed = (previous.get("status"), previous.get("plan_identity"), previous.get("blockers"),
                        previous.get("safe_return_required"), previous.get("reason")) != (
