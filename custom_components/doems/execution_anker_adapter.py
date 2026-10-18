@@ -72,6 +72,10 @@ class AnkerExecutionAdapter:
                 raise HomeAssistantError("Self-consumption mode not confirmed")
             return True
 
+    async def stop(self) -> bool:
+        """Stop an authorized session with verified zero power and self-consumption."""
+        return await self.safe_return()
+
     def _power_matches(self, expected_w: int) -> bool:
         """Require a finite numeric setpoint readback; never trust a service-call success."""
         try:
