@@ -81,17 +81,18 @@ class DOEMSExecutionSupervisor:
                                         previous=self.last_result)
             previous = self.last_result
             self.last_result = result
-            if (previous.get("status"), previous.get("plan_identity"), previous.get("blockers"),
-                    previous.get("safe_return_required")) != (
-                    result.get("status"), result.get("plan_identity"), result.get("blockers"),
-                    result.get("safe_return_required")):
+            changed = (previous.get("status"), previous.get("plan_identity"), previous.get("blockers"),
+                       previous.get("safe_return_required"), previous.get("reason")) != (
+                       result.get("status"), result.get("plan_identity"), result.get("blockers"),
+                       result.get("safe_return_required"), result.get("reason"))
+            if changed:
                 self.history.append({"at": now.isoformat(), "status": result["status"],
                                      "reason": result["reason"], "plan_identity": result.get("plan_identity"),
                                      "blockers": result.get("blockers", [])})
                 self.history = self.history[-30:]
                 await self._storage.async_save({"last_result": result, "history": self.history})
-            for listener in tuple(self._listeners):
-                listener()
+                for listener in tuple(self._listeners):
+                    listener()
             return dict(result)
 
     def async_add_listener(self, listener: Callable[[], None]) -> Callable[[], None]:
