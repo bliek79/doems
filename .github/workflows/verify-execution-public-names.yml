@@ -3,7 +3,7 @@ on:
   push:
     branches: [fix/execution-public-names-20261018]
 permissions:
-  contents: read
+  contents: write
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -25,7 +25,7 @@ jobs:
           from pathlib import Path
           import subprocess
           changed=set(subprocess.check_output(['git','diff','--name-only','0.2.0-alpha.8.0.3','HEAD'],text=True).splitlines())
-          allowed={'custom_components/doems/sensor.py','custom_components/doems/r8_shadow.py','tests/test_r8_shadow_contract.py','.github/workflows/verify-execution-public-names.yml'}
+          allowed={'custom_components/doems/sensor.py','custom_components/doems/r8_shadow.py','tests/test_r8_shadow_contract.py','.github/workflows/verify-execution-public-names.yml', 'custom_components/doems/manifest.json', 'custom_components/doems/const.py', 'tests/test_alpha5_2_status_hotfix_contract.py', 'tests/test_alpha7_1_planner_migration_contract.py', 'tests/test_alpha7_prices_release_contract.py', 'tests/test_energy_forecast_contract.py', 'RELEASE_NOTES_0.2.0-alpha.8.0.4.md'}
           assert changed <= allowed, changed-allowed
           s=Path('custom_components/doems/sensor.py').read_text()
           assert '_attr_unique_id = "doems_execution_status"' in s
@@ -33,3 +33,14 @@ jobs:
           assert 'doems_r8_shadow_execution' not in s
           assert 'voorbereid_shadow' not in Path('custom_components/doems/r8_shadow.py').read_text()
           PY
+
+      - name: Build release ZIP
+        run: |
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.2.0-alpha.8.0.4.md
+          unzip -t doems.zip
+          sha256sum doems.zip > SHA256SUMS.txt
+      - name: Publish validated naming fix
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create 0.2.0-alpha.8.0.4 doems.zip SHA256SUMS.txt --target "$GITHUB_SHA" --prerelease --title "DOEMS 0.2.0-alpha.8.0.4 - Execution naming fix" --notes-file RELEASE_NOTES_0.2.0-alpha.8.0.4.md
