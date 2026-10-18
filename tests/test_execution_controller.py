@@ -77,3 +77,21 @@ async def test_lost_authority_triggers_stop():
         command_acknowledged=True, plan_identity_matches=True, safety_clear=True)
     assert verdict["decision"] == "stop"
     assert adapter.stops == 1
+
+
+@pytest.mark.asyncio
+async def test_authority_lost_during_start_stops_and_blocks_reuse():
+    authority = {"enabled": True}
+    controller, adapter = build(authorized=lambda: authority["enabled"])
+
+    async def start_then_revoke(**kwargs):
+        adapter.starts.append(kwargs)
+        authority["enabled"] = False
+
+    adapter.start = start_then_revoke
+    with pytest.raises(HomeAssistantError, match="changed during start"):
+        await controller.start(identity="plan-1", action="laden", power_w=500,
+                               target_soc=80, max_runtime_h=1, now=datetime.now(timezone.utc))
+    assert adapter.stops == 1
+    assert controller.session is None
+    assert controller.reconciliation_required is True
