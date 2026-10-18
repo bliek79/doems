@@ -17,6 +17,7 @@ from homeassistant.util import dt as dt_util
 from .execution_model import evaluate_execution
 from .execution_anker_adapter import AnkerExecutionAdapter
 from .execution_control_path import observe_control_path
+from .execution_handover import assess_handover
 
 
 class DOEMSExecutionSupervisor:
@@ -97,6 +98,13 @@ class DOEMSExecutionSupervisor:
             result["control_path"] = (observe_control_path(self.hass, self._control_entities, now)
                                       if self._control_entities else {"ready": False, "blockers": ["control_path_not_configured"]})
             result["command_path_verified"] = False
+            result["handover"] = assess_handover(
+                control_path=result["control_path"],
+                command_contract_verified=False,
+                exclusive_authority_verified=False,
+                restart_reconciled=not self._restart_reconciliation_required,
+                live_stop_test_passed=False,
+            )
             previous = self.last_result
             self.last_result = result
             changed = (previous.get("status"), previous.get("plan_identity"), previous.get("blockers"),
