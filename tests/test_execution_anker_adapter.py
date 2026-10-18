@@ -80,3 +80,24 @@ async def test_failed_start_requires_confirmed_safe_return(monkeypatch):
     state["number.power"] = "400"
     with pytest.raises(HomeAssistantError, match="safe return also failed"):
         await adapter.start(action="laden", power_w=500, revalidate=lambda: True)
+
+
+@pytest.mark.parametrize("readback", ["nan", "inf", "-inf", "unavailable", "not-a-number"])
+def test_setpoint_ack_rejects_nonfinite_and_invalid_values(readback):
+    hass = SimpleNamespace(
+        services=FakeServices(),
+        states=SimpleNamespace(get=lambda _: SimpleNamespace(state=readback)),
+    )
+    adapter = AnkerExecutionAdapter(hass, {"power_setpoint": "number.power"})
+    assert adapter._power_matches(500) is False
+    assert adapter._power_zero() is False
+
+
+def test_setpoint_ack_requires_matching_numeric_value():
+    hass = SimpleNamespace(
+        services=FakeServices(),
+        states=SimpleNamespace(get=lambda _: SimpleNamespace(state="499.5")),
+    )
+    adapter = AnkerExecutionAdapter(hass, {"power_setpoint": "number.power"})
+    assert adapter._power_matches(500) is True
+    assert adapter._power_matches(450) is False
