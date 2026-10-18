@@ -3,7 +3,26 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 import pytest
 from homeassistant.exceptions import HomeAssistantError
-from custom_components.doems.execution_controller import ExecutionController
+# Load the isolated R8 modules without importing the full integration package.
+import importlib.util
+import pathlib
+import sys
+import types
+
+_COMPONENTS = pathlib.Path(__file__).resolve().parents[1] / "custom_components" / "doems"
+for _pkg, _path in (("custom_components", _COMPONENTS.parent),
+                    ("custom_components.doems", _COMPONENTS)):
+    if _pkg not in sys.modules:
+        _module = types.ModuleType(_pkg)
+        _module.__path__ = [str(_path)]
+        sys.modules[_pkg] = _module
+
+_spec = importlib.util.spec_from_file_location(
+    "custom_components.doems.execution_controller", _COMPONENTS / "execution_controller.py")
+_module = importlib.util.module_from_spec(_spec)
+sys.modules[_spec.name] = _module
+_spec.loader.exec_module(_module)
+ExecutionController = _module.ExecutionController
 
 
 class FakeAdapter:
