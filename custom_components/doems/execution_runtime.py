@@ -35,7 +35,11 @@ class DOEMSExecutionSupervisor:
         if isinstance(stored, dict):
             self.history = [x for x in stored.get("history", [])[-30:] if isinstance(x, dict)]
             previous = stored.get("last_result")
-            if isinstance(previous, dict) and previous.get("status") in ("actief", "stoppen", "start_wacht_op_bevestiging"):
+            if isinstance(previous, dict) and previous.get("safe_return_required") is True:
+                self.last_result = {"status": "geblokkeerd", "reason": "Herstart: veilige terugkeer nog niet bevestigd",
+                                    "execution_performed": False, "safe_return_required": True,
+                                    "blockers": ["restart_requires_reconciliation"]}
+            elif isinstance(previous, dict) and previous.get("status") in ("actief", "stoppen", "start_wacht_op_bevestiging"):
                 self.last_result = {"status": "geblokkeerd", "reason": "Herstart: apparaatstatus onafhankelijk controleren",
                                     "execution_performed": False, "safe_return_required": True,
                                     "blockers": ["restart_requires_reconciliation"]}
@@ -77,8 +81,10 @@ class DOEMSExecutionSupervisor:
                                         previous=self.last_result)
             previous = self.last_result
             self.last_result = result
-            if (previous.get("status"), previous.get("plan_identity"), previous.get("blockers")) != (
-                    result.get("status"), result.get("plan_identity"), result.get("blockers")):
+            if (previous.get("status"), previous.get("plan_identity"), previous.get("blockers"),
+                    previous.get("safe_return_required")) != (
+                    result.get("status"), result.get("plan_identity"), result.get("blockers"),
+                    result.get("safe_return_required")):
                 self.history.append({"at": now.isoformat(), "status": result["status"],
                                      "reason": result["reason"], "plan_identity": result.get("plan_identity"),
                                      "blockers": result.get("blockers", [])})
