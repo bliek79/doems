@@ -101,3 +101,16 @@ def test_setpoint_ack_requires_matching_numeric_value():
     adapter = AnkerExecutionAdapter(hass, {"power_setpoint": "number.power"})
     assert adapter._power_matches(500) is True
     assert adapter._power_matches(450) is False
+
+
+@pytest.mark.asyncio
+async def test_safe_return_requires_power_readback():
+    services = FakeServices()
+    def get_state(entity):
+        if entity == 'select.mode':
+            return SimpleNamespace(state='self_consumption')
+        return None
+    hass = SimpleNamespace(services=services, states=SimpleNamespace(get=get_state))
+    adapter = AnkerExecutionAdapter(hass, {'operating_mode': 'select.mode', 'power_setpoint': 'number.power'}, authority=True)
+    with pytest.raises(HomeAssistantError, match='power readback unavailable'):
+        await adapter.safe_return()
