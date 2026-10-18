@@ -29,6 +29,11 @@ class ExecutionController:
             self.reconciliation_required = True
             await self.adapter.start(action=action, power_w=power_w,
                                      revalidate=lambda: self._permitted(identity))
+            # A command acknowledged during the adapter transaction is not
+            # sufficient if ownership or the selected plan changed meanwhile.
+            if not self._permitted(identity):
+                await self.adapter.stop()
+                raise HomeAssistantError("Authority or selected plan changed during start")
             self.session = dict(identity=identity, action=action, power_w=power_w,
                                 target_soc=target_soc, max_runtime_h=max_runtime_h,
                                 started_at=now.astimezone(timezone.utc).isoformat())
