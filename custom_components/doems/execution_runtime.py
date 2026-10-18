@@ -176,6 +176,18 @@ class DOEMSExecutionSupervisor:
                 self._listeners.remove(listener)
         return remove
 
+    def attach_execution_controller(self, controller: ExecutionController) -> None:
+        """Explicit integration seam; never enables authority by attaching."""
+        if self._shutdown:
+            raise RuntimeError("Execution supervisor is shut down")
+        if self._execution_controller is not None:
+            raise RuntimeError("Execution controller already attached")
+        if not isinstance(controller, ExecutionController):
+            raise TypeError("Expected ExecutionController")
+        controller.require_restart_reconciliation()
+        self._execution_controller = controller
+        self._queue()
+
     def execution_capabilities(self) -> dict[str, Any]:
         """Publish the actual actuation boundary, not a simulated permission."""
         return {
