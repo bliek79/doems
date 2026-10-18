@@ -53,7 +53,9 @@ class AnkerExecutionAdapter:
         self._require_authority()
         async with self._lock:
             errors: list[str] = []
-            if self._state("power_setpoint") is not None:
+            if self._state("power_setpoint") is None:
+                errors.append("zero_setpoint: power readback unavailable")
+            else:
                 try:
                     await self._call("number", "set_value", "power_setpoint", {"value": 0})
                     await self._wait(lambda: self._power_zero(), timeout=15)
