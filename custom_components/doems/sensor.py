@@ -41,6 +41,7 @@ from .prices import DOEMSPricesManager
 from .prices_sensor import build_prices_sensors
 from .automatic_combined_planner import DOEMSPlannerManager
 from .r7_runtime import DOEMSR7Scheduler
+from .r8_shadow import evaluate_r8_shadow
 from .solar_actual import SolarActualQuarterManager
 from .solar_forecast import SolarForecastManager
 from .solar_sensor import build_solar_sensors
@@ -140,6 +141,8 @@ async def async_setup_entry(
     r7_scheduler = entry_data.get("r7_scheduler")
     if isinstance(r7_scheduler, DOEMSR7Scheduler):
         entities.append(DOEMSR7SchedulerStatusSensor(entry, r7_scheduler))
+        if isinstance(manual_plan_store, DOEMSManualPlanStore):
+            entities.append(DOEMSR8ShadowSensor(entry, r7_scheduler, manual_plan_store))
 
     async_add_entities(entities)
 
@@ -1157,6 +1160,55 @@ class DOEMSR7SchedulerStatusSensor(SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         return dict(self.scheduler.last_result)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._remove_listener = self.scheduler.async_add_listener(self._handle_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._remove_listener is not None:
+            self._remove_listener()
+            self._remove_listener = None
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
+
+
+class DOEMSR8ShadowSensor(SensorEntity):
+    """Read-only shadow of the R7-selected action; no actuator calls."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+    _attr_name = "DOEMS R8 Shadow Execution"
+    _attr_unique_id = "doems_r8_shadow_execution"
+    _attr_suggested_object_id = "doems_r8_shadow_execution"
+    _attr_icon = "mdi:shield-check-outline"
+
+    def __init__(self, entry: ConfigEntry, scheduler: DOEMSR7Scheduler,
+                 store: DOEMSManualPlanStore) -> None:
+        self.scheduler = scheduler
+        self.store = store
+        self._remove_listener = None
+        self._attr_device_info = _device_info(entry)
+
+    def _result(self) -> dict[str, Any]:
+        r7 = dict(self.scheduler.last_result)
+        slot = r7.get("selected_slot")
+        plan = self.store.get_plan(slot) if type(slot) is int and slot in (1, 2, 3) else None
+        result = evaluate_r8_shadow(r7, plan)
+        result["selected_origin"] = r7.get("selected_origin")
+        result["r7_status"] = r7.get("status")
+        return result
+
+    @property
+    def native_value(self) -> str:
+        return str(self._result()["status"])
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return self._result()
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
