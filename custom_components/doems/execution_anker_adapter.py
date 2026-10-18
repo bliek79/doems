@@ -113,7 +113,9 @@ class AnkerExecutionAdapter:
                 try:
                     if self._state("power_setpoint") is not None:
                         await self._call("number", "set_value", "power_setpoint", {"value": 0})
+                    await self._wait(self._power_zero, timeout=15)
                     await self._call("select", "select_option", "operating_mode", {"option": SELF_MODE})
+                    await self._wait(lambda: self._state("operating_mode") == SELF_MODE)
                 except BaseException as cleanup_error:
                     raise HomeAssistantError("Battery start failed; safe return also failed") from cleanup_error
                 raise
