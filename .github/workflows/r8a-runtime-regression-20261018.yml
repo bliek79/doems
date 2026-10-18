@@ -1,0 +1,55 @@
+name: R8-A runtime regression gate
+on:
+  push:
+    branches: [feature/r8a-runtime-readonly-20261018]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Full tests and syntax
+        run: |
+          python -m pip install --upgrade pip pytest
+          python -m compileall -q custom_components/doems
+          pytest -q
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for p in Path("custom_components/doems").rglob("*.json"):
+              json.loads(p.read_text(encoding="utf-8"))
+          PY
+      - name: Frozen planner source and file scope
+        run: |
+          git diff --name-only 0d9210e279b83561cee0d4d587b7076b48fc8360 HEAD > changed.txt
+          python - <<'PY'
+          from pathlib import Path
+          allowed = {
+            "custom_components/doems/sensor.py",
+            "custom_components/doems/manifest.json",
+            "custom_components/doems/const.py",
+            "tests/test_r8a_runtime_sensor.py",
+            "tests/test_alpha5_2_status_hotfix_contract.py",
+            "tests/test_alpha7_1_planner_migration_contract.py",
+            "tests/test_alpha7_prices_release_contract.py",
+            "tests/test_energy_forecast_contract.py",
+            "RELEASE_NOTES_0.2.0-alpha.8.0.3.md",
+            ".github/workflows/r8a-runtime-regression-20261018.yml",
+          }
+          actual = set(Path("changed.txt").read_text().splitlines())
+          assert actual <= allowed, sorted(actual - allowed)
+          assert "custom_components/doems/sensor.py" in actual
+          PY
+      - name: Verify package
+        run: |
+          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.2.0-alpha.8.0.3.md
+          unzip -t doems.zip
+          unzip -l doems.zip | grep -F 'custom_components/doems/ems_execution_readiness.py'
+          unzip -l doems.zip | grep -F 'custom_components/doems/sensor.py'
+          sha256sum doems.zip
