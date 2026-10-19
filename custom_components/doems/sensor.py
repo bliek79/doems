@@ -102,6 +102,8 @@ async def async_setup_entry(
                 DOEMSEMSStatusSensor(entry, ems_runtime),
                 *build_plan72_sensors(entry, ems_runtime),
                 DOEMSSchedulerStatusSensor(entry, ems_runtime),
+                DOEMSEMSR8ExecutionStatusSensor(entry, ems_runtime),
+                DOEMSEMSR8SafetyStatusSensor(entry, ems_runtime),
                 *(DOEMSPlanStatusSensor(entry, ems_runtime, slot) for slot in range(1, 4)),
                 DOEMSG5LiveParitySensor(
                     entry,
@@ -871,6 +873,53 @@ class DOEMSSchedulerStatusSensor(_DOEMSEMSRuntimeSensor):
             "ready": bool(scheduler.get("scheduler_ready")),
             "physical_control": False,
             "mode": "validation",
+        }
+
+
+class DOEMSEMSR8ExecutionStatusSensor(_DOEMSEMSRuntimeSensor):
+    """R8 integration status: never imply a physical controller is active."""
+
+    _attr_name = "DOEMS EMS R8 Execution Status"
+    _attr_unique_id = "doems_ems_r8_execution_status"
+    _attr_suggested_object_id = "doems_ems_r8_execution_status"
+    _attr_icon = "mdi:shield-lock-outline"
+
+    @property
+    def native_value(self) -> str:
+        return "not_connected"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        scheduler = self.runtime.scheduler_result or {}
+        return {
+            "selected_slot": scheduler.get("scheduler_selected_slot"),
+            "scheduler_ready": bool(scheduler.get("scheduler_ready")),
+            "controller_attached": False,
+            "physical_execution_enabled": False,
+            "execution_authority": False,
+            "reason": "R8 controller is not attached to the active EMS runtime",
+        }
+
+
+class DOEMSEMSR8SafetyStatusSensor(_DOEMSEMSRuntimeSensor):
+    """Read-only R8 safety boundary indicator, not an authorization grant."""
+
+    _attr_name = "DOEMS EMS R8 Safety Status"
+    _attr_unique_id = "doems_ems_r8_safety_status"
+    _attr_suggested_object_id = "doems_ems_r8_safety_status"
+    _attr_icon = "mdi:shield-check-outline"
+
+    @property
+    def native_value(self) -> str:
+        return "blocked"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "blockers": ["r8_controller_not_connected", "physical_execution_not_authorized"],
+            "physical_execution_enabled": False,
+            "execution_authority": False,
+            "validation_mode": "shadow_only",
         }
 
 
