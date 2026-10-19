@@ -46,7 +46,7 @@ def test_automatic_planner_identity_mismatch_blocks():
 def test_real_r7_scheduler_selection_matches_plan():
     scheduler = {"scheduler_selected_slot": 2, "scheduler_selected_action": "laden",
                  "scheduler_ready": True,
-                 "scheduler_slots": {2: {"origin": "automatic_72h_planner",
+                 "scheduler_slots": {2: {"slot": 2, "action": "laden", "origin": "automatic_72h_planner",
                                          "lifecycle_status": "pending", "selected": True,
                                          "status": "startklaar", "planner_identity": "cycle-1"}}}
     plan = {"slot": 2, "origin": "automatic_72h_planner", "action": "laden",
@@ -59,7 +59,7 @@ def test_real_r7_scheduler_selection_matches_plan():
 def test_real_r7_scheduler_not_ready_blocks():
     scheduler = {"scheduler_selected_slot": 1, "scheduler_selected_action": "laden",
                  "scheduler_ready": False,
-                 "scheduler_slots": {1: {"origin": "manual", "lifecycle_status": "pending", "selected": True, "status": "startklaar"}}}
+                 "scheduler_slots": {1: {"slot": 1, "action": "laden", "origin": "manual", "lifecycle_status": "pending", "selected": True, "status": "startklaar"}}}
     plan = {"slot": 1, "origin": "manual", "action": "laden", "lifecycle_status": "pending"}
     result = bridge.inspect_selection(scheduler, plan)
     assert "scheduler_not_ready" in result["blockers"]
@@ -90,3 +90,15 @@ def test_r7_ready_flag_without_selected_slot_evidence_blocks():
     result = bridge.inspect_selection(scheduler, plan)
     assert result["ready"] is False
     assert "scheduler_selection_not_confirmed" in result["blockers"]
+
+
+def test_r7_selected_slot_detail_mismatch_blocks():
+    scheduler = {"scheduler_selected_slot": 1, "scheduler_selected_action": "laden",
+                 "scheduler_ready": True,
+                 "scheduler_slots": {1: {"slot": 2, "action": "ontladen", "origin": "manual",
+                                         "lifecycle_status": "pending", "selected": True,
+                                         "status": "startklaar"}}}
+    plan = {"slot": 1, "origin": "manual", "action": "laden", "lifecycle_status": "pending"}
+    result = bridge.inspect_selection(scheduler, plan)
+    assert result["ready"] is False
+    assert "scheduler_slot_detail_mismatch" in result["blockers"]
