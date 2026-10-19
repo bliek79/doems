@@ -82,20 +82,6 @@ async def test_manual_invalid_power_never_issues_battery_command():
     assert h.execution.commands == []
 
 
-def _automatic_runner():
-    tree = ast.parse(SOURCE)
-    owner = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "DOEMSEMSRuntime")
-    parent = next(n for n in owner.body if isinstance(n, ast.FunctionDef) and n.name == "_schedule_manual_physical_start")
-    inner = next(n for n in ast.walk(parent) if isinstance(n, ast.AsyncFunctionDef) and n.name == "_run_automatic")
-    ns = {
-        "asyncio": asyncio,
-        "HomeAssistantError": HomeAssistantError,
-        "_LOGGER": type("Logger", (), {"warning": staticmethod(lambda *args: None), "exception": staticmethod(lambda *args: None)})(),
-    }
-    exec(compile(ast.fix_missing_locations(ast.Module(body=[inner], type_ignores=[])), "<automatic-runner>", "exec"), ns)
-    return ns["_run_automatic"]
-
-
 class AutomaticHarness:
     def __init__(self, valid=True, power=500):
         self.execution = InertAlpha76(power)
@@ -117,14 +103,13 @@ class AutomaticHarness:
 @pytest.mark.asyncio
 async def test_automatic_plan_executes_and_confirms_readback():
     h = AutomaticHarness()
-    runner = _automatic_runner()
-    await runner.__get__(h)() if False else _run_automatic_bound(runner, h, "planner-1")
+    await _run_automatic_bound(h, "planner-1")
     assert h.execution.commands == [("automatic_start", "planner-1")]
     assert h.verified == [500.0]
     assert h.refresh_reasons == ["automatic_execution_terminal"]
 
 
-async def _run_automatic_bound(runner, h, identity):
+async def _run_automatic_bound(h, identity):
     # The production nested coroutine closes over self and planner identity.
     # Bind those closure names by rebuilding it in a tiny outer function.
     source = ast.parse(SOURCE)
@@ -144,7 +129,7 @@ async def _run_automatic_bound(runner, h, identity):
 @pytest.mark.asyncio
 async def test_automatic_mismatch_uses_existing_alpha76_emergency_stop():
     h = AutomaticHarness(valid=False)
-    await _run_automatic_bound(None, h, "planner-2")
+    await _run_automatic_bound(h, "planner-2")
     assert h.execution.commands[0] == ("automatic_start", "planner-2")
     assert h.execution.commands[1][0] == "stop"
     assert h.execution.commands[1][2] is True
