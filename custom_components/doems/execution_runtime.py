@@ -101,8 +101,10 @@ class DOEMSExecutionSupervisor:
                     "selected_slot": selection_source["selected_slot"],
                     "selected_origin": selection_source["selected_origin"],
                     "selected_action": scheduler.get("scheduler_selected_action"),
-                    "selected_lifecycle": (selected_plan or {}).get("lifecycle_status"),
-                    "selected_planner_identity": (selected_plan or {}).get("planner_identity"),
+                    "selected_lifecycle": ((scheduler.get("scheduler_slots") or {}).get(selected_slot, {})
+                                           or (scheduler.get("scheduler_slots") or {}).get(str(selected_slot), {})).get("lifecycle_status"),
+                    "selected_planner_identity": ((scheduler.get("scheduler_slots") or {}).get(selected_slot, {})
+                                                  or (scheduler.get("scheduler_slots") or {}).get(str(selected_slot), {})).get("planner_identity"),
                 })
             slot = scheduler.get("selected_slot")
             plan = self.store.get_plan(slot) if type(slot) is int and slot in (1, 2, 3) else None
