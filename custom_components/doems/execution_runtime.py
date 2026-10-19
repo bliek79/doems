@@ -15,7 +15,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .execution_model import evaluate_execution
-from .execution_planner_bridge import inspect_selection
+from .execution_planner_bridge import inspect_selection, normalize_scheduler_selection
 from .execution_anker_adapter import AnkerExecutionAdapter
 from .execution_control_path import observe_control_path
 from .execution_handover import assess_handover
@@ -91,21 +91,7 @@ class DOEMSExecutionSupervisor:
             scheduler_source = (getattr(self.scheduler, "scheduler_result", None)
                                 or getattr(self.scheduler, "last_result", None)
                                 or (self.scheduler.snapshot() if hasattr(self.scheduler, "snapshot") else {}))
-            scheduler = dict(scheduler_source or {})
-            if "scheduler_selected_slot" in scheduler:
-                selected_slot = scheduler.get("scheduler_selected_slot")
-                selected_plan = (self.store.get_plan(selected_slot)
-                                 if type(selected_slot) is int and selected_slot in (1, 2, 3) else None)
-                selection_source = inspect_selection(scheduler, selected_plan)
-                scheduler.update({
-                    "selected_slot": selection_source["selected_slot"],
-                    "selected_origin": selection_source["selected_origin"],
-                    "selected_action": scheduler.get("scheduler_selected_action"),
-                    "selected_lifecycle": ((scheduler.get("scheduler_slots") or {}).get(selected_slot, {})
-                                           or (scheduler.get("scheduler_slots") or {}).get(str(selected_slot), {})).get("lifecycle_status"),
-                    "selected_planner_identity": ((scheduler.get("scheduler_slots") or {}).get(selected_slot, {})
-                                                  or (scheduler.get("scheduler_slots") or {}).get(str(selected_slot), {})).get("planner_identity"),
-                })
+            scheduler = normalize_scheduler_selection(scheduler_source or {})
             slot = scheduler.get("selected_slot")
             plan = self.store.get_plan(slot) if type(slot) is int and slot in (1, 2, 3) else None
             battery = (self.battery.snapshot() if self.battery is not None
