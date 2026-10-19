@@ -21,8 +21,11 @@ def inspect_selection(scheduler: Mapping[str, Any],
     blockers: list[str] = []
     if type(slot) is not int or slot not in (1, 2, 3):
         blockers.append("selection_missing")
-    if is_r7 and scheduler.get("scheduler_ready") is not True:
-        blockers.append("scheduler_not_ready")
+    if is_r7:
+        if scheduler.get("scheduler_ready") is not True:
+            blockers.append("scheduler_not_ready")
+        if detail.get("selected") is not True or detail.get("status") != "startklaar":
+            blockers.append("scheduler_selection_not_confirmed")
     if not isinstance(plan, Mapping):
         blockers.append("selected_plan_missing")
         plan = {}
