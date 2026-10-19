@@ -109,6 +109,33 @@ class DOEMSExecutionSupervisor:
                                         battery=battery, source_fresh=fresh,
                                         previous=self.last_result)
             result["planner_bridge"] = selection
+            # Observe the proven Alpha76 execution as the *only* physical owner.
+            # This is evidence, not a second actuator or a claim of R8 authority.
+            proven = getattr(self.scheduler, "execution", None)
+            proven_state = getattr(proven, "data", None)
+            if not isinstance(proven_state, dict):
+                proven_state = {}
+            result["proven_execution"] = {
+                "available": proven is not None,
+                "active": proven_state.get("active") is True,
+                "origin": proven_state.get("origin"),
+                "slot": proven_state.get("slot"),
+                "remaining_s": proven_state.get("remaining_s"),
+                "last_stop_reason": proven_state.get("stop_reason"),
+                "setpoint_handoff_status": getattr(
+                    self.scheduler, "_setpoint_handoff_status", None),
+                "physical_owner": "alpha76" if proven is not None else None,
+                "r8_command_issued": False,
+            }
+            # A restart must not infer a safe return from an empty scheduler.
+            # Only an independent observation of the proven controller can
+            # clear a *read-only* reconciliation flag; it never enables R8.
+            if self._restart_reconciliation_required and proven is not None:
+                control = getattr(self.scheduler, "control_path_result", None)
+                if (proven_state.get("active") is False
+                        and isinstance(control, dict)
+                        and control.get("ready") is True):
+                    self._restart_reconciliation_required = False
             if not selection["ready"]:
                 result["status"] = "geblokkeerd"
                 result["reason"] = "Plannerselectie niet consistent"
