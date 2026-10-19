@@ -28,6 +28,11 @@ def inspect_selection(scheduler: Mapping[str, Any],
             blockers.append("scheduler_selection_not_confirmed")
         if detail.get("slot") != slot or detail.get("action") != action:
             blockers.append("scheduler_slot_detail_mismatch")
+        if (not isinstance(plan, Mapping)
+                or detail.get("execution_mode") not in ("direct", "gepland")
+                or detail.get("execution_mode") != scheduler.get("scheduler_selected_execution_mode")
+                or detail.get("execution_mode") != plan.get("execution_mode")):
+            blockers.append("scheduler_execution_mode_mismatch")
     if not isinstance(plan, Mapping):
         blockers.append("selected_plan_missing")
         plan = {}
