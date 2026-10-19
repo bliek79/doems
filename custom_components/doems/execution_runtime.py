@@ -15,6 +15,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .execution_model import evaluate_execution
+from .execution_planner_bridge import inspect_selection
 from .execution_anker_adapter import AnkerExecutionAdapter
 from .execution_control_path import observe_control_path
 from .execution_handover import assess_handover
@@ -88,10 +89,18 @@ class DOEMSExecutionSupervisor:
             plan = self.store.get_plan(slot) if type(slot) is int and slot in (1, 2, 3) else None
             battery = self.battery.snapshot() if self.battery is not None else {"status": "blocked"}
             fresh = self.scheduler._sources_fresh(now, battery) if self.battery is not None else False
+            # Audit the planner selection without granting physical authority.
+            selection = inspect_selection(scheduler, plan)
             # Never infer a physical acknowledgement from power measurements.
             result = evaluate_execution(now=now, scheduler=scheduler, plan=plan,
                                         battery=battery, source_fresh=fresh,
                                         previous=self.last_result)
+            result["planner_bridge"] = selection
+            if not selection["ready"]:
+                result["status"] = "geblokkeerd"
+                result["reason"] = "Plannerselectie niet consistent"
+                result["execution_performed"] = False
+                result["blockers"] = list(dict.fromkeys([*result.get("blockers", []), *selection["blockers"]]))
             if self._restart_reconciliation_required:
                 result["status"] = "geblokkeerd"
                 result["reason"] = "Apparaatcontrole na herstart vereist"
