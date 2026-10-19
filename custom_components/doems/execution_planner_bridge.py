@@ -13,7 +13,8 @@ def inspect_selection(scheduler: Mapping[str, Any],
     is_r7 = "scheduler_selected_slot" in scheduler
     slot = scheduler.get("scheduler_selected_slot") if is_r7 else scheduler.get("selected_slot")
     slots = scheduler.get("scheduler_slots") or {}
-    detail = (slots.get(slot) or slots.get(str(slot)) or {}) if is_r7 and isinstance(slots, Mapping) else {}
+    raw_detail = (slots.get(slot) or slots.get(str(slot))) if is_r7 and isinstance(slots, Mapping) else None
+    detail = raw_detail if isinstance(raw_detail, Mapping) else {}
     action = scheduler.get("scheduler_selected_action") if is_r7 else scheduler.get("selected_action")
     lifecycle = detail.get("lifecycle_status") if is_r7 else scheduler.get("selected_lifecycle")
     selected_origin = detail.get("origin") if is_r7 else scheduler.get("selected_origin")
@@ -38,7 +39,7 @@ def inspect_selection(scheduler: Mapping[str, Any],
         plan = {}
     if not plan.get("action") or action != plan.get("action"):
         blockers.append("selected_action_changed")
-    if is_r7 and (not isinstance(slots, Mapping) or not isinstance(detail, Mapping)):
+    if is_r7 and (not isinstance(slots, Mapping) or not isinstance(raw_detail, Mapping)):
         blockers.append("scheduler_slot_details_unavailable")
     if not plan.get("lifecycle_status") or lifecycle != plan.get("lifecycle_status"):
         blockers.append("selected_lifecycle_changed")
