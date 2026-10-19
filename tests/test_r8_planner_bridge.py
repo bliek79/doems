@@ -102,3 +102,17 @@ def test_r7_selected_slot_detail_mismatch_blocks():
     result = bridge.inspect_selection(scheduler, plan)
     assert result["ready"] is False
     assert "scheduler_slot_detail_mismatch" in result["blockers"]
+
+
+def test_automatic_plan_missing_identity_fails_closed():
+    scheduler = {"scheduler_selected_slot": 2, "scheduler_selected_action": "laden",
+                 "scheduler_ready": True,
+                 "scheduler_slots": {2: {"slot": 2, "action": "laden",
+                                         "origin": "automatic_72h_planner",
+                                         "lifecycle_status": "pending",
+                                         "selected": True, "status": "startklaar"}}}
+    plan = {"slot": 2, "origin": "automatic_72h_planner",
+            "action": "laden", "lifecycle_status": "pending"}
+    result = bridge.inspect_selection(scheduler, plan)
+    assert result["ready"] is False
+    assert "planner_identity_changed" in result["blockers"]
