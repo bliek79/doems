@@ -63,7 +63,7 @@ class DOEMSExecutionSupervisor:
         else:
             raise RuntimeError("R8 scheduler change listener unavailable")
         self._unsubs.append(self.store.add_listener(self._queue))
-        if self.battery is not None:
+        if self.battery is not None and hasattr(self.battery, "async_add_listener"):
             self._unsubs.append(self.battery.async_add_listener(self._queue))
         self._unsubs.append(async_track_time_interval(self.hass, self._tick, timedelta(seconds=5)))
         await self.async_evaluate()
@@ -106,7 +106,8 @@ class DOEMSExecutionSupervisor:
                 })
             slot = scheduler.get("selected_slot")
             plan = self.store.get_plan(slot) if type(slot) is int and slot in (1, 2, 3) else None
-            battery = self.battery.snapshot() if self.battery is not None else {"status": "blocked"}
+            battery = (self.battery.snapshot() if self.battery is not None
+                       and hasattr(self.battery, "snapshot") else {"status": "blocked"})
             fresh = (bool(self.scheduler._sources_fresh(now, battery))
                      if self.battery is not None and hasattr(self.scheduler, "_sources_fresh")
                      else False)
