@@ -88,7 +88,10 @@ class DOEMSExecutionSupervisor:
     async def async_evaluate(self) -> dict[str, Any]:
         async with self._lock:
             now = dt_util.utcnow()
-            scheduler_source = (getattr(self.scheduler, "scheduler_result", None)
+            # The R7 EMS runtime publishes the complete scheduler/safety snapshot
+            # through .data. scheduler_result alone omits safety and slot context.
+            scheduler_source = (getattr(self.scheduler, "data", None)
+                                or getattr(self.scheduler, "scheduler_result", None)
                                 or getattr(self.scheduler, "last_result", None)
                                 or (self.scheduler.snapshot() if hasattr(self.scheduler, "snapshot") else {}))
             scheduler = normalize_scheduler_selection(scheduler_source or {})
