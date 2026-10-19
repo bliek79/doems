@@ -84,13 +84,29 @@ class DOEMSExecutionSupervisor:
     async def async_evaluate(self) -> dict[str, Any]:
         async with self._lock:
             now = dt_util.utcnow()
-            scheduler = dict(self.scheduler.last_result)
+            scheduler_source = (self.scheduler.snapshot() if hasattr(self.scheduler, "snapshot")
+                                else getattr(self.scheduler, "last_result", {}))
+            scheduler = dict(scheduler_source or {})
+            if "scheduler_selected_slot" in scheduler:
+                selected_slot = scheduler.get("scheduler_selected_slot")
+                selected_plan = (self.store.get_plan(selected_slot)
+                                 if type(selected_slot) is int and selected_slot in (1, 2, 3) else None)
+                selection_source = inspect_selection(scheduler, selected_plan)
+                scheduler.update({
+                    "selected_slot": selection_source["selected_slot"],
+                    "selected_origin": selection_source["selected_origin"],
+                    "selected_action": scheduler.get("scheduler_selected_action"),
+                    "selected_lifecycle": (selected_plan or {}).get("lifecycle_status"),
+                    "selected_planner_identity": (selected_plan or {}).get("planner_identity"),
+                })
             slot = scheduler.get("selected_slot")
             plan = self.store.get_plan(slot) if type(slot) is int and slot in (1, 2, 3) else None
             battery = self.battery.snapshot() if self.battery is not None else {"status": "blocked"}
-            fresh = self.scheduler._sources_fresh(now, battery) if self.battery is not None else False
+            fresh = (bool(self.scheduler._sources_fresh(now, battery))
+                     if self.battery is not None and hasattr(self.scheduler, "_sources_fresh")
+                     else False)
             # Audit the planner selection without granting physical authority.
-            selection = inspect_selection(scheduler, plan)
+            selection = inspect_selection(scheduler_source or {}, plan)
             # Never infer a physical acknowledgement from power measurements.
             result = evaluate_execution(now=now, scheduler=scheduler, plan=plan,
                                         battery=battery, source_fresh=fresh,
