@@ -141,3 +141,14 @@ def test_r7_execution_mode_drift_blocks():
     result = bridge.inspect_selection(scheduler, plan)
     assert result["ready"] is False
     assert "scheduler_execution_mode_mismatch" in result["blockers"]
+
+
+def test_malformed_r7_slot_details_fail_closed_without_exception():
+    scheduler = {"scheduler_selected_slot": 1, "scheduler_selected_action": "laden",
+                 "scheduler_selected_execution_mode": "direct", "scheduler_ready": True,
+                 "scheduler_slots": {1: "invalid"}}
+    plan = {"slot": 1, "origin": "manual", "action": "laden",
+            "execution_mode": "direct", "lifecycle_status": "pending"}
+    result = bridge.inspect_selection(scheduler, plan)
+    assert result["ready"] is False
+    assert "scheduler_slot_details_unavailable" in result["blockers"]
