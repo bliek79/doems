@@ -56,29 +56,26 @@ class ManualHarness:
         return self.valid
 
 
-@pytest.mark.asyncio
-async def test_manual_plan_executes_and_confirms_readback():
+def test_manual_plan_executes_and_confirms_readback():
     h = ManualHarness()
-    await _method("async_execute_selected_plan_verified_handoff")(h)
+    asyncio.run(_method("async_execute_selected_plan_verified_handoff")(h))
     assert h.execution.commands == ["manual_start"]
     assert h.verified == [500.0]
 
 
-@pytest.mark.asyncio
-async def test_manual_plan_mismatch_emergency_stops():
+def test_manual_plan_mismatch_emergency_stops():
     h = ManualHarness(valid=False)
     with pytest.raises(HomeAssistantError, match="platform_setpoint_handoff_not_confirmed"):
-        await _method("async_execute_selected_plan_verified_handoff")(h)
+        asyncio.run(_method("async_execute_selected_plan_verified_handoff")(h))
     assert h.execution.commands[0] == "manual_start"
     assert h.execution.commands[1][0] == "stop"
     assert h.execution.commands[1][2] is True
 
 
-@pytest.mark.asyncio
-async def test_manual_invalid_power_never_issues_battery_command():
+def test_manual_invalid_power_never_issues_battery_command():
     h = ManualHarness(power="bad")
     with pytest.raises(HomeAssistantError, match="expected_power_invalid"):
-        await _method("async_execute_selected_plan_verified_handoff")(h)
+        asyncio.run(_method("async_execute_selected_plan_verified_handoff")(h))
     assert h.execution.commands == []
 
 
@@ -100,10 +97,9 @@ class AutomaticHarness:
         self.refresh_reasons.append(reason)
 
 
-@pytest.mark.asyncio
-async def test_automatic_plan_executes_and_confirms_readback():
+def test_automatic_plan_executes_and_confirms_readback():
     h = AutomaticHarness()
-    await _run_automatic_bound(h, "planner-1")
+    asyncio.run(_run_automatic_bound(h, "planner-1"))
     assert h.execution.commands == [("automatic_start", "planner-1")]
     assert h.verified == [500.0]
     assert h.refresh_reasons == ["automatic_execution_terminal"]
@@ -126,10 +122,9 @@ async def _run_automatic_bound(h, identity):
     await ns["make"](h, identity)()
 
 
-@pytest.mark.asyncio
-async def test_automatic_mismatch_uses_existing_alpha76_emergency_stop():
+def test_automatic_mismatch_uses_existing_alpha76_emergency_stop():
     h = AutomaticHarness(valid=False)
-    await _run_automatic_bound(h, "planner-2")
+    asyncio.run(_run_automatic_bound(h, "planner-2"))
     assert h.execution.commands[0] == ("automatic_start", "planner-2")
     assert h.execution.commands[1][0] == "stop"
     assert h.execution.commands[1][2] is True
