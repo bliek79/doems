@@ -68,3 +68,29 @@ def inspect_selection(scheduler: Mapping[str, Any],
         "execution_authority": False,
         "physical_execution_enabled": False,
     }
+
+
+def normalize_scheduler_selection(scheduler: Mapping[str, Any]) -> dict[str, Any]:
+    """Map the existing R7 scheduler contract to R8 without inventing evidence.
+
+    Malformed or absent R7 details remain absent so the independent bridge
+    rejects them; no plan-store values are substituted for scheduler facts.
+    """
+    normalized = dict(scheduler)
+    if "scheduler_selected_slot" not in scheduler:
+        return normalized
+    slot = scheduler.get("scheduler_selected_slot")
+    slots = scheduler.get("scheduler_slots")
+    raw = ((slots.get(slot) or slots.get(str(slot)))
+           if isinstance(slots, Mapping) else None)
+    detail = raw if isinstance(raw, Mapping) else {}
+    normalized.update({
+        "selected_slot": slot,
+        "selected_origin": detail.get("origin"),
+        "selected_action": scheduler.get("scheduler_selected_action"),
+        "selected_lifecycle": detail.get("lifecycle_status"),
+        "selected_planner_identity": detail.get("planner_identity"),
+        "physical_execution_enabled": False,
+        "execution_authority": False,
+    })
+    return normalized
