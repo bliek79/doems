@@ -38,7 +38,6 @@ from .const import (
 )
 from .ems_settings import EMSSettings
 from .ems_runtime import DOEMSEMSRuntime
-from .execution_runtime import DOEMSExecutionSupervisor
 from .energy_coordinator import DOEMSEnergyCoordinator
 from .prices_runtime import DOEMSRegisteredPricesManager
 from .presence import DOEMSPresenceStore
@@ -358,15 +357,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
         )
         await ems_runtime.async_setup()
 
-    # R8 observes the actual R7 scheduler and Plan Store. It cannot issue battery
-    # commands; Alpha76 remains the sole physical execution owner.
-    r8_supervisor = None
-    if ems_runtime is not None:
-        r8_supervisor = DOEMSExecutionSupervisor(
-            hass, ems_runtime, ems_runtime.plan_store, None, entry.entry_id
-        )
-        await r8_supervisor.async_setup()
-
     entry.runtime_data = coordinator
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "energy_forecast_enabled": coordinator is not None,
@@ -377,7 +367,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
         "presence": presence,
         "ems_settings": ems_settings,
         "ems_runtime": ems_runtime,
-        "r8_supervisor": r8_supervisor,
     }
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -420,9 +409,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> bo
         await coordinator.async_shutdown()
 
     entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
-    r8_supervisor = entry_data.get("r8_supervisor")
-    if isinstance(r8_supervisor, DOEMSExecutionSupervisor):
-        await r8_supervisor.async_shutdown()
 
     ems_runtime = entry_data.get("ems_runtime")
     if isinstance(ems_runtime, DOEMSEMSRuntime):
