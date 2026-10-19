@@ -57,7 +57,11 @@ class DOEMSExecutionSupervisor:
                 self.last_result = {"status": "geblokkeerd", "reason": "Herstart: apparaatstatus onafhankelijk controleren",
                                     "execution_performed": False, "safe_return_required": True,
                                     "blockers": ["restart_requires_reconciliation"]}
-        self._unsubs.append(self.scheduler.async_add_listener(self._queue))
+        # R7 publishes scheduler changes through its existing EMS runtime listener.
+        if hasattr(self.scheduler, "async_add_listener"):
+            self._unsubs.append(self.scheduler.async_add_listener(self._queue))
+        else:
+            raise RuntimeError("R8 scheduler change listener unavailable")
         self._unsubs.append(self.store.add_listener(self._queue))
         if self.battery is not None:
             self._unsubs.append(self.battery.async_add_listener(self._queue))
@@ -84,8 +88,9 @@ class DOEMSExecutionSupervisor:
     async def async_evaluate(self) -> dict[str, Any]:
         async with self._lock:
             now = dt_util.utcnow()
-            scheduler_source = (self.scheduler.snapshot() if hasattr(self.scheduler, "snapshot")
-                                else getattr(self.scheduler, "last_result", {}))
+            scheduler_source = (getattr(self.scheduler, "scheduler_result", None)
+                                or getattr(self.scheduler, "last_result", None)
+                                or (self.scheduler.snapshot() if hasattr(self.scheduler, "snapshot") else {}))
             scheduler = dict(scheduler_source or {})
             if "scheduler_selected_slot" in scheduler:
                 selected_slot = scheduler.get("scheduler_selected_slot")
