@@ -92,10 +92,20 @@ class DOEMSExecutionSupervisor:
             # The R7 EMS runtime publishes the complete scheduler/safety snapshot
             # through .data. scheduler_result alone omits safety and slot context.
             observation = observe_alpha76(self.scheduler, now)
-            scheduler_source = (observation["scheduler"]
-                                or getattr(self.scheduler, "scheduler_result", None)
-                                or getattr(self.scheduler, "last_result", None)
-                                or (self.scheduler.snapshot() if hasattr(self.scheduler, "snapshot") else {}))
+            # Alpha76 coordinator snapshots can be populated before their R7
+            # scheduler fields are published. Fall back to the actual R7
+            # scheduler result, never to an unrelated truthy snapshot.
+            scheduler_source = observation["scheduler"]
+            if not isinstance(scheduler_source, dict) or not (
+                "scheduler_selected_slot" in scheduler_source
+                or "selected_slot" in scheduler_source
+            ):
+                scheduler_source = (
+                    getattr(self.scheduler, "scheduler_result", None)
+                    or getattr(self.scheduler, "last_result", None)
+                    or scheduler_source
+                    or {}
+                )
             scheduler = normalize_scheduler_selection(scheduler_source or {})
             slot = scheduler.get("selected_slot")
             plan = self.store.get_plan(slot) if type(slot) is int and slot in (1, 2, 3) else None
