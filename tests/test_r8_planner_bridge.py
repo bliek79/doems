@@ -152,3 +152,37 @@ def test_malformed_r7_slot_details_fail_closed_without_exception():
     result = bridge.inspect_selection(scheduler, plan)
     assert result["ready"] is False
     assert "scheduler_slot_details_unavailable" in result["blockers"]
+
+
+def test_normalize_r7_selection_preserves_independent_evidence():
+    scheduler = {"scheduler_selected_slot": 1, "scheduler_selected_action": "laden",
+                 "scheduler_ready": True,
+                 "scheduler_slots": {1: {"slot": 1, "action": "laden",
+                                         "origin": "manual", "lifecycle_status": "pending",
+                                         "planner_identity": None, "selected": True,
+                                         "status": "startklaar"}}}
+    normalized = bridge.normalize_scheduler_selection(scheduler)
+    assert normalized["selected_slot"] == 1
+    assert normalized["selected_origin"] == "manual"
+    assert normalized["selected_lifecycle"] == "pending"
+    assert normalized["selected_action"] == "laden"
+    assert normalized["execution_authority"] is False
+    assert normalized["physical_execution_enabled"] is False
+    assert scheduler.get("selected_slot") is None
+
+
+def test_normalize_malformed_r7_details_does_not_borrow_plan_values():
+    scheduler = {"scheduler_selected_slot": 1, "scheduler_selected_action": "laden",
+                 "scheduler_ready": True, "scheduler_slots": {1: "broken"}}
+    normalized = bridge.normalize_scheduler_selection(scheduler)
+    assert normalized["selected_origin"] is None
+    assert normalized["selected_lifecycle"] is None
+    assert bridge.inspect_selection(scheduler, {"slot": 1, "origin": "manual",
+        "action": "laden", "execution_mode": "direct", "lifecycle_status": "pending"})["ready"] is False
+
+
+def test_normalize_legacy_scheduler_remains_read_only():
+    scheduler = {"selected_slot": 1, "selected_origin": "manual"}
+    normalized = bridge.normalize_scheduler_selection(scheduler)
+    assert normalized == scheduler
+    assert normalized is not scheduler
