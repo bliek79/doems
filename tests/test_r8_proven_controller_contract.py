@@ -7,7 +7,8 @@ ROOT = Path(__file__).resolve().parents[1] / "custom_components" / "doems"
 def test_r8_supervisor_never_commands_proven_controller():
     source = (ROOT / "execution_runtime.py").read_text()
     assert 'result["proven_execution"]' in source
-    assert '"r8_command_issued": False' in source
+    bridge = (ROOT / "execution_alpha76_bridge.py").read_text()
+    assert '"r8_command_issued": False' in bridge
     assert 'getattr(self.scheduler, "execution", None)' in source
     assert "await proven.async_execute" not in source
     assert "await proven.async_stop" not in source
