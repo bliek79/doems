@@ -26,6 +26,8 @@ def inspect_selection(scheduler: Mapping[str, Any],
             blockers.append("scheduler_not_ready")
         if detail.get("selected") is not True or detail.get("status") != "startklaar":
             blockers.append("scheduler_selection_not_confirmed")
+        if detail.get("slot") != slot or detail.get("action") != action:
+            blockers.append("scheduler_slot_detail_mismatch")
     if not isinstance(plan, Mapping):
         blockers.append("selected_plan_missing")
         plan = {}
