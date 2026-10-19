@@ -116,3 +116,15 @@ def test_automatic_plan_missing_identity_fails_closed():
     result = bridge.inspect_selection(scheduler, plan)
     assert result["ready"] is False
     assert "planner_identity_changed" in result["blockers"]
+
+
+def test_r7_scheduler_lifecycle_change_blocks():
+    scheduler = {"scheduler_selected_slot": 1, "scheduler_selected_action": "laden",
+                 "scheduler_ready": True,
+                 "scheduler_slots": {1: {"slot": 1, "action": "laden", "origin": "manual",
+                                         "lifecycle_status": "actief", "selected": True,
+                                         "status": "startklaar"}}}
+    plan = {"slot": 1, "origin": "manual", "action": "laden", "lifecycle_status": "pending"}
+    result = bridge.inspect_selection(scheduler, plan)
+    assert result["ready"] is False
+    assert "selected_lifecycle_changed" in result["blockers"]
