@@ -41,7 +41,9 @@ def inspect_selection(scheduler: Mapping[str, Any],
     if selected_origin != origin:
         blockers.append("selected_origin_changed")
     if origin == "automatic_72h_planner" and (
-        selected_identity != plan.get("planner_identity")
+        not isinstance(selected_identity, str)
+        or not selected_identity
+        or selected_identity != plan.get("planner_identity")
     ):
         blockers.append("planner_identity_changed")
     identity = (
