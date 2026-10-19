@@ -38,6 +38,8 @@ def inspect_selection(scheduler: Mapping[str, Any],
         plan = {}
     if not plan.get("action") or action != plan.get("action"):
         blockers.append("selected_action_changed")
+    if is_r7 and (not isinstance(slots, Mapping) or not isinstance(detail, Mapping)):
+        blockers.append("scheduler_slot_details_unavailable")
     if not plan.get("lifecycle_status") or lifecycle != plan.get("lifecycle_status"):
         blockers.append("selected_lifecycle_changed")
     if plan.get("slot") is not None and plan.get("slot") != slot:
