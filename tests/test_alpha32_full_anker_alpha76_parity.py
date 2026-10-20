@@ -21,7 +21,7 @@ def test_candidate_identity_is_consistent_with_manifest() -> None:
     version_line = next(line for line in const.splitlines() if line.startswith("VERSION = "))
     const_version = version_line.split('"', 2)[1]
     assert const_version == manifest_version
-    assert const_version.startswith("0.1.0-alpha.")
+    assert const_version.startswith(("0.1.0-alpha.", "0.2.0-alpha."))
 
 def test_source_verified_alpha76_modules_are_frozen() -> None:
     expected = {
