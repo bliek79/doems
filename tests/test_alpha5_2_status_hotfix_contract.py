@@ -16,4 +16,4 @@ def test_status_fix_is_carried_forward_in_alpha36() -> None:
     version_line=next(line for line in const.splitlines() if line.startswith("VERSION = "))
     const_version=version_line.split('"',2)[1]
     assert const_version==manifest["version"]
-    assert const_version.startswith("0.1.0-alpha.")
+    assert const_version.startswith(("0.1.0-alpha.", "0.2.0-alpha."))
