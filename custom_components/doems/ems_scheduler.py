@@ -14,7 +14,6 @@ from .ems_plan_store import DOEMSPlanStore
 class SchedulerCandidate:
     slot: int
     action: str
-    origin: str
     execution_mode: str
     start_time: datetime | None
     ready_since: datetime
@@ -128,7 +127,6 @@ class DOEMSScheduler:
                     SchedulerCandidate(
                         slot=slot,
                         action=str(action),
-                        origin=str(plan.get("origin") or "manual"),
                         execution_mode="direct",
                         start_time=None,
                         ready_since=local_now,
@@ -145,7 +143,6 @@ class DOEMSScheduler:
                     SchedulerCandidate(
                         slot=slot,
                         action=str(action),
-                        origin=str(plan.get("origin") or "manual"),
                         execution_mode="gepland",
                         start_time=parsed_start,
                         ready_since=parsed_start,
@@ -156,12 +153,11 @@ class DOEMSScheduler:
 
             slot_details[slot] = detail
 
-        # Combined planner: a due manual plan always takes precedence over
-        # automatic planner proposals. Within each origin, preserve the
-        # existing scheduled-first, oldest-due deterministic ordering.
+        # Scheduled candidates are preferred by oldest due start time; direct
+        # plans follow in slot order. This prevents two simulated starts from
+        # being selected at the same time and makes conflicts deterministic.
         candidates.sort(
             key=lambda item: (
-                0 if item.origin != "automatic_72h_planner" else 1,
                 0 if item.execution_mode == "gepland" else 1,
                 item.ready_since,
                 item.slot,
