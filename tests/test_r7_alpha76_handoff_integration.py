@@ -129,3 +129,16 @@ def test_automatic_mismatch_uses_existing_alpha76_emergency_stop():
     assert h.execution.commands[1][0] == "stop"
     assert h.execution.commands[1][2] is True
     assert h.refresh_reasons == ["automatic_execution_terminal"]
+
+
+def test_unexpected_post_start_error_emergency_stops_active_execution():
+    class FailingHarness(AutomaticHarness):
+        async def _async_verify_platform_setpoint_handoff(self, power):
+            raise RuntimeError("readback adapter crashed")
+
+    h = FailingHarness()
+    h.execution.data["active"] = True
+    asyncio.run(_run_automatic_bound(h, "planner-crash"))
+    assert h.execution.commands[0] == ("automatic_start", "planner-crash")
+    assert h.execution.commands[1] == ("stop", "automatic_handoff_unexpected_error", True)
+    assert h.refresh_reasons == ["automatic_execution_terminal"]
