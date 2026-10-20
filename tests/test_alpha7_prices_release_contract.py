@@ -18,7 +18,7 @@ def test_alpha7_8_versions_prices_files_and_registered_entities():
     version_line = next(line for line in const.splitlines() if line.startswith("VERSION = "))
     const_version = version_line.split('"', 2)[1]
     assert json.loads(manifest)["version"] == const_version
-    assert const_version.startswith("0.1.0-alpha.")
+    assert const_version.startswith(("0.1.0-alpha.", "0.2.0-alpha."))
     assert "DOEMSRegisteredPricesManager" in init
     assert "build_prices_sensors" in sensor
     assert 'entry_data.get("prices")' in sensor
