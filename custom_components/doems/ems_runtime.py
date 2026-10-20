@@ -1278,6 +1278,18 @@ class DOEMSEMSRuntime:
                     _LOGGER.exception(
                         "Unexpected automatic physical DOEMS execution error"
                     )
+                    # A failure after the Alpha76 handoff must never leave a
+                    # running execution without a verified host setpoint.
+                    if self.execution.data.get("active"):
+                        try:
+                            await self.execution.async_stop(
+                                "automatic_handoff_unexpected_error",
+                                emergency=True,
+                            )
+                        except Exception:
+                            _LOGGER.exception(
+                                "Automatic handoff emergency stop failed"
+                            )
                 finally:
                     self._automatic_execution_task = None
                     if not self._shutdown:
