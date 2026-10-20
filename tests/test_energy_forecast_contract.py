@@ -28,7 +28,7 @@ def test_manifest_and_clean_identity_contract() -> None:
     const_version = version_line.split('"', 2)[1]
     assert manifest["domain"] == "doems" and manifest["name"] == "DOEMS"
     assert manifest["version"] == const_version
-    assert const_version.startswith("0.1.0-alpha.")
+    assert const_version.startswith(("0.1.0-alpha.", "0.2.0-alpha."))
     for path in INTEGRATION.rglob("*"):
         if not path.is_file() or path.suffix not in {".py", ".json", ".yaml", ".yml"}: continue
         text = path.read_text(encoding="utf-8")
