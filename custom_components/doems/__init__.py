@@ -409,6 +409,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> bo
         await coordinator.async_shutdown()
 
     entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+
     ems_runtime = entry_data.get("ems_runtime")
     if isinstance(ems_runtime, DOEMSEMSRuntime):
         await ems_runtime.async_shutdown()

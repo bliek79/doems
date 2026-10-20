@@ -1243,7 +1243,31 @@ class DOEMSEMSRuntime:
 
             async def _run_automatic() -> None:
                 try:
-                    await self.execution.async_execute_automatic_plan(str(identity))
+                    started = await self.execution.async_execute_automatic_plan(str(identity))
+                    if started:
+                        # Use the same platform readback as manual execution.
+                        # Alpha76 remains the only physical command owner.
+                        execution_state = self.execution.data
+                        expected = execution_state.get("power_w")
+                        if expected is None:
+                            await self.execution.async_stop(
+                                "automatic_platform_setpoint_expected_power_missing",
+                                emergency=True,
+                            )
+                            raise HomeAssistantError(
+                                "automatic_platform_setpoint_expected_power_missing"
+                            )
+                        if not await self._async_verify_platform_setpoint_handoff(
+                            float(expected)
+                        ):
+                            observed = self._setpoint_handoff_observed_w
+                            reason = (
+                                "automatic_platform_setpoint_handoff_not_confirmed: "
+                                f"expected={float(expected):g}W observed="
+                                f"{'unavailable' if observed is None else f'{observed:g}W'}"
+                            )
+                            await self.execution.async_stop(reason, emergency=True)
+                            raise HomeAssistantError(reason)
                 except asyncio.CancelledError:
                     raise
                 except HomeAssistantError as err:
@@ -1254,6 +1278,18 @@ class DOEMSEMSRuntime:
                     _LOGGER.exception(
                         "Unexpected automatic physical DOEMS execution error"
                     )
+                    # A failure after the Alpha76 handoff must never leave a
+                    # running execution without a verified host setpoint.
+                    if self.execution.data.get("active"):
+                        try:
+                            await self.execution.async_stop(
+                                "automatic_handoff_unexpected_error",
+                                emergency=True,
+                            )
+                        except Exception:
+                            _LOGGER.exception(
+                                "Automatic handoff emergency stop failed"
+                            )
                 finally:
                     self._automatic_execution_task = None
                     if not self._shutdown:
