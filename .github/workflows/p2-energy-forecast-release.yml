@@ -143,3 +143,47 @@ jobs:
           else
             gh release create 0.1.0-alpha.40 doems.zip SHA256SUMS.txt --target main --title "DOEMS 0.1.0-alpha.40 - Manual Plan Replay Fix" --notes-file RELEASE_NOTES_0.1.0-alpha.40.md --prerelease
           fi
+
+  publish-r8-test:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package R8 test prerelease
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          manifest = Path("custom_components/doems/manifest.json")
+          data = json.loads(manifest.read_text(encoding="utf-8"))
+          data["version"] = "0.2.0-alpha.8.0.6"
+          manifest.write_text(json.dumps(data, indent=2) + "\\n", encoding="utf-8")
+          const = Path("custom_components/doems/const.py")
+          source = const.read_text(encoding="utf-8")
+          source = source.replace('VERSION = "0.1.0-alpha.40"', 'VERSION = "0.2.0-alpha.8.0.6"', 1)
+          const.write_text(source, encoding="utf-8")
+          PY
+          zip -r doems-r8.zip custom_components/doems examples LICENSE README.md hacs.json
+          sha256sum doems-r8.zip > SHA256SUMS-r8.txt
+      - name: Publish installable R8 test prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > R8_RELEASE_NOTES.md <<'EOF'
+          # DOEMS 0.2.0-alpha.8.0.6 - R8 live test
+          
+          R8 controller and Combined planner integration test build from main.
+          Frozen Alpha76 controller sources are preserved.
+          Native forecast/planning horizon: 15 minutes, 72 hours, 288 slots.
+          This is a prerelease for Home Assistant validation, not a claim of completed live validation.
+          Physical execution remains subject to the integration's existing safety and authorization gates.
+          
+          Install with HACS prereleases enabled, or use the attached archive.
+          EOF
+          if gh release view 0.2.0-alpha.8.0.6 >/dev/null 2>&1; then
+            gh release edit 0.2.0-alpha.8.0.6 --title "DOEMS 0.2.0-alpha.8.0.6 - R8 live test" --notes-file R8_RELEASE_NOTES.md --prerelease
+            gh release upload 0.2.0-alpha.8.0.6 doems-r8.zip SHA256SUMS-r8.txt --clobber
+          else
+            gh release create 0.2.0-alpha.8.0.6 doems-r8.zip SHA256SUMS-r8.txt --target main --title "DOEMS 0.2.0-alpha.8.0.6 - R8 live test" --notes-file R8_RELEASE_NOTES.md --prerelease
+          fi
