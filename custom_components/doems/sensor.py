@@ -100,6 +100,9 @@ async def async_setup_entry(
         entities.extend(
             [
                 DOEMSEMSStatusSensor(entry, ems_runtime),
+                DOEMSManualPlannerSensor(entry, ems_runtime),
+                DOEMSAutomaticPlannerSensor(entry, ems_runtime),
+                DOEMSCombinedPlannerSensor(entry, ems_runtime),
                 *build_plan72_sensors(entry, ems_runtime),
                 DOEMSSchedulerStatusSensor(entry, ems_runtime),
                 DOEMSEMSR8ExecutionStatusSensor(entry, ems_runtime),
@@ -846,6 +849,77 @@ def build_plan72_sensors(
         )
         for suffix, name, value_key, unit, include_plan, solar_horizon_status in specs
     ]
+
+
+class DOEMSManualPlannerSensor(_DOEMSEMSRuntimeSensor):
+    """Live manual source view backed by the existing persistent plan store."""
+
+    _attr_name = "DOEMS Manual Planner"
+    _attr_unique_id = "doems_manual_planner"
+    _attr_suggested_object_id = "doems_manual_planner"
+    _attr_icon = "mdi:calendar-edit"
+
+    def _plans(self) -> list[dict[str, Any]]:
+        return [
+            {"slot": slot, **self.runtime.plan_store.get_plan(slot)}
+            for slot in range(1, 4)
+            if str(self.runtime.plan_store.get_plan(slot).get("origin") or "manual") == "manual"
+        ]
+
+    @property
+    def native_value(self) -> str:
+        return "ready" if self.runtime.scheduler_result else "waiting"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        plans = self._plans()
+        return {"source": "manual", "plans": plans, "plan_count": len(plans),
+                "physical_execution_enabled": False}
+
+
+class DOEMSAutomaticPlannerSensor(_DOEMSEMSRuntimeSensor):
+    """Live automatic source view of the existing 72-hour planner result."""
+
+    _attr_name = "DOEMS Automatic Planner"
+    _attr_unique_id = "doems_automatic_planner"
+    _attr_suggested_object_id = "doems_automatic_planner"
+    _attr_icon = "mdi:transmission-tower-export"
+
+    @property
+    def native_value(self) -> str:
+        plan = (self.runtime.planner_result or {}).get("plan72") or {}
+        return str(plan.get("auto_plan_72h_status") or "waiting")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        plan = (self.runtime.planner_result or {}).get("plan72") or {}
+        return {"source": "automatic", **_plan72_summary_attrs(plan),
+                "physical_execution_enabled": False}
+
+
+class DOEMSCombinedPlannerSensor(_DOEMSEMSRuntimeSensor):
+    """Live combined selection from the existing scheduler, not a second controller."""
+
+    _attr_name = "DOEMS Combined Planner"
+    _attr_unique_id = "doems_combined_planner"
+    _attr_suggested_object_id = "doems_combined_planner"
+    _attr_icon = "mdi:timeline-clock-outline"
+
+    @property
+    def native_value(self) -> str:
+        return str((self.runtime.scheduler_result or {}).get("scheduler_status") or "waiting")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        scheduler = self.runtime.scheduler_result or {}
+        slot = scheduler.get("scheduler_selected_slot")
+        details = scheduler.get("scheduler_slots") or {}
+        selected = details.get(slot) or details.get(str(slot)) or {}
+        return {"source": "manual_and_automatic", "selected_slot": slot,
+                "selected_origin": selected.get("origin") if isinstance(selected, dict) else None,
+                "selected_action": scheduler.get("scheduler_selected_action"),
+                "ready": bool(scheduler.get("scheduler_ready")),
+                "physical_execution_enabled": False}
 
 
 class DOEMSSchedulerStatusSensor(_DOEMSEMSRuntimeSensor):
