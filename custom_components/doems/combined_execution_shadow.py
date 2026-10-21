@@ -5,6 +5,7 @@ No Home Assistant services are called. No physical battery authority exists here
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from math import isfinite
 from typing import Any, Mapping
 
 
@@ -53,12 +54,17 @@ def evaluate_combined_execution_shadow(
     if len(active) != 1:
         return {**result, "reason": "no_unique_active_slot"}
     position, slot = active[0]
-    manual_charge = float(slot.get("manual_charge_kwh") or 0)
-    manual_discharge = float(slot.get("manual_discharge_kwh") or 0)
-    automatic_charge = float(slot.get("charge_from_grid_safety_kwh") or 0) + float(
-        slot.get("charge_from_grid_trade_kwh") or 0
-    )
-    automatic_discharge = float(slot.get("discharge_to_grid_kwh") or 0)
+    try:
+        manual_charge = float(slot.get("manual_charge_kwh") or 0)
+        manual_discharge = float(slot.get("manual_discharge_kwh") or 0)
+        automatic_charge = float(slot.get("charge_from_grid_safety_kwh") or 0) + float(
+            slot.get("charge_from_grid_trade_kwh") or 0
+        )
+        automatic_discharge = float(slot.get("discharge_to_grid_kwh") or 0)
+    except (ValueError, TypeError, OverflowError):
+        return {**result, "reason": "invalid_energy"}
+    if not all(isfinite(x) for x in (manual_charge, manual_discharge, automatic_charge, automatic_discharge)):
+        return {**result, "reason": "nonfinite_energy"}
     if min(manual_charge, manual_discharge, automatic_charge, automatic_discharge) < 0:
         return {**result, "reason": "negative_energy"}
     charge = manual_charge + automatic_charge
