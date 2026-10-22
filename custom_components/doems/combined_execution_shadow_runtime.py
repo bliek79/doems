@@ -59,10 +59,10 @@ class DOEMSCombinedExecutionShadowRuntime:
         return (
             identity == actual
             and self._authority
-            and plan.get("lifecycle_status") == "pending"
-            and decision.get("selected_lifecycle") == "pending"
-            and decision.get("safety_status") == "safe"
-            and not decision.get("safety_blockers")
+            and plan.get("lifecycle_status") in ("pending", "actief")
+            and (plan.get("lifecycle_status") == "actief" or decision.get("selected_lifecycle") == "pending")
+            and (plan.get("lifecycle_status") == "actief" or decision.get("safety_status") == "safe")
+            and (plan.get("lifecycle_status") == "actief" or not decision.get("safety_blockers"))
             and self.adapter.authority
             and all(self.adapter.entities.get(key) for key in
                     ("operating_mode", "action_direction", "power_setpoint"))
@@ -200,8 +200,9 @@ class DOEMSCombinedExecutionShadowRuntime:
         power = plan.get("power_w")
         target = plan.get("target_soc")
         runtime = plan.get("max_runtime_h")
-        if type(power) is not int or not 100 <= power <= 3500:
+        if type(power) not in (int, float) or not 100 <= power <= 3500 or int(power) != power:
             return
+        power = int(power)
         if type(target) not in (int, float) or not 5 <= target <= 100:
             return
         if type(runtime) not in (int, float) or not 0.25 <= runtime <= 12:
