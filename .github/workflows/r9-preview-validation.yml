@@ -1,0 +1,22 @@
+name: R9 preview validation
+on:
+  push:
+    branches:
+      - feature/r9-combined-execution-shadow
+  pull_request:
+    paths:
+      - 'custom_components/doems/**'
+      - '.github/workflows/r9-preview-validation.yml'
+  workflow_dispatch:
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Compile all DOEMS modules
+        run: python -m compileall -q custom_components/doems
+      - name: Validate integration manifest
+        run: python -c "import json; d=json.load(open('custom_components/doems/manifest.json')); assert d['domain']=='doems' and d['version']"
