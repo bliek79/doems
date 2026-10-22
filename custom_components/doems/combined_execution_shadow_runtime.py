@@ -13,11 +13,11 @@ from .execution_anker_adapter import AnkerExecutionAdapter
 
 
 class DOEMSCombinedExecutionShadowRuntime:
-    def __init__(self, hass: Any, planner: Any) -> None:
+    def __init__(self, hass: Any, planner: Any, battery: Any = None) -> None:
         self.hass = hass
         self.planner = planner
         self.adapter = AnkerExecutionAdapter(hass, {}, authority=False)
-        self.bridge = CombinedAnkerBridge(planner, self.adapter, authority=False)
+        self.bridge = CombinedAnkerBridge(planner, self.adapter, battery=battery, authority=False, exclusive=False)
         self.last_result: dict[str, Any] = {"status": "blocked", "reason": "startup"}
         self._unsubs: list[Callable[[], None]] = []
         self._shutdown = False
