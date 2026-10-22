@@ -6,7 +6,8 @@ forecast. No physical battery authority is granted by this observer.
 from __future__ import annotations
 
 import asyncio
-from datetime import timedelta
+from datetime import timedelta, datetime, timezone
+from copy import deepcopy
 from typing import Any, Callable
 
 from homeassistant.helpers.event import async_track_time_interval
@@ -17,12 +18,16 @@ from .execution_anker_adapter import AnkerExecutionAdapter
 
 
 class DOEMSCombinedExecutionShadowRuntime:
-    def __init__(self, hass: Any, scheduler: Any, store: Any) -> None:
+    def __init__(self, hass: Any, scheduler: Any, store: Any, *, entities=None, authority=False) -> None:
         self.hass = hass
         self.scheduler = scheduler
         self.store = store
-        self.adapter = AnkerExecutionAdapter(hass, {}, authority=False)
-        self.controller = ExecutionController(self.adapter, authorized=lambda: False, revalidate=self._identity_current)
+        self._authority = bool(authority)
+        self.adapter = AnkerExecutionAdapter(hass, entities or {}, authority=self._authority)
+        self.controller = ExecutionController(self.adapter, authorized=lambda: self._authority, revalidate=self._identity_current)
+        self._active_plan = None
+        self._active_slot = None
+        self._started = set()
         self.last_result: dict[str, Any] = {"status": "startup", "physical_execution_enabled": False}
         self._unsubs: list[Callable[[], None]] = []
         self._listeners: list[Callable[[], None]] = []
@@ -53,6 +58,7 @@ class DOEMSCombinedExecutionShadowRuntime:
         )
         return (
             identity == actual
+            and self._authority
             and plan.get("lifecycle_status") == "pending"
             and decision.get("selected_lifecycle") == "pending"
             and decision.get("safety_status") == "safe"
@@ -79,7 +85,7 @@ class DOEMSCombinedExecutionShadowRuntime:
         while self._dirty and not self._shutdown:
             self._dirty = False
             try:
-                self._evaluate()
+                await self._evaluate()
             except Exception as exc:
                 self.last_result = {
                     "status": "blocked", "reason": "slot_observer_error",
@@ -88,7 +94,9 @@ class DOEMSCombinedExecutionShadowRuntime:
             for listener in tuple(self._listeners):
                 listener()
 
-    def _evaluate(self) -> None:
+    async def _evaluate(self) -> None:
+        if self._authority:
+            await self._execute_or_monitor()
         decision = dict(self.scheduler.last_result)
         slot = decision.get("selected_slot")
         if type(slot) is not int or slot not in (1, 2, 3):
@@ -124,6 +132,90 @@ class DOEMSCombinedExecutionShadowRuntime:
             "physical_execution_enabled": False,
         }
 
+    def _identity(self, slot, plan):
+        return (
+            slot, plan.get("lifecycle_updated_at"), plan.get("origin"),
+            plan.get("planner_identity"), plan.get("planner_signature"),
+            plan.get("action"), plan.get("power_w"),
+            plan.get("target_soc"), plan.get("max_runtime_h"),
+        )
+
+    async def _execute_or_monitor(self) -> None:
+        """Use the one existing controller for both Manual and Automatic slots."""
+        now = dt_util.utcnow()
+        if self.controller.session is not None or self.controller.reconciliation_required:
+            session = self.controller.session
+            snapshot = self.scheduler.battery.snapshot() if self.scheduler.battery else {}
+            slot = self._active_slot
+            plan = self.store.get_plan(slot) if slot in (1, 2, 3) else {}
+            same_plan = bool(
+                session and self._active_plan
+                and plan.get("lifecycle_status") == "actief"
+                and all(plan.get(key) == self._active_plan.get(key)
+                        for key in ("origin", "planner_identity", "planner_signature",
+                                    "action", "power_w", "target_soc", "max_runtime_h"))
+            )
+            soc = snapshot.get("soc_percent")
+            try:
+                soc = float(soc)
+            except (TypeError, ValueError):
+                soc = None
+            try:
+                outcome = await self.controller.monitor(
+                    now=now, soc_percent=soc,
+                    sources_fresh=self.scheduler._sources_fresh(now, snapshot),
+                    controller_exclusive=self._authority,
+                    command_acknowledged=bool(session and
+                        self.adapter._power_matches(session["power_w"]) and
+                        self.adapter._state("operating_mode") == "third_party_control"),
+                    plan_identity_matches=same_plan,
+                    safety_clear=same_plan and snapshot.get("status") == "ready",
+                )
+                if outcome.get("decision") == "stop" and same_plan:
+                    await self.store.async_mark_lifecycle(
+                        slot, "voltooid", "execution_watchdog_stopped",
+                        expected_plan=plan)
+                    self._active_plan = None
+                    self._active_slot = None
+            except Exception:
+                # Keep the controller reconciliation fence raised on uncertain stop.
+                self.controller.reconciliation_required = True
+            return
+
+        decision = self.scheduler.last_result
+        slot = decision.get("selected_slot")
+        if type(slot) is not int or slot not in (1, 2, 3):
+            return
+        plan = self.store.get_plan(slot)
+        identity = self._identity(slot, plan)
+        if identity in self._started or not self._identity_current(identity):
+            return
+        power = plan.get("power_w")
+        target = plan.get("target_soc")
+        runtime = plan.get("max_runtime_h")
+        if type(power) is not int or not 100 <= power <= 3500:
+            return
+        if type(target) not in (int, float) or not 5 <= target <= 100:
+            return
+        if type(runtime) not in (int, float) or not 0.25 <= runtime <= 12:
+            return
+        self._started.add(identity)
+        try:
+            await self.controller.start(
+                identity=identity, action=plan["action"], power_w=power,
+                target_soc=target, max_runtime_h=runtime, now=now)
+            if await self.store.async_mark_lifecycle(
+                slot, "actief", "r7_execution_started", expected_plan=plan):
+                self._active_slot = slot
+                self._active_plan = self.store.get_plan(slot)
+            else:
+                await self.controller.stop()
+        except Exception:
+            # Never retry an ambiguous start; the controller owns safe cleanup.
+            if not self.controller.reconciliation_required:
+                await self.store.async_mark_lifecycle(
+                    slot, "fout", "execution_start_failed", expected_plan=plan)
+
     async def async_shutdown(self) -> None:
         self._shutdown = True
         for unsub in self._unsubs:
@@ -131,4 +223,6 @@ class DOEMSCombinedExecutionShadowRuntime:
         self._unsubs.clear()
         if self._task is not None:
             await self._task
+        if self._authority and (self.controller.session is not None or self.controller.reconciliation_required):
+            await self.controller.stop()
         self._listeners.clear()
