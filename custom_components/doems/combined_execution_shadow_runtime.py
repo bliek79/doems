@@ -12,12 +12,17 @@ from typing import Any, Callable
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
+from .execution_controller import ExecutionController
+from .execution_anker_adapter import AnkerExecutionAdapter
+
 
 class DOEMSCombinedExecutionShadowRuntime:
     def __init__(self, hass: Any, scheduler: Any, store: Any) -> None:
         self.hass = hass
         self.scheduler = scheduler
         self.store = store
+        self.adapter = AnkerExecutionAdapter(hass, {}, authority=False)
+        self.controller = ExecutionController(self.adapter, authorized=lambda: False, revalidate=lambda identity: False)
         self.last_result: dict[str, Any] = {"status": "startup", "physical_execution_enabled": False}
         self._unsubs: list[Callable[[], None]] = []
         self._listeners: list[Callable[[], None]] = []
