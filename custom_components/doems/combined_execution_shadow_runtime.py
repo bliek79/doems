@@ -121,10 +121,13 @@ class DOEMSCombinedExecutionShadowRuntime:
             blockers.append("selected_action_changed")
         if decision.get("safety_status") != "safe":
             blockers.append("r7_safety_not_safe")
+        # Shadow mode must report planning readiness independently of
+        # physical authority. Never imply that the battery is being controlled.
+        planning_ready = not blockers
         if not self._authority:
             blockers.append("physical_authority_disabled")
         self.last_result = {
-            "status": "blocked" if blockers else "slot_ready_observe",
+            "status": ("slot_ready_observe" if planning_ready else "blocked"),
             "selected_slot": slot,
             "origin": plan.get("origin"),
             "action": plan.get("action"),
