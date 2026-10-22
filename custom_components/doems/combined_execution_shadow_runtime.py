@@ -63,6 +63,9 @@ class DOEMSCombinedExecutionShadowRuntime:
             and decision.get("selected_lifecycle") == "pending"
             and decision.get("safety_status") == "safe"
             and not decision.get("safety_blockers")
+            and self.adapter.authority
+            and all(self.adapter.entities.get(key) for key in
+                    ("operating_mode", "action_direction", "power_setpoint"))
         )
 
     async def async_setup(self) -> None:
@@ -116,6 +119,10 @@ class DOEMSCombinedExecutionShadowRuntime:
             blockers.append("action_invalid")
         if decision.get("selected_action") != plan.get("action"):
             blockers.append("selected_action_changed")
+        if decision.get("safety_status") != "safe":
+            blockers.append("r7_safety_not_safe")
+        if not self._authority:
+            blockers.append("physical_authority_disabled")
         self.last_result = {
             "status": "blocked" if blockers else "slot_ready_observe",
             "selected_slot": slot,
