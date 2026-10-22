@@ -11,6 +11,7 @@ from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.util import dt as dt_util
 
 from .r7_model import AUTO_ORIGIN, _num, _time, evaluate_r7
+from .manual_soc_projection_model import MIN_SOC_PERCENT
 
 
 class DOEMSR7Scheduler:
@@ -111,6 +112,26 @@ class DOEMSR7Scheduler:
                 return False
         return True
 
+    def _manual_safety_limits(self) -> dict[str, float]:
+        """Independent configured hard limits; invalid settings fail closed in R7."""
+        try:
+            settings = self.planner._settings()
+            charge = _num(settings.get("max_charge_power_w"))
+            discharge = _num(settings.get("max_discharge_power_w"))
+            reserve = _num(settings.get("software_reserve_percent"))
+            if (charge is None or not 100 <= charge <= 100000
+                    or discharge is None or not 100 <= discharge <= 100000
+                    or reserve is None or not 0 <= reserve <= 30
+                    or MIN_SOC_PERCENT + reserve > 100):
+                return {}
+            return {
+                "max_charge_power_w": charge,
+                "max_discharge_power_w": discharge,
+                "planner_floor_soc_percent": MIN_SOC_PERCENT + reserve,
+            }
+        except (AttributeError, TypeError, ValueError, OverflowError):
+            return {}
+
     async def async_evaluate(self, *, now: datetime | None = None) -> dict[str, Any]:
         if self._shutdown:
             return dict(self.last_result)
@@ -135,11 +156,13 @@ class DOEMSR7Scheduler:
                 plans = {i: self.store.get_plan(i) for i in (1, 2, 3)}
             bundle = self.planner.bundle_snapshot()
             battery = self.battery.snapshot() if self.battery else {"status": "blocked"}
+            manual_limits = self._manual_safety_limits()
             result = evaluate_r7(
                 now=reference, plans=plans, bundle=bundle, battery=battery,
                 bridge_ready=self.bridge.last_result.get("status") == "ready",
                 planner_generation=self.planner._generation,
                 source_fresh=self._sources_fresh(reference, battery),
+                manual_limits=manual_limits,
             )
             if result["can_promote"] and self.planner.bundle_snapshot() is bundle:
                 slot = result["selected_slot"]
@@ -162,6 +185,7 @@ class DOEMSR7Scheduler:
                         bridge_ready=self.bridge.last_result.get("status") == "ready",
                         planner_generation=self.planner._generation,
                         source_fresh=self._sources_fresh(reference, battery),
+                        manual_limits=manual_limits,
                     )
             result["last_promotion"] = self.last_promotion
             self.last_result = result
