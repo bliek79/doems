@@ -14,17 +14,17 @@ jobs:
       - name: Validate Python and manifest
         run: |
           python -m compileall -q custom_components/doems
-          python -c "import json; d=json.load(open('custom_components/doems/manifest.json')); assert d['version']=='0.2.0-alpha.9.0'"
+          python -c "import json; d=json.load(open('custom_components/doems/manifest.json')); assert d['version']=='0.2.0-alpha.9.1'"
       - name: Publish immutable preview prerelease
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v0.2.0-alpha.9.0 >/dev/null 2>&1; then
+          if gh release view v0.2.0-alpha.9.1 >/dev/null 2>&1; then
             echo "Release already exists; refusing to overwrite"
             exit 1
           fi
-          gh release create v0.2.0-alpha.9.0 \
+          gh release create v0.2.0-alpha.9.1 \
             --target "$GITHUB_SHA" \
-            --title "DOEMS 0.2.0-alpha.9.0 - R9 Shadow Preview" \
+            --title "DOEMS 0.2.0-alpha.9.1 - R9 Shadow Preview" \
             --prerelease \
             --notes "R9 installation preview for Home Assistant. Manual and Automatic share three persistent plan slots; R7 selects the slot and R8 execution remains without physical authority. Physical Anker control is DISABLED. Python compile and manifest checks only; HA startup and planner integration are not yet validated. Do not use for live battery execution."
