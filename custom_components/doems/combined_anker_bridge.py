@@ -80,6 +80,8 @@ class CombinedAnkerBridge:
                 )
             elif self.controller.reconciliation_required:
                 await self.controller.stop()
+            if session is not None and self.controller.session is None:
+                return {**decision, "bridge": "stopped_by_watchdog"}
             if decision["status"] != "shadow_ready" or decision["action"] == "idle":
                 return {**decision, "bridge": "idle_or_blocked"}
             if self.controller.session is not None:
