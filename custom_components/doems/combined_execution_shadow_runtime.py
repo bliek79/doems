@@ -22,7 +22,7 @@ class DOEMSCombinedExecutionShadowRuntime:
         self.scheduler = scheduler
         self.store = store
         self.adapter = AnkerExecutionAdapter(hass, {}, authority=False)
-        self.controller = ExecutionController(self.adapter, authorized=lambda: False, revalidate=lambda identity: False)
+        self.controller = ExecutionController(self.adapter, authorized=lambda: False, revalidate=self._identity_current)
         self.last_result: dict[str, Any] = {"status": "startup", "physical_execution_enabled": False}
         self._unsubs: list[Callable[[], None]] = []
         self._listeners: list[Callable[[], None]] = []
@@ -37,6 +37,27 @@ class DOEMSCombinedExecutionShadowRuntime:
             if listener in self._listeners:
                 self._listeners.remove(listener)
         return remove
+
+    def _identity_current(self, identity: tuple) -> bool:
+        """Verify that R7 still selects exactly the same pending slot revision."""
+        decision = self.scheduler.last_result
+        slot = decision.get("selected_slot")
+        if type(slot) is not int or slot not in (1, 2, 3):
+            return False
+        plan = self.store.get_plan(slot)
+        actual = (
+            slot, plan.get("lifecycle_updated_at"), plan.get("origin"),
+            plan.get("planner_identity"), plan.get("planner_signature"),
+            plan.get("action"), plan.get("power_w"),
+            plan.get("target_soc"), plan.get("max_runtime_h"),
+        )
+        return (
+            identity == actual
+            and plan.get("lifecycle_status") == "pending"
+            and decision.get("selected_lifecycle") == "pending"
+            and decision.get("safety_status") == "safe"
+            and not decision.get("safety_blockers")
+        )
 
     async def async_setup(self) -> None:
         self._unsubs.append(self.scheduler.async_add_listener(self.refresh))
