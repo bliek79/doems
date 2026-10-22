@@ -1,36 +1,31 @@
-"""Read-only R9 Combined execution supervisor.
-
-Observes planner publications and the current 15-minute slot. Never actuates.
-"""
+"""R9 Combined execution runtime; physical authority deliberately disabled."""
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 from typing import Any, Callable
 
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
-from .combined_execution_shadow import evaluate_combined_execution_shadow
+from .combined_anker_bridge import CombinedAnkerBridge
+from .execution_anker_adapter import AnkerExecutionAdapter
 
 
 class DOEMSCombinedExecutionShadowRuntime:
     def __init__(self, hass: Any, planner: Any) -> None:
         self.hass = hass
         self.planner = planner
-        self.last_result: dict[str, Any] = {
-            "status": "blocked",
-            "reason": "startup",
-            "physical_execution_enabled": False,
-            "execution_performed": False,
-        }
+        self.adapter = AnkerExecutionAdapter(hass, {}, authority=False)
+        self.bridge = CombinedAnkerBridge(planner, self.adapter, authority=False)
+        self.last_result: dict[str, Any] = {"status": "blocked", "reason": "startup"}
         self._unsubs: list[Callable[[], None]] = []
         self._shutdown = False
+        self._task: asyncio.Task | None = None
 
     async def async_setup(self) -> None:
         self._unsubs.append(self.planner.async_add_listener(self.refresh))
-        self._unsubs.append(
-            async_track_time_interval(self.hass, self._tick, timedelta(minutes=1))
-        )
+        self._unsubs.append(async_track_time_interval(self.hass, self._tick, timedelta(minutes=1)))
         self.refresh()
 
     def _tick(self, _now: Any) -> None:
@@ -39,20 +34,21 @@ class DOEMSCombinedExecutionShadowRuntime:
     def refresh(self) -> None:
         if self._shutdown:
             return
+        if self._task is not None and not self._task.done():
+            return
+        self._task = self.hass.async_create_task(self._evaluate())
+
+    async def _evaluate(self) -> None:
         try:
-            self.last_result = evaluate_combined_execution_shadow(
-                self.planner.snapshot("combined"), now=dt_util.utcnow()
-            )
-        except (ValueError, TypeError, OverflowError):
-            self.last_result = {
-                "status": "blocked",
-                "reason": "observer_error",
-                "physical_execution_enabled": False,
-                "execution_performed": False,
-            }
+            self.last_result = await self.bridge.async_reconcile(dt_util.utcnow())
+        except Exception as exc:
+            self.last_result = {"status": "blocked", "reason": "bridge_error", "error_type": type(exc).__name__}
 
     async def async_shutdown(self) -> None:
         self._shutdown = True
-        for unsubscribe in self._unsubs:
-            unsubscribe()
+        for unsub in self._unsubs:
+            unsub()
         self._unsubs.clear()
+        if self._task is not None:
+            await self._task
+        await self.bridge.async_shutdown()
