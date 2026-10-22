@@ -22,6 +22,7 @@ class DOEMSCombinedExecutionShadowRuntime:
         self._unsubs: list[Callable[[], None]] = []
         self._shutdown = False
         self._task: asyncio.Task | None = None
+        self._dirty = False
 
     async def async_setup(self) -> None:
         self._unsubs.append(self.planner.async_add_listener(self.refresh))
@@ -34,9 +35,14 @@ class DOEMSCombinedExecutionShadowRuntime:
     def refresh(self) -> None:
         if self._shutdown:
             return
-        if self._task is not None and not self._task.done():
-            return
-        self._task = self.hass.async_create_task(self._evaluate())
+        self._dirty = True
+        if self._task is None or self._task.done():
+            self._task = self.hass.async_create_task(self._drain())
+
+    async def _drain(self) -> None:
+        while self._dirty and not self._shutdown:
+            self._dirty = False
+            await self._evaluate()
 
     async def _evaluate(self) -> None:
         try:
