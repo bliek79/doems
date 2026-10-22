@@ -60,9 +60,7 @@ def evaluate_combined_execution_shadow(
         automatic_charge = float(slot.get("charge_from_grid_safety_kwh") or 0) + float(
             slot.get("charge_from_grid_trade_kwh") or 0
         )
-        automatic_discharge = float(slot.get("discharge_to_grid_kwh") or 0) + float(
-            slot.get("discharge_to_home_kwh") or 0
-        )
+        automatic_discharge = float(slot.get("discharge_to_grid_kwh") or 0)
     except (ValueError, TypeError, OverflowError):
         return {**result, "reason": "invalid_energy"}
     if not all(isfinite(x) for x in (manual_charge, manual_discharge, automatic_charge, automatic_discharge)):
