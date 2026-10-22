@@ -23,6 +23,15 @@ class DOEMSCombinedExecutionShadowRuntime:
         self._shutdown = False
         self._task: asyncio.Task | None = None
         self._dirty = False
+        self._listeners: list[Callable[[], None]] = []
+
+    def async_add_listener(self, listener: Callable[[], None]) -> Callable[[], None]:
+        self._listeners.append(listener)
+
+        def remove() -> None:
+            if listener in self._listeners:
+                self._listeners.remove(listener)
+        return remove
 
     async def async_setup(self) -> None:
         self._unsubs.append(self.planner.async_add_listener(self.refresh))
@@ -49,6 +58,8 @@ class DOEMSCombinedExecutionShadowRuntime:
             self.last_result = await self.bridge.async_reconcile(dt_util.utcnow())
         except Exception as exc:
             self.last_result = {"status": "blocked", "reason": "bridge_error", "error_type": type(exc).__name__}
+        for listener in tuple(self._listeners):
+            listener()
 
     async def async_shutdown(self) -> None:
         self._shutdown = True
@@ -58,3 +69,4 @@ class DOEMSCombinedExecutionShadowRuntime:
         if self._task is not None:
             await self._task
         await self.bridge.async_shutdown()
+        self._listeners.clear()
