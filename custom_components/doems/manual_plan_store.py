@@ -331,16 +331,26 @@ class DOEMSManualPlanStore:
         slot: int,
         status: str,
         reason: str | None = None,
-    ) -> None:
-        """Lifecycle primitive reserved for later validated layers/tests."""
+        *,
+        expected_plan: dict[str, Any] | None = None,
+    ) -> bool:
+        """Persist an execution transition only for the same selected plan.
+
+        The optional compare-and-set guard prevents a delayed actuator callback
+        from overwriting a slot that Manual or Automatic has since replaced.
+        Execution callers must pass their selection snapshot.
+        """
         self._validate_slot(slot)
         if status not in LIFECYCLE_STATUSES:
             raise ValueError(f"Unknown lifecycle status: {status}")
+        if expected_plan is not None and self._plans[slot] != expected_plan:
+            return False
         self._plans[slot]["lifecycle_status"] = status
         self._plans[slot]["lifecycle_reason"] = reason
         self._plans[slot]["lifecycle_updated_at"] = dt_util.now().isoformat()
         await self._async_save()
         self._notify()
+        return True
 
 
     async def async_promote_automatic_plan(
