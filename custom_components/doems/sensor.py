@@ -41,6 +41,7 @@ from .prices import DOEMSPricesManager
 from .prices_sensor import build_prices_sensors
 from .automatic_combined_planner import DOEMSPlannerManager
 from .r7_runtime import DOEMSR7Scheduler
+from .combined_execution_shadow_runtime import DOEMSCombinedExecutionShadowRuntime
 from .solar_actual import SolarActualQuarterManager
 from .solar_forecast import SolarForecastManager
 from .solar_sensor import build_solar_sensors
@@ -140,6 +141,10 @@ async def async_setup_entry(
     r7_scheduler = entry_data.get("r7_scheduler")
     if isinstance(r7_scheduler, DOEMSR7Scheduler):
         entities.append(DOEMSR7SchedulerStatusSensor(entry, r7_scheduler))
+
+    combined_execution = entry_data.get("combined_execution_shadow")
+    if isinstance(combined_execution, DOEMSCombinedExecutionShadowRuntime):
+        entities.append(DOEMSCombinedExecutionStatusSensor(entry, combined_execution))
 
     async_add_entities(entities)
 
@@ -1161,6 +1166,45 @@ class DOEMSR7SchedulerStatusSensor(SensorEntity):
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         self._remove_listener = self.scheduler.async_add_listener(self._handle_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._remove_listener is not None:
+            self._remove_listener()
+            self._remove_listener = None
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
+
+
+class DOEMSCombinedExecutionStatusSensor(SensorEntity):
+    """Live observable R9 Combined execution decision for HA validation."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+    _attr_name = "DOEMS Combined Execution Status"
+    _attr_unique_id = "doems_combined_execution_status"
+    _attr_suggested_object_id = "doems_combined_execution_status"
+    _attr_icon = "mdi:transmission-tower"
+
+    def __init__(self, entry: ConfigEntry, runtime: DOEMSCombinedExecutionShadowRuntime) -> None:
+        self.runtime = runtime
+        self._remove_listener = None
+        self._attr_device_info = _device_info(entry)
+
+    @property
+    def native_value(self) -> str:
+        result = self.runtime.last_result
+        return str(result.get("bridge") or result.get("status") or "startup")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return dict(self.runtime.last_result)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._remove_listener = self.runtime.async_add_listener(self._handle_update)
 
     async def async_will_remove_from_hass(self) -> None:
         if self._remove_listener is not None:
