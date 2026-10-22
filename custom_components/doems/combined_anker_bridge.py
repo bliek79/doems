@@ -51,7 +51,7 @@ class CombinedAnkerBridge:
         if snapshot.get("status") != "ready":
             return None
         try:
-            value = float(snapshot["sources"]["soc"]["state"])
+            value = float(snapshot["soc_percent"])
         except (KeyError, TypeError, ValueError):
             return None
         return value if isfinite(value) and 0 <= value <= 100 else None
