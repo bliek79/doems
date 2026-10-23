@@ -25,10 +25,15 @@ class DOEMSCombinedExecutionShadowRuntime:
         self.scheduler = scheduler
         self.store = store
         self._authority = bool(authority)
-        self._combined_bridge = CombinedAnkerBridge(planner, AnkerExecutionAdapter(hass, entities or {}, authority=False), battery=battery, authority=False, exclusive=False) if planner is not None else None
+        self._combined_bridge = None
         self._combined_last_result: dict[str, Any] = {"bridge": "startup", "physical_execution_enabled": False}
         self.adapter = AnkerExecutionAdapter(hass, entities or {}, authority=self._authority)
         self.controller = ExecutionController(self.adapter, authorized=lambda: self._authority, revalidate=self._identity_current)
+        if planner is not None:
+            self._combined_bridge = CombinedAnkerBridge(
+                planner, self.adapter, battery=battery, authority=False,
+                exclusive=False, controller=self.controller,
+            )
         self._active_plan = None
         self._active_slot = None
         self._started = set()
