@@ -337,6 +337,8 @@ class DOEMSOptionsFlow(OptionsFlow):
                     value = user_input.get(key)
                     if value and (not value.startswith(domain + ".") or self.hass.states.get(value) is None):
                         errors[key] = "source_not_found"
+                    elif value and value.split(".", 1)[1].startswith("doems_"):
+                        errors[key] = "doems_source_not_allowed"
                 if not errors:
                     for key, _ in fields:
                         if user_input.get(key):
