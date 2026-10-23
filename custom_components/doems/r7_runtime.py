@@ -59,8 +59,12 @@ class DOEMSR7Scheduler:
 
         return remove
 
-    @callback
     def _queue_evaluate(self) -> None:
+        """Accept listener notifications from any thread."""
+        self.hass.loop.call_soon_threadsafe(self._queue_evaluate_on_loop)
+
+    @callback
+    def _queue_evaluate_on_loop(self) -> None:
         if self._shutdown:
             return
         self._dirty = True
