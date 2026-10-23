@@ -286,6 +286,4 @@ class DOEMSCombinedExecutionShadowRuntime:
             await self._task
         if self._authority and (self.controller.session is not None or self.controller.reconciliation_required):
             await self.controller.stop()
-        if self._combined_bridge is not None:
-            await self._combined_bridge.async_shutdown()
         self._listeners.clear()
