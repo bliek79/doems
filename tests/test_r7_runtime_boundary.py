@@ -36,6 +36,7 @@ def load_runtime(monkeypatch):
 
 class FakeHass:
     def __init__(self):
+        self.loop = asyncio.get_running_loop()
         self.states = {
             f"sensor.{item}": types.SimpleNamespace(last_reported=NOW)
             for item in ("soc", "capacity", "charge_power", "discharge_power", "device_status")
