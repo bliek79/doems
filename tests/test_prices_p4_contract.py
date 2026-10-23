@@ -128,3 +128,32 @@ def test_electricity_to_gas_ratio_and_missing_semantics():
     assert m.electricity_to_gas_price_ratio(0.35, 0.0) is None
     assert m.gas_equivalent_eur_kwh(None, energy_factor_kwh_m3=9.77) is None
     assert m.gas_equivalent_eur_kwh(1.71, energy_factor_kwh_m3=0) is None
+
+
+def test_dst_fallback_uses_higher_neighbor_and_preserves_utc_quarters():
+    m = _load("prices_model")
+    from zoneinfo import ZoneInfo
+    local = ZoneInfo("Europe/Amsterdam")
+    first = datetime(2026, 10, 25, 2, tzinfo=local, fold=0).astimezone(timezone.utc)
+    second = datetime(2026, 10, 25, 2, tzinfo=local, fold=1).astimezone(timezone.utc)
+    after = second + timedelta(hours=1)
+    assert first == datetime(2026, 10, 25, 0, tzinfo=timezone.utc)
+    assert second == datetime(2026, 10, 25, 1, tzinfo=timezone.utc)
+    indexed = {}
+    for start, price in [(first, 0.10890), (after, 0.08236)]:
+        for ts in m.expected_quarter_starts(start, 4):
+            indexed[ts] = m.PricePoint(ts, price, price, price, price, "forecast_hour", 60)
+    missing, price = m.dst_fallback_missing_hour(indexed, year=2026)
+    assert missing == m.expected_quarter_starts(second, 4)
+    assert price == 0.10890
+    indexed[second] = m.PricePoint(second, 0.09, 0.09, 0.09, 0.09, "known_pt15m", 15)
+    assert m.dst_fallback_missing_hour(indexed, year=2026) is None
+
+
+def test_dst_fallback_requires_genuine_complete_neighboring_forecasts():
+    m = _load("prices_model")
+    start = datetime(2026, 10, 25, 0, tzinfo=timezone.utc)
+    indexed = {}
+    for ts in m.expected_quarter_starts(start, 4):
+        indexed[ts] = m.PricePoint(ts, 0.1, 0.1, 0.1, 0.1, "forecast_hour", 60)
+    assert m.dst_fallback_missing_hour(indexed, year=2026) is None
