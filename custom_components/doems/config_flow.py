@@ -666,7 +666,7 @@ class DOEMSOptionsFlow(OptionsFlow):
                 CONF_GAS_GRID_PER_DAY,
             ):
                 self._pending.pop(key, None)
-            return self._save()
+            return await self.async_step_anker_control_entities()
         return self.async_show_form(
             step_id="prices",
             data_schema=vol.Schema({
@@ -722,7 +722,7 @@ class DOEMSOptionsFlow(OptionsFlow):
                     self._pending.pop(CONF_GAS_MARKET_ENTITY, None)
                 else:
                     self._pending.pop(CONF_GAS_ENERGYZERO_CONFIG_ENTRY, None)
-                return self._save()
+                return await self.async_step_anker_control_entities()
 
         current_mode = str(
             self._current(CONF_GAS_SOURCE_MODE, GAS_SOURCE_HOME_ASSISTANT_ENTITY)
