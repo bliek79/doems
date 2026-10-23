@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from math import isfinite
 from typing import Any, Iterable
 
@@ -206,3 +207,26 @@ def electricity_to_gas_price_ratio(
     ):
         return None
     return round(electricity_price / gas_price, 6)
+
+
+def dst_fallback_missing_hour(
+    indexed: dict[datetime, PricePoint], *, year: int
+) -> tuple[list[datetime], float] | None:
+    """Find the missing repeated Amsterdam hour; return UTC quarters and conservative EUR/kWh.
+
+    The surrounding hours must be genuine forecast values. Never overwrite source data.
+    """
+    local = ZoneInfo("Europe/Amsterdam")
+    october_end = datetime(year, 10, 31, tzinfo=local)
+    last_sunday = 31 - (october_end.weekday() + 1) % 7
+    repeated = datetime(year, 10, last_sunday, 2, tzinfo=local, fold=1)
+    start = utc(repeated)
+    missing = expected_quarter_starts(start, 4)
+    before = expected_quarter_starts(start - timedelta(hours=1), 4)
+    after = expected_quarter_starts(start + timedelta(hours=1), 4)
+    if any(ts in indexed for ts in missing):
+        return None
+    adjacent = [indexed.get(ts) for ts in [*before, *after]]
+    if any(p is None or p.kind != "forecast_hour" or p.market_ex_vat is None for p in adjacent):
+        return None
+    return missing, max(p.market_ex_vat for p in adjacent)
