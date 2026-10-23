@@ -35,6 +35,8 @@ class DOEMSCombinedExecutionShadowRuntime:
         self._task: asyncio.Task | None = None
         self._dirty = False
         self._shutdown = False
+        self._restart_reconciled = False
+        self._last_stop_blockers = []
 
     def async_add_listener(self, listener: Callable[[], None]) -> Callable[[], None]:
         self._listeners.append(listener)
@@ -150,7 +152,10 @@ class DOEMSCombinedExecutionShadowRuntime:
             "scheduler_status": decision.get("status"),
             "blockers": blockers,
             "observed_at": dt_util.utcnow().isoformat(),
-            "physical_execution_enabled": False,
+            "physical_execution_enabled": bool(self.controller.session),
+            "execution_authorized": self._authority,
+            "reconciliation_required": self.controller.reconciliation_required,
+            "last_stop_blockers": list(self._last_stop_blockers),
         }
 
     def _identity(self, slot, plan):
@@ -164,6 +169,16 @@ class DOEMSCombinedExecutionShadowRuntime:
     async def _execute_or_monitor(self) -> None:
         """Use the one existing controller for both Manual and Automatic slots."""
         now = dt_util.utcnow()
+        if not self._restart_reconciled:
+            mode = self.adapter._state("operating_mode")
+            if mode is None or mode not in ("self_consumption", "third_party_control"):
+                return
+            if mode == "third_party_control":
+                self.controller.require_restart_reconciliation()
+                await self.controller.stop()
+                self._restart_reconciled = True
+                return
+            self._restart_reconciled = True
         if self.controller.session is not None or self.controller.reconciliation_required:
             session = self.controller.session
             snapshot = self.scheduler.battery.snapshot() if self.scheduler.battery else {}
@@ -192,10 +207,17 @@ class DOEMSCombinedExecutionShadowRuntime:
                     plan_identity_matches=same_plan,
                     safety_clear=same_plan and snapshot.get("status") == "ready",
                 )
-                if outcome.get("decision") == "stop" and same_plan:
-                    await self.store.async_mark_lifecycle(
-                        slot, "voltooid", "execution_watchdog_stopped",
-                        expected_plan=plan)
+                if outcome.get("decision") == "stop":
+                    blockers = list(outcome.get("blockers") or [])
+                    self._last_stop_blockers = blockers
+                    normal = bool(blockers) and all(
+                        b in ("target_reached", "runtime_elapsed") for b in blockers
+                    )
+                    if same_plan:
+                        await self.store.async_mark_lifecycle(
+                            slot, "voltooid" if normal else "fout",
+                            "execution_completed" if normal else "execution_safety_stopped",
+                            expected_plan=plan)
                     self._active_plan = None
                     self._active_slot = None
             except Exception:
