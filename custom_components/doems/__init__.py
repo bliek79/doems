@@ -11,6 +11,9 @@ from homeassistant.helpers.storage import Store
 
 from .const import (
     CONF_BATTERY_OBSERVATION_ENABLED,
+    CONF_ANKER_OPERATING_MODE_ENTITY,
+    CONF_ANKER_ACTION_DIRECTION_ENTITY,
+    CONF_ANKER_POWER_SETPOINT_ENTITY,
     CONF_ENERGY_FORECAST_ENABLED,
     CONF_PRICES_ENABLED,
     DOMAIN,
@@ -119,6 +122,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
     combined_execution_shadow = DOEMSCombinedExecutionShadowRuntime(
         hass, r7_scheduler, manual_plan_store,
         planner=planner, battery=battery_input,
+        entities={
+            "operating_mode": entry.options.get(CONF_ANKER_OPERATING_MODE_ENTITY),
+            "action_direction": entry.options.get(CONF_ANKER_ACTION_DIRECTION_ENTITY),
+            "power_setpoint": entry.options.get(CONF_ANKER_POWER_SETPOINT_ENTITY),
+        },
     )
     await combined_execution_shadow.async_setup()
 
