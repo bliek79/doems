@@ -10,6 +10,7 @@ from datetime import timedelta, datetime, timezone
 from copy import deepcopy
 from typing import Any, Callable
 
+from homeassistant.core import callback
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
@@ -78,6 +79,12 @@ class DOEMSCombinedExecutionShadowRuntime:
         self.refresh()
 
     def refresh(self) -> None:
+        """Thread-safe entry point for scheduler/store notifications."""
+        self.hass.loop.call_soon_threadsafe(self._refresh_on_loop)
+
+    @callback
+    def _refresh_on_loop(self) -> None:
+        """Only the event loop may mutate the observer task and dirty flag."""
         if self._shutdown:
             return
         self._dirty = True
@@ -95,7 +102,11 @@ class DOEMSCombinedExecutionShadowRuntime:
                     "error_type": type(exc).__name__, "physical_execution_enabled": False,
                 }
             for listener in tuple(self._listeners):
-                listener()
+                try:
+                    listener()
+                except Exception:
+                    # A faulty UI listener must not terminate the observer drain.
+                    continue
 
     async def _evaluate(self) -> None:
         if self._authority:
