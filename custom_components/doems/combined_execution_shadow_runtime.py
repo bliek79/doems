@@ -119,7 +119,7 @@ class DOEMSCombinedExecutionShadowRuntime:
                     continue
 
     async def _evaluate(self) -> None:
-        if self._combined_bridge is not None:
+        if self._combined_bridge is not None and not self._authority:
             try:
                 self._combined_last_result = await self._combined_bridge.async_reconcile(dt_util.utcnow())
             except Exception as exc:
