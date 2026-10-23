@@ -13,6 +13,9 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_ANKER_OPERATING_MODE_ENTITY,
+    CONF_ANKER_ACTION_DIRECTION_ENTITY,
+    CONF_ANKER_POWER_SETPOINT_ENTITY,
     CONF_BATTERY_CAPACITY_ENTITY,
     CONF_BATTERY_CHARGE_POWER_ENTITY,
     CONF_BATTERY_DISCHARGE_POWER_ENTITY,
@@ -315,6 +318,40 @@ class DOEMSOptionsFlow(OptionsFlow):
                 vol.Required(CONF_PLANNER_MAX_DISCHARGE_POWER_W, default=float(self._current(CONF_PLANNER_MAX_DISCHARGE_POWER_W, DEFAULT_PLANNER_MAX_DISCHARGE_POWER_W))): _number(100.0, 3500.0, 100.0, "W"),
                 vol.Required(CONF_PLANNER_MINIMUM_TRADE_MARGIN_EUR_PER_KWH, default=float(self._current(CONF_PLANNER_MINIMUM_TRADE_MARGIN_EUR_PER_KWH, DEFAULT_PLANNER_MINIMUM_TRADE_MARGIN_EUR_PER_KWH))): _number(0.0, 2.0, 0.01, "EUR/kWh"),
             }),
+        )
+
+    async def async_step_anker_control_entities(self, user_input=None):
+        """Configure Anker control entities; configuration never enables execution."""
+        fields = (
+            (CONF_ANKER_OPERATING_MODE_ENTITY, "select"),
+            (CONF_ANKER_ACTION_DIRECTION_ENTITY, "select"),
+            (CONF_ANKER_POWER_SETPOINT_ENTITY, "number"),
+        )
+        errors = {}
+        if user_input is not None:
+            chosen = [user_input.get(key) for key, _ in fields]
+            if any(chosen) and not all(chosen):
+                errors["base"] = "anker_control_incomplete"
+            else:
+                for key, domain in fields:
+                    value = user_input.get(key)
+                    if value and (not value.startswith(domain + ".") or self.hass.states.get(value) is None):
+                        errors[key] = "source_not_found"
+                if not errors:
+                    for key, _ in fields:
+                        if user_input.get(key):
+                            self._pending[key] = user_input[key]
+                        else:
+                            self._pending.pop(key, None)
+                    return self._save()
+        return self.async_show_form(
+            step_id="anker_control_entities",
+            data_schema=vol.Schema({
+                _optional_entity(CONF_ANKER_OPERATING_MODE_ENTITY, self._current(CONF_ANKER_OPERATING_MODE_ENTITY)): selector.EntitySelector(selector.EntitySelectorConfig(domain="select")),
+                _optional_entity(CONF_ANKER_ACTION_DIRECTION_ENTITY, self._current(CONF_ANKER_ACTION_DIRECTION_ENTITY)): selector.EntitySelector(selector.EntitySelectorConfig(domain="select")),
+                _optional_entity(CONF_ANKER_POWER_SETPOINT_ENTITY, self._current(CONF_ANKER_POWER_SETPOINT_ENTITY)): selector.EntitySelector(selector.EntitySelectorConfig(domain="number")),
+            }),
+            errors=errors,
         )
 
     async def async_step_energy_forecast(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
