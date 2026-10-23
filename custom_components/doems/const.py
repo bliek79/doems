@@ -25,6 +25,11 @@ CONF_BATTERY_DISCHARGE_POWER_ENTITY = "battery_discharge_power_entity"
 CONF_BATTERY_STATUS_ENTITY = "battery_status_entity"
 BATTERY_INPUT_CONTRACT_VERSION = 1
 
+# Physical actuator mapping is configuration only; it never grants authority.
+CONF_ANKER_OPERATING_MODE_ENTITY = "anker_operating_mode_entity"
+CONF_ANKER_ACTION_DIRECTION_ENTITY = "anker_action_direction_entity"
+CONF_ANKER_POWER_SETPOINT_ENTITY = "anker_power_setpoint_entity"
+
 # Planner configuration. These permanent keys are independent from the
 # temporary alpha.6.x and alpha.7 naming used before the planner identities
 # were finalized.
