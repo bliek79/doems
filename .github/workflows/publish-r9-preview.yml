@@ -14,17 +14,17 @@ jobs:
       - name: Validate Python and manifest
         run: |
           python -m compileall -q custom_components/doems
-          python -c "import json; d=json.load(open('custom_components/doems/manifest.json')); assert d['version']=='0.2.0-alpha.9.3'"
+          python -c "import json; d=json.load(open('custom_components/doems/manifest.json')); assert d['version']=='0.2.0-alpha.9.4'"
       - name: Publish immutable preview prerelease
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v0.2.0-alpha.9.3 >/dev/null 2>&1; then
+          if gh release view v0.2.0-alpha.9.4 >/dev/null 2>&1; then
             echo "Release already exists; refusing to overwrite"
             exit 1
           fi
-          gh release create v0.2.0-alpha.9.3 \
+          gh release create v0.2.0-alpha.9.4 \
             --target "$GITHUB_SHA" \
-            --title "DOEMS 0.2.0-alpha.9.3 - R9 Thread-Safe Shadow Preview" \
+            --title "DOEMS 0.2.0-alpha.9.4 - Prices DST Fallback and EnergyZero Startup Fix" \
             --prerelease \
-            --notes "R9 thread-safety fix: R7 and R9 worker-thread notifications are marshalled onto the Home Assistant event loop before scheduling tasks. R9 listener errors are isolated. Manual/Automatic/Combined planner logic unchanged. Physical Anker control remains DISABLED. GitHub CI passed on PR #101; Home Assistant live validation is still required."
+            --notes "Prices: conservative Europe/Amsterdam repeated-hour DST fallback uses the higher adjacent Stroomvoorspeller forecast for four missing quarters, marked estimated_dst_fallback; source values always override estimates. EnergyZero startup retry waits for the source and is cancelled on shutdown. Native 15m/72h/288 architecture and shadow-only physical execution remain unchanged. CI passed; live Home Assistant validation remains required."
