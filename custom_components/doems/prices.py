@@ -58,6 +58,7 @@ from .prices_model import (
     ceil_quarter,
     compose_point,
     deduplicate_price_points,
+    dst_fallback_missing_hour,
     expected_quarter_starts,
     floor_quarter,
     gas_equivalent_eur_kwh,
@@ -515,6 +516,16 @@ class DOEMSPricesManager:
                 point.uncertainty_pct = self._safe_float(item.get("uncertainty_pct"))
                 point.regime = item.get("regime")
                 future[q_start] = point
+        # Only repair the entirely absent repeated wintertime hour.
+        for year in {dt_util.utcnow().year, dt_util.utcnow().year + 1}:
+            result = dst_fallback_missing_hour({**future, **known}, year=year)
+            if result is None:
+                continue
+            missing_starts, conservative_price = result
+            for q_start in missing_starts:
+                future[q_start] = self._compose_point(
+                    q_start, conservative_price, "estimated_dst_fallback", 60
+                )
         self.forecast_count = len(future)
 
         indexed, duplicate_count = deduplicate_price_points([*future.values(), *known.values()])
