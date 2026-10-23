@@ -71,15 +71,20 @@ def test_r9_worker_thread_refresh_deduplicates_and_shutdown(monkeypatch):
         hass = SimpleNamespace(loop=loop, async_create_task=create)
         observer = module.DOEMSCombinedExecutionShadowRuntime(hass, SimpleNamespace(), SimpleNamespace())
         evaluations = []
+        entered = asyncio.Event()
+        release = asyncio.Event()
         async def evaluate():
             evaluations.append(1)
-            await asyncio.sleep(0)
+            entered.set()
+            await release.wait()
         observer._evaluate = evaluate
         with ThreadPoolExecutor(max_workers=2) as pool:
             await asyncio.gather(*[loop.run_in_executor(pool, observer.refresh) for _ in range(20)])
+        await asyncio.wait_for(entered.wait(), 1)
+        assert len(tasks) == 1  # A burst during one active drain must not spawn another.
+        release.set()
         await asyncio.sleep(0.05)
         assert evaluations
-        assert len(tasks) == 1
         await observer.async_shutdown()
         observer.refresh()
         await asyncio.sleep(0)
