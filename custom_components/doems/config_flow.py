@@ -278,19 +278,19 @@ class DOEMSOptionsFlow(OptionsFlow):
             return await self.async_step_solar_system()
         if self._pending.get(CONF_PRICES_ENABLED, False):
             return await self.async_step_prices()
-        return self._save()
+        return await self.async_step_anker_control_entities()
 
     async def _continue_after_battery_observation(self) -> ConfigFlowResult:
         if self._pending.get(CONF_SOLAR_FOUNDATION_ENABLED, False):
             return await self.async_step_solar_system()
         if self._pending.get(CONF_PRICES_ENABLED, False):
             return await self.async_step_prices()
-        return self._save()
+        return await self.async_step_anker_control_entities()
 
     async def _continue_after_solar(self) -> ConfigFlowResult:
         if self._pending.get(CONF_PRICES_ENABLED, False):
             return await self.async_step_prices()
-        return self._save()
+        return await self.async_step_anker_control_entities()
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
@@ -303,7 +303,7 @@ class DOEMSOptionsFlow(OptionsFlow):
                 return await self.async_step_solar_system()
             if self._pending.get(CONF_PRICES_ENABLED, False):
                 return await self.async_step_prices()
-            return self._save()
+            return await self.async_step_anker_control_entities()
 
         return self.async_show_form(
             step_id="init",
