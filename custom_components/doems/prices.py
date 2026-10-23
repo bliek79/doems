@@ -426,7 +426,7 @@ class DOEMSPricesManager:
             self._gas_startup_pending = False
             self._cancel_gas_startup_retry()
         except Exception as err:
-            if self._gas_startup_pending and "not loaded" in str(err).lower():
+            if "not loaded" in str(err).lower():
                 self._schedule_gas_startup_retry()
                 return
             self.gas_source_status = "error"
