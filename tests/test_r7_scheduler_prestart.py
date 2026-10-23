@@ -187,3 +187,54 @@ def test_no_r7_physical_actuator_calls():
         result = evaluate(plans=items)
         assert not result["physical_execution_enabled"]
         assert not result["execution_authority"]
+
+
+def test_manual_charge_safe_when_automatic_combined_blocked():
+    blocked = {"status": "blocked", "valid": False, "combined": {
+        "status": "blocked", "valid": False, "blockers": ["planner_automatic_invalid"]}}
+    manual = plan(origin="manual", lifecycle_status="pending", power_w=500)
+    result = model.evaluate_r7(
+        now=NOW, plans={1: manual}, bundle=blocked, battery=battery(),
+        bridge_ready=False, planner_generation=5, source_fresh=True,
+        manual_limits={"max_charge_power_w": 3500,
+                       "max_discharge_power_w": 3500,
+                       "planner_floor_soc_percent": 10},
+    )
+    assert result["status"] == "manual_pending_observe"
+    assert result["safety_status"] == "safe"
+    assert result["safety_blockers"] == []
+    assert result["r5_bundle_current"] is False
+    assert result["can_promote"] is False
+    assert result["physical_execution_enabled"] is False
+
+
+def test_manual_discharge_reserve_and_missing_limits_fail_closed():
+    blocked = {"status": "blocked", "combined": {}}
+    manual = plan(origin="manual", lifecycle_status="pending",
+                  action="ontladen", target_soc=9, power_w=500)
+    kwargs = dict(now=NOW, plans={1: manual}, bundle=blocked,
+                  battery=battery(), bridge_ready=False,
+                  planner_generation=5, source_fresh=True)
+    limits = {"max_charge_power_w": 3500,
+              "max_discharge_power_w": 3500,
+              "planner_floor_soc_percent": 10}
+    result = model.evaluate_r7(**kwargs, manual_limits=limits)
+    assert "execution_reserve_reached" in result["safety_blockers"]
+    assert result["safety_status"] == "blocked"
+    result = model.evaluate_r7(**kwargs, manual_limits={})
+    assert "power_invalid" in result["safety_blockers"]
+    assert "execution_reserve_unavailable" in result["safety_blockers"]
+
+
+def test_automatic_does_not_bypass_blocked_bundle_using_manual_limits():
+    blocked = {"status": "blocked", "valid": False, "combined": {}}
+    result = model.evaluate_r7(
+        now=NOW, plans={1: plan()}, bundle=blocked, battery=battery(),
+        bridge_ready=False, planner_generation=5, source_fresh=True,
+        manual_limits={"max_charge_power_w": 3500,
+                       "max_discharge_power_w": 3500,
+                       "planner_floor_soc_percent": 10},
+    )
+    assert "power_invalid" in result["safety_blockers"]
+    assert "r5_bundle_not_current" in result["prestart_blockers"]
+    assert result["can_promote"] is False

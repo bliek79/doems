@@ -24,7 +24,8 @@ def _num(value: Any) -> float | None:
         return None
 
 def _safety(plan: Mapping[str, Any], battery: Mapping[str, Any],
-            combined: Mapping[str, Any], source_fresh: bool) -> list[str]:
+            combined: Mapping[str, Any], source_fresh: bool,
+            manual_limits: Mapping[str, Any] | None = None) -> list[str]:
     blockers: list[str] = []
     if battery.get("status") != "ready":
         blockers.append("battery_input_not_ready")
@@ -40,7 +41,10 @@ def _safety(plan: Mapping[str, Any], battery: Mapping[str, Any],
     action = plan.get("action")
     power, target, soc = (_num(plan.get("power_w")), _num(plan.get("target_soc")),
                           _num(battery.get("soc_percent")))
-    maximum = _num(combined.get("max_charge_power_w" if action == "laden" else "max_discharge_power_w"))
+    limits = manual_limits if plan.get("origin", "manual") == "manual" else combined
+    if limits is None:
+        limits = {}
+    maximum = _num(limits.get("max_charge_power_w" if action == "laden" else "max_discharge_power_w"))
     if action not in {"laden", "ontladen"}:
         blockers.append("action_invalid")
     if maximum is None or maximum <= 0 or power is None or not 100 <= power <= maximum:
@@ -56,7 +60,7 @@ def _safety(plan: Mapping[str, Any], battery: Mapping[str, Any],
             blockers.append("discharge_target_already_reached")
         if action == "ontladen":
             # R5 owns the hard floor; never derive it from a hardcoded capacity.
-            reserve = _num(combined.get("planner_floor_soc_percent"))
+            reserve = _num(limits.get("planner_floor_soc_percent"))
             if reserve is None:
                 blockers.append("execution_reserve_unavailable")
             elif soc <= reserve or target < reserve:
@@ -66,7 +70,7 @@ def _safety(plan: Mapping[str, Any], battery: Mapping[str, Any],
 def evaluate_r7(*, now: datetime, plans: Mapping[int, Mapping[str, Any]],
                 bundle: Mapping[str, Any], battery: Mapping[str, Any],
                 bridge_ready: bool, planner_generation: int,
-                source_fresh: bool) -> dict[str, Any]:
+                source_fresh: bool, manual_limits: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Select one due plan; only an automatic concept can pass R7-D2 promotion."""
     if now.tzinfo is None:
         raise ValueError("now must be timezone-aware")
@@ -128,7 +132,7 @@ def evaluate_r7(*, now: datetime, plans: Mapping[int, Mapping[str, Any]],
     auto_concept = bool(selected and selected.get("origin") == AUTO_ORIGIN
                         and selected.get("lifecycle_status") == "concept")
     safety_needed = bool(selected and selected.get("lifecycle_status") in {"concept", "pending"})
-    safety_blockers = _safety(selected, battery, combined, source_fresh) if safety_needed else []
+    safety_blockers = _safety(selected, battery, combined, source_fresh, manual_limits) if safety_needed else []
     prestart_blockers: list[str] = []
     if auto_concept:
         if not full_bundle:

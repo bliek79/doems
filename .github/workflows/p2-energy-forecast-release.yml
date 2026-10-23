@@ -41,7 +41,7 @@ jobs:
           test ! -f scripts/build_brand_assets.py
           test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
           test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
-          grep -F 'VERSION = "0.2.0-alpha.9.0"' custom_components/doems/const.py
+          grep -F 'VERSION = "0.2.0-alpha.9.1"' custom_components/doems/const.py
           test -f tests/test_reset_solar_array_performance_recovery.py
           test -f custom_components/doems/solar_actual.py
           test -f tests/test_solar_actual_quarter_validation.py
@@ -82,7 +82,7 @@ jobs:
           grep -F 'DOEMSAutoSlotBridge' custom_components/doems/__init__.py
           grep -F '"performance_factor_percent"' custom_components/doems/config_flow.py
           grep -F '"array_performance_factors": array_performance_factors' custom_components/doems/solar_forecast.py
-          grep -F '"version": "0.2.0-alpha.9.0"' custom_components/doems/manifest.json
+          grep -F '"version": "0.2.0-alpha.9.1"' custom_components/doems/manifest.json
           grep -F 'build_prices_sensors' custom_components/doems/sensor.py
           grep -F 'DOEMSRegisteredPricesManager' custom_components/doems/__init__.py
           grep -F 'GAS_SOURCE_ENERGYZERO_MARKET_ACTION' custom_components/doems/const.py
@@ -208,9 +208,10 @@ jobs:
           ! grep -F 'sensor.doems_ems_plan72_hours' examples/doems_planner_dashboard.yaml
           ! grep -F 'doems_r5_1_' examples/doems_planner_dashboard.yaml
           ! grep -F 'observational_only' examples/doems_planner_dashboard.yaml
-          # Manual concept expiry is user-approved. Frozen unrelated R0-R6 digests stay unchanged.
+          # Manual concept expiry is user-approved. Pin the manual store to the
+          # published alpha.9.1 release blob; unrelated R0-R6 digests stay unchanged.
           test "$(git hash-object custom_components/doems/manual_plan_model.py)" = "ffc7f7e9aa73078d72e8df88f5359590aa812657"
-          test "$(git hash-object custom_components/doems/manual_plan_store.py)" = "01a895d2acb2369a66483796567a64fe0dfbc333"
+          test "$(git hash-object custom_components/doems/manual_plan_store.py)" = "bc8d3c3ece9eb74d1d17ec166edbf15e792e959d"
           test "$(git hash-object custom_components/doems/manual_plan_services.py)" = "1826839068587491ed6b51caffd464861af009f7"
           test "$(git hash-object custom_components/doems/manual_plan_lifecycle.py)" = "4d69c84ba7608bde36089f00c14cbc79e46b46a3"
           test "$(git hash-object custom_components/doems/manual_plan_lifecycle_model.py)" = "3a8688ac9a18dba133136d4124b8772c8e49222e"
