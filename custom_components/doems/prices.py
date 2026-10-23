@@ -12,10 +12,10 @@ import logging
 from typing import Any
 from collections.abc import Callable
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
+from homeassistant.helpers.event import async_call_later, async_track_state_change_event, async_track_time_interval
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -58,6 +58,7 @@ from .prices_model import (
     ceil_quarter,
     compose_point,
     deduplicate_price_points,
+    dst_fallback_missing_hour,
     expected_quarter_starts,
     floor_quarter,
     gas_equivalent_eur_kwh,
@@ -73,6 +74,7 @@ PRICES_URL = "https://stroomvoorspeller.nl/data/prices.json"
 FORECAST_URL = "https://stroomvoorspeller.nl/data/forecast.json"
 REFRESH_INTERVAL = timedelta(minutes=30)
 SOURCE_STALE_AFTER = timedelta(hours=28)
+GAS_STARTUP_RETRY_SECONDS = 30
 
 PUBLIC_ENTITY_IDS = (
     "sensor.doems_prices_status",
@@ -125,6 +127,9 @@ class DOEMSPricesManager:
         self.gas_source_error: str | None = None
         self.gas_source_timestamp: str | None = None
         self.gas_source_points = 0
+        self._gas_startup_retry_unsub = None
+        self._gas_startup_pending = False
+        self._shutdown = False
 
     @property
     def options(self) -> dict[str, Any]:
@@ -297,6 +302,8 @@ class DOEMSPricesManager:
             )
 
     async def async_shutdown(self) -> None:
+        self._shutdown = True
+        self._cancel_gas_startup_retry()
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()
@@ -345,6 +352,33 @@ class DOEMSPricesManager:
         )
         self.gas_source_points = 1 if market is not None else 0
 
+    def _cancel_gas_startup_retry(self) -> None:
+        if self._gas_startup_retry_unsub is not None:
+            self._gas_startup_retry_unsub()
+            self._gas_startup_retry_unsub = None
+
+    def _schedule_gas_startup_retry(self) -> None:
+        if self._shutdown or self._gas_startup_retry_unsub is not None:
+            return
+        self._gas_startup_pending = True
+        self.gas_source_status = "wachten_op_bron"
+        self.gas_source_error = None
+        self._gas_startup_retry_unsub = async_call_later(
+            self.hass, GAS_STARTUP_RETRY_SECONDS, self._gas_startup_retry_callback
+        )
+
+    @callback
+    def _gas_startup_retry_callback(self, _now: datetime) -> None:
+        self._gas_startup_retry_unsub = None
+        if not self._shutdown:
+            self.hass.async_create_task(self._async_retry_gas_startup())
+
+    async def _async_retry_gas_startup(self) -> None:
+        await self._async_refresh_gas_source()
+        if not self._shutdown:
+            self._publish_states()
+            self._notify()
+
     async def _async_refresh_gas_source(self) -> None:
         if not self.gas_enabled:
             self._gas_action_market_price = None
@@ -356,17 +390,18 @@ class DOEMSPricesManager:
             self._refresh_entity_gas_source()
             return
 
-        self._gas_action_market_price = None
-        self.gas_source_timestamp = None
-        self.gas_source_points = 0
         entry_id = self.gas_energyzero_config_entry
         if not entry_id:
             self.gas_source_status = "error"
             self.gas_source_error = "energyzero_config_entry_missing"
             return
+        source_entry = self.hass.config_entries.async_get_entry(entry_id)
+        if source_entry is None or source_entry.state != ConfigEntryState.LOADED:
+            self._schedule_gas_startup_retry()
+            return
         if not self.hass.services.has_service("energyzero", "get_gas_prices"):
             self.gas_source_status = "error"
-            self.gas_source_error = "energyzero_get_gas_prices_service_unavailable"
+            self._schedule_gas_startup_retry()
             return
 
         try:
@@ -389,8 +424,12 @@ class DOEMSPricesManager:
             self.gas_source_points = points
             self.gas_source_status = "ok"
             self.gas_source_error = None
+            self._gas_startup_pending = False
+            self._cancel_gas_startup_retry()
         except Exception as err:
-            self._gas_action_market_price = None
+            if "not loaded" in str(err).lower():
+                self._schedule_gas_startup_retry()
+                return
             self.gas_source_status = "error"
             self.gas_source_error = f"{type(err).__name__}: {err}"
             _LOGGER.warning(
@@ -477,6 +516,16 @@ class DOEMSPricesManager:
                 point.uncertainty_pct = self._safe_float(item.get("uncertainty_pct"))
                 point.regime = item.get("regime")
                 future[q_start] = point
+        # Only repair the entirely absent repeated wintertime hour.
+        for year in {dt_util.utcnow().year, dt_util.utcnow().year + 1}:
+            result = dst_fallback_missing_hour({**future, **known}, year=year)
+            if result is None:
+                continue
+            missing_starts, conservative_price = result
+            for q_start in missing_starts:
+                future[q_start] = self._compose_point(
+                    q_start, conservative_price, "estimated_dst_fallback", 60
+                )
         self.forecast_count = len(future)
 
         indexed, duplicate_count = deduplicate_price_points([*future.values(), *known.values()])
