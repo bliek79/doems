@@ -2,7 +2,7 @@ name: Publish R9 preview prerelease
 on:
   push:
     branches:
-      - release/r9-manual-independent-alpha9.2
+      - release/r9-threadsafe-alpha9.3
   workflow_dispatch:
 permissions:
   contents: write
@@ -14,17 +14,17 @@ jobs:
       - name: Validate Python and manifest
         run: |
           python -m compileall -q custom_components/doems
-          python -c "import json; d=json.load(open('custom_components/doems/manifest.json')); assert d['version']=='0.2.0-alpha.9.2'"
+          python -c "import json; d=json.load(open('custom_components/doems/manifest.json')); assert d['version']=='0.2.0-alpha.9.3'"
       - name: Publish immutable preview prerelease
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v0.2.0-alpha.9.2 >/dev/null 2>&1; then
+          if gh release view v0.2.0-alpha.9.3 >/dev/null 2>&1; then
             echo "Release already exists; refusing to overwrite"
             exit 1
           fi
-          gh release create v0.2.0-alpha.9.2 \
+          gh release create v0.2.0-alpha.9.3 \
             --target "$GITHUB_SHA" \
-            --title "DOEMS 0.2.0-alpha.9.2 - R9 Manual Independence Shadow Preview" \
+            --title "DOEMS 0.2.0-alpha.9.3 - R9 Thread-Safe Shadow Preview" \
             --prerelease \
-            --notes "R9 shadow preview: manual R7 safety validates independent configured charge/discharge limits and hard SOC reserve when Automatic/Combined is blocked. All 238 Python tests and three GitHub CI workflows passed on the source PR. Physical Anker control remains DISABLED. Home Assistant live validation is still required; do not use for live battery execution."
+            --notes "R9 thread-safety fix: R7 and R9 worker-thread notifications are marshalled onto the Home Assistant event loop before scheduling tasks. R9 listener errors are isolated. Manual/Automatic/Combined planner logic unchanged. Physical Anker control remains DISABLED. GitHub CI passed on PR #101; Home Assistant live validation is still required."
