@@ -116,7 +116,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
     r7_scheduler = DOEMSR7Scheduler(hass, planner, r6_slot_bridge, manual_plan_store, battery_input)
     await r7_scheduler.async_setup()
 
-    combined_execution_shadow = DOEMSCombinedExecutionShadowRuntime(hass, r7_scheduler, manual_plan_store)
+    combined_execution_shadow = DOEMSCombinedExecutionShadowRuntime(
+        hass, r7_scheduler, manual_plan_store,
+        planner=planner, battery=battery_input,
+    )
     await combined_execution_shadow.async_setup()
 
     entry.runtime_data = coordinator
