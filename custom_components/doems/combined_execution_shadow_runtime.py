@@ -14,16 +14,19 @@ from homeassistant.core import callback
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
+from .combined_anker_bridge import CombinedAnkerBridge
 from .execution_controller import ExecutionController
 from .execution_anker_adapter import AnkerExecutionAdapter
 
 
 class DOEMSCombinedExecutionShadowRuntime:
-    def __init__(self, hass: Any, scheduler: Any, store: Any, *, entities=None, authority=False) -> None:
+    def __init__(self, hass: Any, scheduler: Any, store: Any, *, entities=None, authority=False, planner=None, battery=None) -> None:
         self.hass = hass
         self.scheduler = scheduler
         self.store = store
         self._authority = bool(authority)
+        self._combined_bridge = CombinedAnkerBridge(planner, AnkerExecutionAdapter(hass, entities or {}, authority=False), battery=battery, authority=False, exclusive=False) if planner is not None else None
+        self._combined_last_result: dict[str, Any] = {"bridge": "startup", "physical_execution_enabled": False}
         self.adapter = AnkerExecutionAdapter(hass, entities or {}, authority=self._authority)
         self.controller = ExecutionController(self.adapter, authorized=lambda: self._authority, revalidate=self._identity_current)
         self._active_plan = None
@@ -111,6 +114,14 @@ class DOEMSCombinedExecutionShadowRuntime:
                     continue
 
     async def _evaluate(self) -> None:
+        if self._combined_bridge is not None:
+            try:
+                self._combined_last_result = await self._combined_bridge.async_reconcile(dt_util.utcnow())
+            except Exception as exc:
+                self._combined_last_result = {
+                    "bridge": "blocked", "reason": "combined_handoff_error",
+                    "error_type": type(exc).__name__, "physical_execution_enabled": False,
+                }
         if self._authority:
             await self._execute_or_monitor()
         decision = dict(self.scheduler.last_result)
@@ -156,6 +167,7 @@ class DOEMSCombinedExecutionShadowRuntime:
             "execution_authorized": self._authority,
             "reconciliation_required": self.controller.reconciliation_required,
             "last_stop_blockers": list(self._last_stop_blockers),
+            "combined_handoff": deepcopy(self._combined_last_result),
         }
 
     def _identity(self, slot, plan):
@@ -269,4 +281,6 @@ class DOEMSCombinedExecutionShadowRuntime:
             await self._task
         if self._authority and (self.controller.session is not None or self.controller.reconciliation_required):
             await self.controller.stop()
+        if self._combined_bridge is not None:
+            await self._combined_bridge.async_shutdown()
         self._listeners.clear()
