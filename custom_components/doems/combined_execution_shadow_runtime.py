@@ -74,7 +74,7 @@ class DOEMSCombinedExecutionShadowRuntime:
     async def async_setup(self) -> None:
         self._unsubs.append(self.scheduler.async_add_listener(self.refresh))
         self._unsubs.append(self.store.add_listener(self.refresh))
-        self._unsubs.append(async_track_time_interval(self.hass, self._tick, timedelta(minutes=1)))
+        self._unsubs.append(async_track_time_interval(self.hass, self._tick, timedelta(seconds=5)))
         self.refresh()
 
     def _tick(self, _now: Any) -> None:
