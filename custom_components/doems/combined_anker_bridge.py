@@ -16,7 +16,7 @@ from .execution_controller import ExecutionController
 class CombinedAnkerBridge:
     def __init__(self, planner: Any, adapter: Any, *, battery: Any = None,
                  authority: bool = False, exclusive: bool = False,
-                 controller: ExecutionController | None = None) -> None:
+                 controller: ExecutionController) -> None:
         self.planner = planner
         self.adapter = adapter
         self.battery = battery
@@ -25,9 +25,7 @@ class CombinedAnkerBridge:
         self._lock = asyncio.Lock()
         self._startup_checked = False
         self._completed_slots: set[tuple] = set()
-        self.controller = controller if controller is not None else ExecutionController(
-            adapter, authorized=self._authorized, revalidate=self._still_current
-        )
+        self.controller = controller
 
     def _authorized(self) -> bool:
         return bool(self.authority and self.exclusive and self.adapter.authority)
