@@ -61,6 +61,8 @@ class CombinedAnkerBridge:
         async with self._lock:
             decision = self._decision(now)
             if not self._authorized():
+                if self.controller.session is not None or self.controller.reconciliation_required:
+                    await self.controller.stop()
                 return {**decision, "bridge": "authority_disabled", "physical_execution_enabled": False}
             if not self._startup_checked:
                 mode = self.adapter._state("operating_mode")
