@@ -28,7 +28,7 @@ class DOEMSCombinedExecutionShadowRuntime:
         self._combined_bridge = None
         self._combined_last_result: dict[str, Any] = {"bridge": "startup", "physical_execution_enabled": False}
         self.adapter = AnkerExecutionAdapter(hass, entities or {}, authority=self._authority)
-        self.controller = ExecutionController(self.adapter, authorized=lambda: self._authority, revalidate=self._combined_identity_current)
+        self.controller = ExecutionController(self.adapter, authorized=self._combined_authorized, revalidate=self._combined_identity_current)
         if planner is not None:
             self._combined_bridge = CombinedAnkerBridge(
                 planner, self.adapter, battery=battery, authority=False,
@@ -53,6 +53,9 @@ class DOEMSCombinedExecutionShadowRuntime:
             if listener in self._listeners:
                 self._listeners.remove(listener)
         return remove
+
+    def _combined_authorized(self) -> bool:
+        return bool(self._combined_bridge is not None and self._combined_bridge._authorized())
 
     def _combined_identity_current(self, identity: tuple) -> bool:
         return bool(self._combined_bridge is not None and self._combined_bridge._still_current(identity))
@@ -122,7 +125,7 @@ class DOEMSCombinedExecutionShadowRuntime:
                     continue
 
     async def _evaluate(self) -> None:
-        if self._combined_bridge is not None and not self._authority:
+        if self._combined_bridge is not None:
             try:
                 self._combined_last_result = await self._combined_bridge.async_reconcile(dt_util.utcnow())
             except Exception as exc:
