@@ -13,22 +13,30 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      matrix:
+        include:
+          - python: '3.13'
+            homeassistant: '2026.2.3'
+          - python: '3.14'
+            homeassistant: '2026.9.3'
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
-      - run: python -m pip install pytest pytest-asyncio homeassistant==2026.2.3
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install pytest pytest-asyncio homeassistant==${{ matrix.homeassistant }}
       - run: python -m compileall -q custom_components/doems scripts
       - run: python -m pytest -q --junitxml=test-results.xml
+      - run: python scripts/import_smoke.py
       - name: Preserve approved brand icon
         run: test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
       - run: python scripts/release_contract.py --build dist
       - uses: actions/upload-artifact@v4
         with:
-          name: verified-release
+          name: verified-release-${{ matrix.python }}
           path: |
             dist/doems.zip
             dist/SHA256SUMS.txt
@@ -48,7 +56,7 @@ jobs:
           python-version: '3.13'
       - uses: actions/download-artifact@v4
         with:
-          name: verified-release
+          name: verified-release-3.14
           path: dist
       - name: Validate tested artifact and refuse existing tags or releases
         env:

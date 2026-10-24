@@ -49,7 +49,8 @@ Dynamic power caps remain deferred under the 23 October routebaseline decision.
 
 ## Executed local checks
 
-Python 3.13.16 with Home Assistant 2026.2.3: 289 tests passed. The complete
+Python 3.13.16 with Home Assistant 2026.2.3: 289 tests passed.
+Python 3.14.8 with Home Assistant 2026.9.3: 289 tests passed. The complete
 suite covers Manual/Automatic/Combined, manual priority, quarter contracts,
 three-slot synchronization, persistence, promotion, expiry, source blocking,
 SOC policy, thread notifications, controller authorization and reconciliation.
@@ -66,7 +67,9 @@ These tests are not live battery measurements.
 Five added release-contract tests reject version drift, wrong release tags,
 stale archives and unexpected archive contents, and verify deterministic ZIPs.
 Integration setup, config_flow, sensor, binary_sensor, number, select and
-datetime modules import successfully with the stated Home Assistant package.
+datetime modules import successfully with both stated Home Assistant packages.
+All integration modules additionally pass the standalone import smoke check
+with Home Assistant 2026.9.3. CI includes both supported test environments.
 Compile checks cover integration and release scripts.
 
 ## Release controls
