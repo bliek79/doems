@@ -96,6 +96,8 @@ class AnkerExecutionAdapter:
             raise HomeAssistantError("Invalid action or setpoint")
         if not revalidate():
             raise HomeAssistantError("Final revalidation failed before mode switch")
+        if self._state("operating_mode") != SELF_MODE:
+            raise HomeAssistantError("Start requires self-consumption mode")
         # A stale control mode cannot be treated as a fresh zero-power acknowledgement.
         if self._state("operating_mode") is None:
             raise HomeAssistantError("Operating mode unavailable before start")

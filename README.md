@@ -4,7 +4,9 @@ DOEMS is a Home Assistant Energy Management System integration built component b
 
 ## Current stage
 
-`0.1.0-alpha.7.6` is a focused **branding hotfix**. DOEMS now uses byte-for-byte the same existing `brand/icon.png` as the already working Dummy OS Data and Anker EMS integrations. No new artwork, crop, generated variant or MDI is used. Runtime logic is unchanged.
+`0.2.0-alpha.9.5` is the R9 recovery prerelease. Manual and Automatic feed the Combined planner; the Combined bridge has one shared Anker execution controller. Physical authority remains disabled by default. Installation does not enable battery control. Dynamic power caps are deferred.
+
+Software regression and mocked service tests are distinct from Home Assistant installation and live battery verification. See `docs/recovery_audit.md` for scope and evidence. Existing release tags are preserved.
 
 The current integration provides:
 
@@ -35,7 +37,7 @@ Energy Forecast retains the native DOEMS time contract: 15-minute resolution, 72
 
 Solar uses a provider-neutral installation contract with stable inverter-group and array IDs. Open-Meteo is the current primary provider. The P3.1 runtime publishes a generic 1..N array forecast while preserving the fixed 15-minute / 72-hour / 288-slot contract.
 
-The Alpha41 Solar reference freeze remains available for migration validation. Local shading/obstruction learning is a later observer-only Solar expansion and is not part of Alpha7.
+The retired Alpha41 Solar reference freeze is removed idempotently during setup. Local shading and obstruction learning remain outside this recovery.
 
 ## Prices P4
 

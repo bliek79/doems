@@ -1,312 +1,78 @@
-name: DOEMS CI and 0.2.0-alpha.9.0 Manual Concept Expiry Cleanup
-
+name: DOEMS validation and immutable release
 on:
   pull_request:
   push:
-    branches: [release-0.2.0-alpha.9.0]
+    branches: [main]
   workflow_dispatch:
-
 permissions:
-  contents: write
-
+  contents: read
+concurrency:
+  group: doems-release-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   validate:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - run: python -m pip install --upgrade pip pytest
-      - run: python -m compileall -q custom_components/doems
-      - run: pytest -q --durations=15
-      - name: Validate JSON files
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          for path in Path('custom_components/doems').rglob('*.json'):
-              json.loads(path.read_text(encoding='utf-8'))
-              print(f'valid: {path}')
-          PY
-      - name: Validate 0.2.0-alpha.9.0 R7 R6 integration and frozen baseline
-        run: |
-          test -f RELEASE_NOTES_0.2.0-alpha.9.0.md
-          test -f examples/prices_p4_forecast_card.yaml
-          test -f custom_components/doems/prices.py
-          test -f custom_components/doems/prices_model.py
-          test -f custom_components/doems/prices_sensor.py
-          test -f custom_components/doems/prices_runtime.py
-          test -f custom_components/doems/brand/icon.png
-          test ! -f scripts/build_brand_assets.py
-          test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
-          test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
-          grep -F 'VERSION = "0.2.0-alpha.9.3"' custom_components/doems/const.py
-          test -f tests/test_reset_solar_array_performance_recovery.py
-          test -f custom_components/doems/solar_actual.py
-          test -f tests/test_solar_actual_quarter_validation.py
-          grep -F 'SolarActualQuarterManager' custom_components/doems/__init__.py
-          grep -F 'doems_solar_actual_quarter' custom_components/doems/solar_sensor.py
-          grep -F 'forecast_point_for_start' custom_components/doems/solar_forecast.py
-          grep -F 'SOLAR_DEFAULT_PERFORMANCE_FACTOR = 0.90' custom_components/doems/const.py
-          test -f tests/test_r6_slot_bridge_model.py
-          test -f tests/test_r6_slot_store.py
-          test -f tests/test_r6_slot_bridge_runtime.py
-          test -f custom_components/doems/r7_model.py
-          test -f custom_components/doems/r7_runtime.py
-          test -f tests/test_r7_scheduler_prestart.py
-          test -f tests/test_r7_plan_store_promotion.py
-          test -f tests/test_r7_runtime_boundary.py
-          test -f custom_components/doems/automatic_plan_contract.py
-          test -f tests/test_r7_r6_quarter_chain.py
-          test -f tests/test_r7_auto_quarter_contract.py
-          grep -F 'validate_automatic_plan' custom_components/doems/manual_plan_store.py
-          grep -F 'validate_automatic_plan' custom_components/doems/r7_model.py
-          grep -F 'MIN_AUTO_RUNTIME_H = 0.25' custom_components/doems/automatic_plan_contract.py
-          ! grep -q 'async_call(' custom_components/doems/automatic_plan_contract.py
-          ! grep -q 'async_call(' custom_components/doems/r7_model.py
-          grep -F 'class DOEMSR7Scheduler' custom_components/doems/r7_runtime.py
-          grep -F 'async_promote_automatic_plan' custom_components/doems/manual_plan_store.py
-          grep -F 'doems_scheduler_status' custom_components/doems/sensor.py
-          grep -F 'doems_r7_scheduler_status' custom_components/doems/planner_migration.py
-          grep -F 'sensor.doems_scheduler_status' examples/doems_scheduler_status_card.yaml
-          ! grep -qF 'doems_r7_scheduler_status' custom_components/doems/sensor.py
-          ! grep -qF 'doems_r7_scheduler_status' examples/doems_scheduler_status_card.yaml
-          test -f tests/test_scheduler_identity_migration.py
-          test -f examples/doems_scheduler_status_card.yaml
-          test ! -e examples/doems_r7_scheduler_status_card.yaml
-          grep -F 'physical_execution_enabled' custom_components/doems/r7_model.py
-          grep -F 'AUTO_ORIGIN = "automatic_72h_planner"' custom_components/doems/manual_plan_store.py
-          grep -F 'async_sync_automatic_plans' custom_components/doems/manual_plan_store.py
-          grep -F 'build_automatic_slot_proposals' custom_components/doems/automatic_slot_bridge_model.py
-          grep -F 'DOEMSAutoSlotBridge' custom_components/doems/__init__.py
-          grep -F '"performance_factor_percent"' custom_components/doems/config_flow.py
-          grep -F '"array_performance_factors": array_performance_factors' custom_components/doems/solar_forecast.py
-          grep -F '"version": "0.2.0-alpha.9.3"' custom_components/doems/manifest.json
-          grep -F 'build_prices_sensors' custom_components/doems/sensor.py
-          grep -F 'DOEMSRegisteredPricesManager' custom_components/doems/__init__.py
-          grep -F 'GAS_SOURCE_ENERGYZERO_MARKET_ACTION' custom_components/doems/const.py
-          grep -F '"get_gas_prices"' custom_components/doems/prices.py
-          grep -F '"incl_vat": True' custom_components/doems/prices.py
-          grep -F 'CONF_GAS_ENERGYZERO_CONFIG_ENTRY' custom_components/doems/config_flow.py
-          grep -F 'GAS_HIGHER_HEATING_VALUE_KWH_M3 = 9.77' custom_components/doems/const.py
-          grep -F 'doems_prices_gas_vs_electricity' custom_components/doems/prices_sensor.py
-          grep -F 'energy_carrier_price_only' custom_components/doems/prices.py
-          grep -F 'sensor.doems_prices_timeline' examples/prices_p4_forecast_card.yaml
-          grep -F 'import_all_in' examples/prices_p4_forecast_card.yaml
-          grep -F 'export_all_in' examples/prices_p4_forecast_card.yaml
-          test ! -f custom_components/doems/solar_reference_freeze.py
-          test ! -f custom_components/doems/solar_reference_freeze_runtime.py
-          test ! -f custom_components/doems/button.py
-          test ! -f tests/test_solar_reference_freeze_contract.py
-          test ! -f examples/alpha41_solar_freeze_dashboard.yaml
-          ! grep -R -F 'doems_capture_alpha41_solar_freeze' custom_components/doems
-          ! grep -R -F 'doems_alpha41_solar_freeze_captured' custom_components/doems
-          test -f custom_components/doems/battery_contract.py
-          test -f custom_components/doems/battery_contract_model.py
-          test -f tests/test_alpha2_battery_input_contract.py
-          grep -F 'CONF_BATTERY_OBSERVATION_ENABLED' custom_components/doems/const.py
-          grep -F 'CONF_BATTERY_SOC_ENTITY' custom_components/doems/const.py
-          grep -F 'CONF_BATTERY_CAPACITY_ENTITY' custom_components/doems/const.py
-          grep -F 'DOEMSBatteryInputContract' custom_components/doems/__init__.py
-          grep -F 'doems_battery_input_status' custom_components/doems/sensor.py
-          grep -F '"physical_execution_authority": False' custom_components/doems/battery_contract_model.py
-          grep -F 'def _battery_power_sources_reusable' custom_components/doems/config_flow.py
-          grep -F 'if not reuse_power_sources:' custom_components/doems/config_flow.py
-          test -f custom_components/doems/manual_plan_model.py
-          test -f custom_components/doems/manual_plan_store.py
-          test -f custom_components/doems/manual_plan_services.py
-          test -f custom_components/doems/number.py
-          test -f custom_components/doems/datetime.py
-          test -f custom_components/doems/services.yaml
-          test -f tests/test_alpha3_manual_plan_store_contract.py
-          grep -F 'DOEMSManualPlanStore' custom_components/doems/__init__.py
-          grep -F 'doems_plan_{slot}_status' custom_components/doems/sensor.py
-          grep -F 'doems_plan_{slot}_{field}' custom_components/doems/select.py
-          grep -F 'doems_plan_{slot}_{definition.object_suffix}' custom_components/doems/number.py
-          grep -F 'doems_plan_{slot}_start_time' custom_components/doems/datetime.py
-          ! grep -R -F 'automatic_72h_planner' custom_components/doems/manual_plan_store.py custom_components/doems/manual_plan_services.py
-          ! grep -R -F 'async_call(' custom_components/doems/manual_plan_store.py custom_components/doems/manual_plan_services.py
-          test -f custom_components/doems/manual_soc_projection_model.py
-          test -f custom_components/doems/manual_soc_projection.py
-          test -f tests/test_alpha4_manual_soc_projection_contract.py
-          grep -F 'DOEMSManualSOCProjection' custom_components/doems/__init__.py
-          grep -F 'doems_manual_planner' custom_components/doems/sensor.py
-          grep -F 'doems_manual_soc_projection_timeline' custom_components/doems/sensor.py
-          ! grep -F 'doems_ems_plan72_hours' custom_components/doems/sensor.py
-          grep -F 'FORECAST_SLOTS = 288' custom_components/doems/manual_soc_projection_model.py
-          grep -F 'CHARGE_EFFICIENCY = 0.92' custom_components/doems/manual_soc_projection_model.py
-          grep -F 'DISCHARGE_EFFICIENCY = 0.92' custom_components/doems/manual_soc_projection_model.py
-          grep -F 'MIN_SOC_PERCENT = 5.0' custom_components/doems/manual_soc_projection_model.py
-          grep -F '"automatic_planner_active": False' custom_components/doems/manual_soc_projection_model.py
-          grep -F '"scheduler_active": False' custom_components/doems/manual_soc_projection_model.py
-          grep -F '"physical_execution_authority": False' custom_components/doems/manual_soc_projection_model.py
-          ! grep -R -F 'async_call(' custom_components/doems/manual_soc_projection.py custom_components/doems/manual_soc_projection_model.py
-          ! grep -R -F 'third_party_control' custom_components/doems/manual_soc_projection.py custom_components/doems/manual_soc_projection_model.py
-          ! grep -R -F 'automatic_72h_planner' custom_components/doems/manual_soc_projection.py custom_components/doems/manual_soc_projection_model.py
-          test -f custom_components/doems/manual_plan_lifecycle_model.py
-          test -f custom_components/doems/manual_plan_lifecycle.py
-          test -f tests/test_alpha5_manual_lifecycle_expiry_contract.py
-          grep -F 'DOEMSManualPlanLifecycle' custom_components/doems/__init__.py
-          grep -F 'doems_manual_plan_lifecycle' custom_components/doems/sensor.py
-          grep -F 'async_release_expired_manual_plans' custom_components/doems/manual_plan_store.py
-          grep -F 'MANUAL_EXPIRY_REASON = "manual_start_window_expired"' custom_components/doems/manual_plan_lifecycle_model.py
-          grep -F 'MANUAL_RELEASE_REASON = "manual_expired_released"' custom_components/doems/manual_plan_lifecycle_model.py
-          grep -F 'MANUAL_CONCEPT_EXPIRY_REASON = "manual_concept_start_window_expired"' custom_components/doems/manual_plan_lifecycle_model.py
-          grep -F 'MANUAL_CONCEPT_RELEASE_REASON = "manual_concept_expired_released"' custom_components/doems/manual_plan_lifecycle_model.py
-          grep -F 'previous_lifecycle_status' custom_components/doems/manual_plan_store.py
-          test -f tests/test_manual_concept_model.py
-          test -f tests/test_manual_concept_store_integration.py
-          ! grep -R -F 'async_call(' custom_components/doems/manual_plan_store.py custom_components/doems/manual_plan_lifecycle.py custom_components/doems/manual_plan_lifecycle_model.py
-          grep -F 'async_track_point_in_utc_time' custom_components/doems/manual_plan_lifecycle.py
-          grep -F '"physical_execution_authority": False' custom_components/doems/manual_plan_lifecycle.py
-          grep -F '"scheduler_active": False' custom_components/doems/manual_plan_lifecycle.py
-          grep -F '"automatic_planner_active": False' custom_components/doems/manual_plan_lifecycle.py
-          ! grep -R -F 'async_call(' custom_components/doems/manual_plan_lifecycle.py custom_components/doems/manual_plan_lifecycle_model.py
-          ! grep -R -F 'third_party_control' custom_components/doems/manual_plan_lifecycle.py custom_components/doems/manual_plan_lifecycle_model.py
-          ! grep -R -F 'DOEMSScheduler' custom_components/doems/manual_plan_lifecycle.py custom_components/doems/manual_plan_lifecycle_model.py
-          test -f custom_components/doems/automatic_combined_planner_model.py
-          test -f custom_components/doems/automatic_combined_planner_runtime.py
-          test -f custom_components/doems/automatic_combined_planner.py
-          test -f custom_components/doems/planner_migration.py
-          test -f tests/test_alpha7_1_planner_migration_contract.py
-          test -f examples/doems_planner_dashboard.yaml
-          test ! -f custom_components/doems/r5_preview_model.py
-          test ! -f custom_components/doems/r5_preview_runtime.py
-          test ! -f custom_components/doems/r5_preview.py
-          test ! -f tests/test_alpha7_r5_1_rebuild_contract.py
-          grep -F 'doems_manual_planner' custom_components/doems/sensor.py
-          grep -F 'doems_manual_soc_projection_timeline' custom_components/doems/sensor.py
-          grep -F 'doems_automatic_planner' custom_components/doems/sensor.py
-          grep -F 'doems_automatic_soc_projection_timeline' custom_components/doems/sensor.py
-          grep -F 'doems_combined_planner' custom_components/doems/sensor.py
-          grep -F 'doems_combined_soc_projection_timeline' custom_components/doems/sensor.py
-          ! grep -F 'doems_ems_plan72_hours' custom_components/doems/sensor.py
-          ! grep -F 'doems_r5_1_' custom_components/doems/sensor.py
-          ! grep -Ei 'shadow|observational_only|preview' custom_components/doems/sensor.py custom_components/doems/automatic_combined_planner.py custom_components/doems/automatic_combined_planner_runtime.py custom_components/doems/automatic_combined_planner_model.py
-          grep -F 'async_add_executor_job' custom_components/doems/automatic_combined_planner.py
-          grep -F 'def planner_timeline_slots(self, reference: datetime)' custom_components/doems/prices.py
-          grep -F '"peak_sale_enabled": False' custom_components/doems/automatic_combined_planner_model.py
-          grep -F '"plan_store_writes_enabled": False' custom_components/doems/automatic_combined_planner_model.py
-          grep -F '"scheduler_enabled": False' custom_components/doems/automatic_combined_planner_model.py
-          grep -F '"safety_prestart_enabled": False' custom_components/doems/automatic_combined_planner_model.py
-          grep -F '"execution_enabled": False' custom_components/doems/automatic_combined_planner_model.py
-          grep -F '"physical_execution_enabled": False' custom_components/doems/automatic_combined_planner_model.py
-          grep -F 'CONF_PLANNER_SOFTWARE_RESERVE_PERCENT' custom_components/doems/const.py
-          grep -F 'DEFAULT_PLANNER_SOFTWARE_RESERVE_PERCENT = 5.0' custom_components/doems/const.py
-          grep -F 'DEFAULT_PLANNER_MAX_CHARGE_POWER_W = 3500.0' custom_components/doems/const.py
-          grep -F 'DEFAULT_PLANNER_MAX_DISCHARGE_POWER_W = 3500.0' custom_components/doems/const.py
-          grep -F 'DEFAULT_PLANNER_MINIMUM_TRADE_MARGIN_EUR_PER_KWH = 0.10' custom_components/doems/const.py
-          grep -F 'sensor.doems_combined_planner' examples/doems_planner_dashboard.yaml
-          grep -F "const combinedEntity = hass.states['sensor.doems_combined_planner'];" examples/doems_planner_dashboard.yaml
-          ! grep -F 'entity: sensor.doems_combined_planner' <(sed -n '1,140p' examples/doems_planner_dashboard.yaml)
-          grep -F 'registry.async_remove(old_entity_id)' custom_components/doems/planner_migration.py
-          grep -F 'manual_charge_kwh' examples/doems_planner_dashboard.yaml
-          grep -F 'manual_discharge_kwh' examples/doems_planner_dashboard.yaml
-          grep -F 'price_source' examples/doems_planner_dashboard.yaml
-          grep -F 'dynamic_reserve_floor_end_soc_percent' examples/doems_planner_dashboard.yaml
-          ! grep -F 'sensor.doems_ems_plan72_hours' examples/doems_planner_dashboard.yaml
-          ! grep -F 'doems_r5_1_' examples/doems_planner_dashboard.yaml
-          ! grep -F 'observational_only' examples/doems_planner_dashboard.yaml
-          # Manual concept expiry is user-approved. Pin the manual store to the
-          # published alpha.9.1 release blob; unrelated R0-R6 digests stay unchanged.
-          test "$(git hash-object custom_components/doems/manual_plan_model.py)" = "ffc7f7e9aa73078d72e8df88f5359590aa812657"
-          test "$(git hash-object custom_components/doems/manual_plan_store.py)" = "bc8d3c3ece9eb74d1d17ec166edbf15e792e959d"
-          test "$(git hash-object custom_components/doems/manual_plan_services.py)" = "1826839068587491ed6b51caffd464861af009f7"
-          test "$(git hash-object custom_components/doems/manual_plan_lifecycle.py)" = "4d69c84ba7608bde36089f00c14cbc79e46b46a3"
-          test "$(git hash-object custom_components/doems/manual_plan_lifecycle_model.py)" = "3a8688ac9a18dba133136d4124b8772c8e49222e"
-          test "$(git hash-object custom_components/doems/manual_soc_projection.py)" = "3d085b57bc17e7620975490e60ce46ec49808a17"
-          test "$(git hash-object custom_components/doems/manual_soc_projection_model.py)" = "1321c50ef460d54331c3b16dc0f93cf2eb0432e0"
-          test "$(git hash-object custom_components/doems/number.py)" = "16496b112b3808eff63a1c2ddd1aee6dacf0b599"
-          test "$(git hash-object custom_components/doems/select.py)" = "15ebee184502e321a2b64bdd09829fdeefeab1a4"
-          test "$(git hash-object custom_components/doems/datetime.py)" = "bcb95caa993f38cdf42f20df5108fbd6b5aadfc2"
-          test "$(git hash-object custom_components/doems/services.yaml)" = "f5f4807397b64b2c73faaecaea88324d53426592"
-
-  publish-reset-alpha7116:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/release-0.2.0-alpha.9.0'
-    needs: validate
-    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Build release archive
-        run: |
-          zip -r doems.zip custom_components/doems examples LICENSE README.md hacs.json RELEASE_NOTES_0.2.0-alpha.9.0.md
-          sha256sum doems.zip > SHA256SUMS.txt
-          cat SHA256SUMS.txt
-      - name: Verify Prices P4 runtime is packaged
-        run: |
-          unzip -l doems.zip | grep -F 'custom_components/doems/prices.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/prices_model.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/prices_sensor.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/prices_runtime.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/config_flow.py'
-          unzip -l doems.zip | grep -F 'examples/prices_p4_forecast_card.yaml'
-      - name: Verify Battery Input Contract is packaged
-        run: |
-          unzip -l doems.zip | grep -F 'custom_components/doems/battery_contract.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/battery_contract_model.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/config_flow.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/sensor.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/r7_model.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/r7_runtime.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/automatic_plan_contract.py'
-          unzip -l doems.zip | grep -F 'examples/doems_scheduler_status_card.yaml'
-          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.9.0.md'
-      - name: Verify Manual Plan Store is packaged
-        run: |
-          unzip -l doems.zip | grep -F 'custom_components/doems/manual_plan_model.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/manual_plan_store.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/manual_plan_services.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/number.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/datetime.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/services.yaml'
-          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.9.0.md'
-      - name: Verify Manual SOC Replanning is packaged
-        run: |
-          unzip -l doems.zip | grep -F 'custom_components/doems/manual_soc_projection_model.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/manual_soc_projection.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/sensor.py'
-          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.9.0.md'
-      - name: Verify Manual Lifecycle Expiry is packaged
-        run: |
-          unzip -l doems.zip | grep -F 'custom_components/doems/manual_plan_lifecycle_model.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/manual_plan_lifecycle.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/manual_plan_store.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/manual_plan_store.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/sensor.py'
-          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.9.0.md'
-      - name: Verify planner architecture and dashboard are packaged
-        run: |
-          unzip -l doems.zip | grep -F 'custom_components/doems/automatic_combined_planner_model.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/automatic_combined_planner_runtime.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/automatic_combined_planner.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/planner_migration.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/prices.py'
-          unzip -l doems.zip | grep -F 'custom_components/doems/sensor.py'
-          unzip -l doems.zip | grep -F 'examples/doems_planner_dashboard.yaml'
-          unzip -l doems.zip | grep -F 'RELEASE_NOTES_0.2.0-alpha.9.0.md'
-      - name: Verify exact existing DOEMS brand icon is packaged
-        run: |
-          unzip -l doems.zip | grep -F 'custom_components/doems/brand/icon.png'
-          test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
-          test "$(find custom_components/doems/brand -maxdepth 1 -type f | wc -l)" -eq 1
-      - name: Publish 0.2.0-alpha.9.0 Manual Concept Expiry Cleanup
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install pytest pytest-asyncio homeassistant==2026.2.3
+      - run: python -m compileall -q custom_components/doems scripts
+      - run: python -m pytest -q --junitxml=test-results.xml
+      - name: Preserve approved brand icon
+        run: test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
+      - run: python scripts/release_contract.py --build dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-release
+          path: |
+            dist/doems.zip
+            dist/SHA256SUMS.txt
+            test-results.xml
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-release
+          path: dist
+      - name: Validate tested artifact and refuse existing tags or releases
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Published tags are immutable; retries must target the same commit.
-          if gh api "repos/${{ github.repository }}/git/ref/tags/0.2.0-alpha.9.0" >/dev/null 2>&1; then
-            existing_sha="$(gh api "repos/${{ github.repository }}/git/ref/tags/0.2.0-alpha.9.0" --jq '.object.sha')"
-            test "$existing_sha" = "${{ github.sha }}"
+          set -euo pipefail
+          version=$(python -c 'import json; print(json.load(open("custom_components/doems/manifest.json"))["version"])')
+          tag="v$version"
+          python scripts/release_contract.py --tag "$tag" --verify-archive dist/doems.zip
+          (cd dist && sha256sum --check SHA256SUMS.txt)
+          if git show-ref --verify --quiet "refs/tags/$tag"; then
+            echo "Existing tag must never be overwritten: $tag"
+            exit 1
           fi
-          if gh release view 0.2.0-alpha.9.0 >/dev/null 2>&1; then
-            gh release edit 0.2.0-alpha.9.0 --title "DOEMS 0.2.0-alpha.9.0 - Manual Concept Expiry Cleanup" --notes-file RELEASE_NOTES_0.2.0-alpha.9.0.md --latest
-            gh release upload 0.2.0-alpha.9.0 doems.zip SHA256SUMS.txt --clobber
-          else
-            gh release create 0.2.0-alpha.9.0 doems.zip SHA256SUMS.txt --target release-0.2.0-alpha.9.0 --title "DOEMS 0.2.0-alpha.9.0 - Manual Concept Expiry Cleanup" --notes-file RELEASE_NOTES_0.2.0-alpha.9.0.md --latest
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Existing release must never be overwritten: $tag"
+            exit 1
           fi
-          published_sha="$(gh api "repos/${{ github.repository }}/git/ref/tags/0.2.0-alpha.9.0" --jq '.object.sha')"
-          test "$published_sha" = "${{ github.sha }}"
-
+          gh release create "$tag" dist/doems.zip dist/SHA256SUMS.txt \
+            --target "$GITHUB_SHA" --prerelease \
+            --title "DOEMS $version" --notes-file "RELEASE_NOTES_$version.md"
+          gh release view "$tag" --json tagName,isPrerelease,targetCommitish,assets
+          mkdir downloaded
+          gh release download "$tag" --dir downloaded --pattern doems.zip --pattern SHA256SUMS.txt
+          (cd downloaded && sha256sum --check SHA256SUMS.txt)
+          python scripts/release_contract.py --tag "$tag" --verify-archive downloaded/doems.zip
+          test "$(git ls-remote origin "refs/tags/$tag" | cut -f1)" = "$GITHUB_SHA"

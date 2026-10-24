@@ -15,16 +15,17 @@ from .execution_controller import ExecutionController
 
 class CombinedAnkerBridge:
     def __init__(self, planner: Any, adapter: Any, *, battery: Any = None,
-                 authority: bool = False, exclusive: bool = False) -> None:
+                 authority: bool = False, exclusive: bool = False,
+                 controller: ExecutionController) -> None:
         self.planner = planner
         self.adapter = adapter
         self.battery = battery
         self.authority = authority
         self.exclusive = exclusive
         self._lock = asyncio.Lock()
-        self.controller = ExecutionController(
-            adapter, authorized=self._authorized, revalidate=self._still_current
-        )
+        self._startup_checked = False
+        self._completed_slots: set[tuple] = set()
+        self.controller = controller
 
     def _authorized(self) -> bool:
         return bool(self.authority and self.exclusive and self.adapter.authority)
@@ -60,12 +61,26 @@ class CombinedAnkerBridge:
         async with self._lock:
             decision = self._decision(now)
             if not self._authorized():
-                return {**decision, "bridge": "authority_disabled"}
+                if self.controller.session is not None or self.controller.reconciliation_required:
+                    await self.controller.stop()
+                return {**decision, "bridge": "authority_disabled", "physical_execution_enabled": False}
+            if not self._startup_checked:
+                mode = self.adapter._state("operating_mode")
+                if mode is None:
+                    return {**decision, "bridge": "startup_mode_unavailable"}
+                if mode == "third_party_control":
+                    self.controller.require_restart_reconciliation()
+                elif mode != "self_consumption":
+                    return {**decision, "bridge": "startup_mode_unexpected"}
+                self._startup_checked = True
+                if self.controller.reconciliation_required:
+                    await self.controller.stop()
+                    return {**decision, "bridge": "startup_reconciled"}
             identity = self._identity(decision)
             session = self.controller.session
             if session is not None:
                 soc = self._soc()
-                await self.controller.monitor(
+                outcome = await self.controller.monitor(
                     now=now, soc_percent=soc, sources_fresh=soc is not None,
                     controller_exclusive=self.exclusive,
                     command_acknowledged=(
@@ -81,11 +96,15 @@ class CombinedAnkerBridge:
             elif self.controller.reconciliation_required:
                 await self.controller.stop()
             if session is not None and self.controller.session is None:
-                return {**decision, "bridge": "stopped_by_watchdog"}
+                self._completed_slots.add(session["identity"])
+                return {**decision, "bridge": "stopped_by_watchdog",
+                        "stop_blockers": outcome.get("blockers", [])}
             if decision["status"] != "shadow_ready" or decision["action"] == "idle":
                 return {**decision, "bridge": "idle_or_blocked"}
             if self.controller.session is not None:
-                return {**decision, "bridge": "running"}
+                return {**decision, "bridge": "running", "physical_execution_enabled": True}
+            if identity in self._completed_slots:
+                return {**decision, "bridge": "slot_already_executed"}
             power = decision["planned_power_w"]
             if type(power) is not int or not 100 <= power <= 3500:
                 return {**decision, "bridge": "power_out_of_range"}
@@ -97,7 +116,12 @@ class CombinedAnkerBridge:
                          if s.get("start") == decision["start"]), None)
             if slot is None:
                 return {**decision, "bridge": "slot_missing"}
-            floor = float(slot.get("automatic_floor_soc_percent", 100))
+            try:
+                floor = float(slot["automatic_floor_soc_percent"])
+            except (KeyError, TypeError, ValueError, OverflowError):
+                return {**decision, "bridge": "reserve_floor_unavailable"}
+            if not isfinite(floor) or not 0 <= floor <= 100:
+                return {**decision, "bridge": "reserve_floor_invalid"}
             if decision["action"] == "discharge" and soc <= floor:
                 return {**decision, "bridge": "reserve_floor"}
             target = 100.0 if decision["action"] == "charge" else floor
@@ -108,7 +132,7 @@ class CombinedAnkerBridge:
                 action="laden" if decision["action"] == "charge" else "ontladen",
                 power_w=power, target_soc=target, max_runtime_h=0.25, now=now,
             )
-            return {**decision, "bridge": "running"}
+            return {**decision, "bridge": "running", "physical_execution_enabled": True}
 
     async def async_shutdown(self) -> None:
         async with self._lock:

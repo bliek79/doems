@@ -51,7 +51,7 @@ def test_r9_worker_thread_refresh_deduplicates_and_shutdown(monkeypatch):
     mod("homeassistant.util", __path__=[])
     mod("homeassistant.util.dt", utcnow=lambda: None)
     mod("custom_components", __path__=[])
-    mod("custom_components.doems", __path__=[])
+    mod("custom_components.doems", __path__=[str(Path(__file__).resolve().parents[1] / "custom_components/doems")])
     mod("custom_components.doems.execution_controller", ExecutionController=lambda *a, **k: SimpleNamespace(session=None, reconciliation_required=False))
     mod("custom_components.doems.execution_anker_adapter", AnkerExecutionAdapter=lambda *a, **k: SimpleNamespace())
 

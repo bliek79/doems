@@ -43,12 +43,16 @@ def evaluate_combined_execution_shadow(
         return {**result, "reason": "native_288_required"}
     current = now.astimezone(timezone.utc)
     active: list[tuple[int, Mapping[str, Any]]] = []
+    previous_end = None
     for position, slot in enumerate(slots):
         if not isinstance(slot, Mapping):
             return {**result, "reason": "malformed_slot"}
         start, end = _instant(slot.get("start")), _instant(slot.get("end"))
         if start is None or end is None or (end - start).total_seconds() != 900:
             return {**result, "reason": "invalid_quarter_boundaries"}
+        if previous_end is not None and start != previous_end:
+            return {**result, "reason": "non_contiguous_quarters"}
+        previous_end = end
         if start <= current < end:
             active.append((position, slot))
     if len(active) != 1:
@@ -72,6 +76,9 @@ def evaluate_combined_execution_shadow(
     if charge > 0 and discharge > 0:
         return {**result, "reason": "conflicting_directions"}
     action = "charge" if charge > 0 else "discharge" if discharge > 0 else "idle"
+    power_w = round((charge if charge else discharge) * 4000)
+    if power_w < 0 or power_w > 3500:
+        return {**result, "reason": "power_out_of_range"}
     return {
         **result,
         "status": "shadow_ready",
@@ -79,7 +86,7 @@ def evaluate_combined_execution_shadow(
         "slot": position,
         "action": action,
         "planned_energy_kwh": charge if charge else discharge,
-        "planned_power_w": round((charge if charge else discharge) * 4000),
+        "planned_power_w": power_w,
         "start": slot["start"],
         "end": slot["end"],
     }

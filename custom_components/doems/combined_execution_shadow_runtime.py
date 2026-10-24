@@ -1,8 +1,4 @@
-"""R9 three-slot execution observer.
-
-Read the canonical R7-selected Plan Store slot, not the 288-slot Combined
-forecast. No physical battery authority is granted by this observer.
-"""
+"""Observe R7 and reconcile the canonical 288-slot Combined execution path."""
 from __future__ import annotations
 
 import asyncio
@@ -14,18 +10,26 @@ from homeassistant.core import callback
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
+from .combined_anker_bridge import CombinedAnkerBridge
 from .execution_controller import ExecutionController
 from .execution_anker_adapter import AnkerExecutionAdapter
 
 
 class DOEMSCombinedExecutionShadowRuntime:
-    def __init__(self, hass: Any, scheduler: Any, store: Any, *, entities=None, authority=False) -> None:
+    def __init__(self, hass: Any, scheduler: Any, store: Any, *, entities=None, authority=False, planner=None, battery=None) -> None:
         self.hass = hass
         self.scheduler = scheduler
         self.store = store
         self._authority = bool(authority)
+        self._combined_bridge = None
+        self._combined_last_result: dict[str, Any] = {"bridge": "startup", "physical_execution_enabled": False}
         self.adapter = AnkerExecutionAdapter(hass, entities or {}, authority=self._authority)
-        self.controller = ExecutionController(self.adapter, authorized=lambda: self._authority, revalidate=self._identity_current)
+        self.controller = ExecutionController(self.adapter, authorized=self._combined_authorized, revalidate=self._combined_identity_current)
+        if planner is not None:
+            self._combined_bridge = CombinedAnkerBridge(
+                planner, self.adapter, battery=battery,
+                authority=False, exclusive=False, controller=self.controller,
+            )
         self._active_plan = None
         self._active_slot = None
         self._started = set()
@@ -35,6 +39,8 @@ class DOEMSCombinedExecutionShadowRuntime:
         self._task: asyncio.Task | None = None
         self._dirty = False
         self._shutdown = False
+        self._restart_reconciled = False
+        self._last_stop_blockers = []
 
     def async_add_listener(self, listener: Callable[[], None]) -> Callable[[], None]:
         self._listeners.append(listener)
@@ -43,6 +49,12 @@ class DOEMSCombinedExecutionShadowRuntime:
             if listener in self._listeners:
                 self._listeners.remove(listener)
         return remove
+
+    def _combined_authorized(self) -> bool:
+        return bool(self._combined_bridge is not None and self._combined_bridge._authorized())
+
+    def _combined_identity_current(self, identity: tuple) -> bool:
+        return bool(self._combined_bridge is not None and self._combined_bridge._still_current(identity))
 
     def _identity_current(self, identity: tuple) -> bool:
         """Verify that R7 still selects exactly the same pending slot revision."""
@@ -72,7 +84,7 @@ class DOEMSCombinedExecutionShadowRuntime:
     async def async_setup(self) -> None:
         self._unsubs.append(self.scheduler.async_add_listener(self.refresh))
         self._unsubs.append(self.store.add_listener(self.refresh))
-        self._unsubs.append(async_track_time_interval(self.hass, self._tick, timedelta(minutes=1)))
+        self._unsubs.append(async_track_time_interval(self.hass, self._tick, timedelta(seconds=5)))
         self.refresh()
 
     def _tick(self, _now: Any) -> None:
@@ -109,15 +121,25 @@ class DOEMSCombinedExecutionShadowRuntime:
                     continue
 
     async def _evaluate(self) -> None:
-        if self._authority:
-            await self._execute_or_monitor()
+        if self._combined_bridge is not None:
+            try:
+                self._combined_last_result = await self._combined_bridge.async_reconcile(dt_util.utcnow())
+            except Exception as exc:
+                self._combined_last_result = {
+                    "bridge": "blocked", "reason": "combined_handoff_error",
+                    "error_type": type(exc).__name__,
+                    "physical_execution_enabled": bool(self.controller.session),
+                    "reconciliation_required": self.controller.reconciliation_required,
+                }
+        # R7 remains observational; only Combined may supply physical commands.
         decision = dict(self.scheduler.last_result)
         slot = decision.get("selected_slot")
         if type(slot) is not int or slot not in (1, 2, 3):
             self.last_result = {
                 "status": "idle", "selected_slot": None,
                 "scheduler_status": decision.get("status"),
-                "physical_execution_enabled": False,
+                "physical_execution_enabled": bool(self.controller.session),
+                "combined_handoff": deepcopy(self._combined_last_result),
             }
             return
         plan = self.store.get_plan(slot)
@@ -150,7 +172,11 @@ class DOEMSCombinedExecutionShadowRuntime:
             "scheduler_status": decision.get("status"),
             "blockers": blockers,
             "observed_at": dt_util.utcnow().isoformat(),
-            "physical_execution_enabled": False,
+            "physical_execution_enabled": bool(self.controller.session),
+            "execution_authorized": self._combined_authorized(),
+            "reconciliation_required": self.controller.reconciliation_required,
+            "last_stop_blockers": list(self._last_stop_blockers),
+            "combined_handoff": deepcopy(self._combined_last_result),
         }
 
     def _identity(self, slot, plan):
@@ -164,6 +190,16 @@ class DOEMSCombinedExecutionShadowRuntime:
     async def _execute_or_monitor(self) -> None:
         """Use the one existing controller for both Manual and Automatic slots."""
         now = dt_util.utcnow()
+        if not self._restart_reconciled:
+            mode = self.adapter._state("operating_mode")
+            if mode is None or mode not in ("self_consumption", "third_party_control"):
+                return
+            if mode == "third_party_control":
+                self.controller.require_restart_reconciliation()
+                await self.controller.stop()
+                self._restart_reconciled = True
+                return
+            self._restart_reconciled = True
         if self.controller.session is not None or self.controller.reconciliation_required:
             session = self.controller.session
             snapshot = self.scheduler.battery.snapshot() if self.scheduler.battery else {}
@@ -192,10 +228,17 @@ class DOEMSCombinedExecutionShadowRuntime:
                     plan_identity_matches=same_plan,
                     safety_clear=same_plan and snapshot.get("status") == "ready",
                 )
-                if outcome.get("decision") == "stop" and same_plan:
-                    await self.store.async_mark_lifecycle(
-                        slot, "voltooid", "execution_watchdog_stopped",
-                        expected_plan=plan)
+                if outcome.get("decision") == "stop":
+                    blockers = list(outcome.get("blockers") or [])
+                    self._last_stop_blockers = blockers
+                    normal = bool(blockers) and all(
+                        b in ("target_reached", "runtime_elapsed") for b in blockers
+                    )
+                    if same_plan:
+                        await self.store.async_mark_lifecycle(
+                            slot, "voltooid" if normal else "fout",
+                            "execution_completed" if normal else "execution_safety_stopped",
+                            expected_plan=plan)
                     self._active_plan = None
                     self._active_slot = None
             except Exception:
@@ -245,6 +288,6 @@ class DOEMSCombinedExecutionShadowRuntime:
         self._unsubs.clear()
         if self._task is not None:
             await self._task
-        if self._authority and (self.controller.session is not None or self.controller.reconciliation_required):
+        if self.controller.session is not None or self.controller.reconciliation_required:
             await self.controller.stop()
         self._listeners.clear()
