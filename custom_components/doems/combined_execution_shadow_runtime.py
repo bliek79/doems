@@ -127,7 +127,9 @@ class DOEMSCombinedExecutionShadowRuntime:
             except Exception as exc:
                 self._combined_last_result = {
                     "bridge": "blocked", "reason": "combined_handoff_error",
-                    "error_type": type(exc).__name__, "physical_execution_enabled": False,
+                    "error_type": type(exc).__name__,
+                    "physical_execution_enabled": bool(self.controller.session),
+                    "reconciliation_required": self.controller.reconciliation_required,
                 }
         # R7 remains observational; only Combined may supply physical commands.
         decision = dict(self.scheduler.last_result)
