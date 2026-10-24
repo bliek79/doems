@@ -1,4 +1,4 @@
-"""Date/time entities for DOEMS Away scheduling."""
+"""Manual Plan Store datetime entities for DOEMS R2."""
 
 from __future__ import annotations
 
@@ -6,9 +6,10 @@ from datetime import datetime
 
 from homeassistant.components.datetime import DateTimeEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_INSTANCE_NAME,
@@ -17,11 +18,9 @@ from .const import (
     DOMAIN,
     NAME,
     VERSION,
-    CONF_EMS_ENABLED,
-    PLAN_SLOT_COUNT,
 )
-from .presence import DOEMSPresenceStore
-from .ems_runtime import DOEMSEMSRuntime
+from .manual_plan_model import PLAN_SLOT_COUNT
+from .manual_plan_store import DOEMSManualPlanStore
 
 
 def _device_info(entry: ConfigEntry) -> DeviceInfo:
@@ -39,83 +38,23 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    presence = hass.data.get(DOMAIN, {}).get(entry.entry_id, {}).get("presence")
-    entities: list[DateTimeEntity] = []
-    if isinstance(presence, DOEMSPresenceStore):
-        entities.extend(
-            [
-                DOEMSAwayDateTime(entry, presence, "start"),
-                DOEMSAwayDateTime(entry, presence, "end"),
-            ]
-        )
-
-    if entry.options.get(CONF_EMS_ENABLED, False):
-        runtime = hass.data.get(DOMAIN, {}).get(entry.entry_id, {}).get("ems_runtime")
-        if isinstance(runtime, DOEMSEMSRuntime):
-            entities.extend(
-                DOEMSPlanStartTime(entry, runtime, slot)
-                for slot in range(1, PLAN_SLOT_COUNT + 1)
-            )
-
-    if entities:
-        async_add_entities(entities)
+    store = hass.data.get(DOMAIN, {}).get(entry.entry_id, {}).get("manual_plan_store")
+    if not isinstance(store, DOEMSManualPlanStore):
+        return
+    async_add_entities(
+        DOEMSManualPlanStartTime(entry, store, slot)
+        for slot in range(1, PLAN_SLOT_COUNT + 1)
+    )
 
 
-class DOEMSAwayDateTime(DateTimeEntity):
-    """Runtime Away start/end boundary."""
+class DOEMSManualPlanStartTime(DateTimeEntity):
+    """Start time for one manual Plan Store slot."""
 
     _attr_should_poll = False
     _attr_has_entity_name = False
 
-    def __init__(
-        self,
-        entry: ConfigEntry,
-        presence: DOEMSPresenceStore,
-        boundary: str,
-    ) -> None:
-        self.presence = presence
-        self.boundary = boundary
-        self._remove_listener = None
-        is_start = boundary == "start"
-        self._attr_name = "DOEMS Away Start" if is_start else "DOEMS Away End"
-        self._attr_unique_id = "doems_away_start" if is_start else "doems_away_end"
-        self._attr_suggested_object_id = "doems_away_start" if is_start else "doems_away_end"
-        self._attr_icon = "mdi:calendar-start" if is_start else "mdi:calendar-end"
-        self._attr_device_info = _device_info(entry)
-
-    @property
-    def native_value(self) -> datetime | None:
-        return self.presence.away_start if self.boundary == "start" else self.presence.away_end
-
-    async def async_set_value(self, value: datetime) -> None:
-        if self.boundary == "start":
-            await self.presence.async_set_away_start(value)
-        else:
-            await self.presence.async_set_away_end(value)
-
-    async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
-        self._remove_listener = self.presence.async_add_listener(self._handle_update)
-
-    async def async_will_remove_from_hass(self) -> None:
-        if self._remove_listener is not None:
-            self._remove_listener()
-        await super().async_will_remove_from_hass()
-
-    @callback
-    def _handle_update(self) -> None:
-        self.async_write_ha_state()
-
-
-class DOEMSPlanStartTime(DateTimeEntity):
-    """Start time entity for one definitive DOEMS EMS plan slot."""
-
-    _attr_should_poll = False
-    _attr_has_entity_name = False
-
-    def __init__(self, entry: ConfigEntry, runtime: DOEMSEMSRuntime, slot: int) -> None:
-        self.runtime = runtime
-        self.plan_store = runtime.plan_store
+    def __init__(self, entry: ConfigEntry, store: DOEMSManualPlanStore, slot: int) -> None:
+        self.store = store
         self.slot = slot
         self._attr_name = f"DOEMS Plan {slot} Start Time"
         self._attr_unique_id = f"doems_plan_{slot}_start_time"
@@ -125,14 +64,13 @@ class DOEMSPlanStartTime(DateTimeEntity):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
-        self.async_on_remove(self.plan_store.add_listener(self.async_write_ha_state))
+        self.async_on_remove(self.store.add_listener(self.async_write_ha_state))
 
     @property
     def native_value(self) -> datetime | None:
-        value = self.plan_store.get_value(self.slot, "start_time")
+        value = self.store.get_value(self.slot, "start_time")
         if not value:
             return None
-        from homeassistant.util import dt as dt_util
         parsed = dt_util.parse_datetime(str(value))
         if parsed is None:
             return None
@@ -141,4 +79,4 @@ class DOEMSPlanStartTime(DateTimeEntity):
         return parsed
 
     async def async_set_value(self, value: datetime) -> None:
-        await self.plan_store.async_set_value(self.slot, "start_time", value)
+        await self.store.async_set_value(self.slot, "start_time", value)

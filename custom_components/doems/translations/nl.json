@@ -21,14 +21,19 @@
           "energy_forecast_enabled": "Energy Forecast activeren",
           "solar_foundation_enabled": "Solar Foundation activeren",
           "prices_enabled": "Prices Forecast activeren",
-          "ems_enabled": "EMS-configuratie activeren"
+          "battery_observation_enabled": "Batterijobservatie activeren",
+          "planner_software_reserve_percent": "Planner software-reserve",
+          "planner_max_charge_power_w": "Planner maximaal laadvermogen",
+          "planner_max_discharge_power_w": "Planner maximaal ontlaadvermogen",
+          "planner_minimum_trade_margin_eur_per_kwh": "Planner minimale handelsmarge"
         }
       },
       "energy_forecast": {
         "title": "Energy Forecast",
-        "description": "Kies alleen de Home Power-invoerroute. Het actieve profiel wordt via DOEMS Presence-entiteiten bediend.",
+        "description": "Kies de Home Power-bronroute en het eerste leerprofiel.",
         "data": {
-          "energy_source_mode": "Home Power-bronmodus"
+          "energy_source_mode": "Home Power-bronmodus",
+          "energy_start_profile": "Startprofiel voor leren"
         }
       },
       "energy_direct": {
@@ -127,25 +132,15 @@
           "gas_grid_per_day": "Gasnetkosten per dag"
         }
       },
-      "ems": {
-        "title": "EMS batterij-instellingen",
-        "description": "Configureer de statische EMS-instellingen en de batterijbronnen/besturingsentiteiten. De fysieke Step 15A-proef blijft fail-safe uit totdat DOEMS Automatic Execution expliciet wordt ingeschakeld.",
+      "battery_observation": {
+        "title": "Batterijobservatie",
+        "description": "Kies de read-only batterijbronnen voor SOC-projectie en validatie. Reeds gekozen laad- en ontlaadvermogensbronnen uit Energy Forecast worden hergebruikt en niet opnieuw gevraagd. Deze stap stuurt de batterij niet aan.",
         "data": {
-          "battery_capacity_kwh": "Batterijcapaciteit",
-          "technical_min_soc_percent": "Technische minimum-SOC",
-          "max_soc_percent": "Maximum-SOC",
-          "max_charge_power_w": "Maximaal laadvermogen",
-          "max_discharge_power_w": "Maximaal ontlaadvermogen",
-          "software_reserve_percent": "Software-reserve",
-          "charge_efficiency_percent": "Laadrendement",
-          "discharge_efficiency_percent": "Ontlaadrendement",
-          "minimum_trade_margin_eur_per_kwh": "Minimale handelsmarge",
-          "startup_delay_seconds": "Opstartvertraging",
-          "soc_entity": "Batterij-SOC sensor (alleen lezen)",
-          "operating_mode_entity": "Bedrijfsmodus-select",
-          "action_direction_entity": "Laad/ontlaadrichting-select",
-          "power_setpoint_entity": "Vermogenssetpoint-number",
-          "device_status_entity": "Batterij-apparaatstatus sensor"
+          "battery_soc_entity": "Batterij SOC",
+          "battery_capacity_entity": "Accucapaciteit",
+          "battery_charge_power_entity": "Batterij laadvermogen",
+          "battery_discharge_power_entity": "Batterij ontlaadvermogen",
+          "battery_status_entity": "Batterij apparaatstatus"
         }
       }
     },
@@ -159,14 +154,10 @@
       "total_actual_reused_as_array": "Bij meerdere arrays mag de totaal-actual niet tegelijk aan één array worden gekoppeld.",
       "energyzero_config_entry_required": "Kies een geldige EnergyZero-configuratie voor de EnergyZero-marktactie.",
       "unsupported_gas_price_unit": "De generieke gasmarktsensor moet EUR/m3 (of €/m³) gebruiken.",
-      "ems_invalid_number": "Voer een geldig getal in.",
-      "ems_below_minimum": "De waarde ligt onder het toegestane minimum.",
-      "ems_above_maximum": "De waarde ligt boven het toegestane maximum.",
-      "ems_invalid_step": "De waarde past niet bij de toegestane stapgrootte.",
-      "ems_soc_range_invalid": "Maximum-SOC moet hoger zijn dan de technische minimum-SOC.",
-      "unsupported_soc_unit": "De SOC-sensor moet % als eenheid gebruiken.",
-      "invalid_soc_value": "De SOC-sensor moet een numerieke waarde van 0 tot 100 leveren.",
-      "control_path_incomplete": "Configureer alle drie besturingsentiteiten samen, of laat ze alle drie leeg."
+      "unsupported_percentage_unit": "De SOC-bron moet % gebruiken.",
+      "invalid_percentage_value": "De SOC-bron moet een waarde tussen 0 en 100 publiceren.",
+      "unsupported_capacity_unit": "De capaciteitsbron moet Wh of kWh gebruiken.",
+      "invalid_capacity_value": "De capaciteitsbron moet een positieve waarde publiceren."
     },
     "abort": {
       "solar_foundation_invalid": "De Solar Foundation-topologie is niet door de structurele validatie gekomen."

@@ -1,141 +1,87 @@
-name: DOEMS CI and Alpha40 Manual Plan Replay Fix Release
-
+name: DOEMS validation and immutable release
 on:
   pull_request:
   push:
-    branches:
-      - main
-      - fix-alpha40-manual-plan-derived-fields
+    branches: [main]
   workflow_dispatch:
-
 permissions:
-  contents: write
-
+  contents: read
+concurrency:
+  group: doems-release-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      matrix:
+        include:
+          - python: '3.13'
+            homeassistant: '2026.2.3'
+          - python: '3.14'
+            homeassistant: '2026.9.3'
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
-      - run: python -m pip install --upgrade pip pytest
-      - name: Compile integration
-        run: python -m compileall -q custom_components/doems
-      - name: Frozen Alpha76 source parity guard
-        run: pytest -q tests/test_alpha32_full_anker_alpha76_parity.py
-      - name: Alpha33 runtime serialization adapter regression
-        run: pytest -q tests/test_alpha33_runtime_serialization_adapter.py
-      - name: Alpha34 verified setpoint handoff regression
-        run: pytest -q tests/test_alpha34_verified_setpoint_handoff_adapter.py
-      - name: Alpha35 sequential safety exception regression
-        run: pytest -q tests/test_alpha35_sequential_safety_exception.py
-      - name: Alpha40 manual plan replay and Design C regression
-        run: pytest -q tests/test_alpha36_best_of_both.py
-      - name: Alpha76 planner foundation and Alpha35 exception
-        run: pytest -q tests/test_alpha31_exact_anker_planner_parity.py
-      - name: Execution and restart parity
-        run: pytest -q tests/test_alpha23_execution_naming_cleanup.py tests/test_alpha26_step15a_manual_physical_execution.py tests/test_alpha27_beta2_automatic_plan72_cutover.py tests/test_alpha29_signature_warning_physical_parity.py tests/test_step12_3_final_revalidation_mode_switch_preview.py tests/test_step12_4_automatic_execution_gate.py tests/test_step12_5_execution_controller.py tests/test_step12_6_restart_recovery_observability.py
-      - name: Planner Scheduler Safety regression
-        run: pytest -q tests/test_alpha8_ems_plans_foundation.py tests/test_step11_safety_prestart_contract.py tests/test_step12_1_control_path_contract.py tests/test_step12_2_action_handoff_contract.py tests/test_plan72_observability_parity.py
-      - name: Forecast Prices Foundation regression
-        run: pytest -q tests/test_alpha5_1_hotfix_contract.py tests/test_alpha5_2_status_hotfix_contract.py tests/test_alpha6_solar_p31_release_contract.py tests/test_alpha7_prices_release_contract.py tests/test_energy_forecast_contract.py tests/test_foundation_contract.py tests/test_alpha21_multirate_runtime.py tests/test_alpha25_solar_array_performance.py tests/test_ems_config_validation.py tests/test_ems_settings_contract.py tests/test_presence_runtime_contract.py tests/test_prices_p4_contract.py tests/test_recorder_attribute_budget.py tests/test_solar_actual_quarter_validation.py tests/test_solar_forecast_model.py tests/test_solar_foundation_contract.py tests/test_solar_p31_runtime_contract.py tests/test_step5a_consumer_wiring_part1.py tests/test_step5a_forecast_diagnostics.py tests/test_step5a_prices_76h_window_fix.py
-      - name: Full pytest
-        run: pytest -q
-      - name: Validate JSON files
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          for path in Path("custom_components/doems").rglob("*.json"):
-              json.loads(path.read_text(encoding="utf-8"))
-              print(f"valid: {path}")
-          PY
-      - name: Validate Alpha40 candidate contract
-        run: |
-          test -f RELEASE_NOTES_0.1.0-alpha.40.md
-          grep -F 'VERSION = "0.2.0-alpha.8.0.8"' custom_components/doems/const.py
-          grep -F '"version": "0.2.0-alpha.8.0.8"' custom_components/doems/manifest.json
-          test -f custom_components/doems/ems_alpha36/energy_need.py
-          test -f custom_components/doems/ems_alpha36/planner_preview.py
-          test -f custom_components/doems/ems_alpha36/planner_72h.py
-          test -f custom_components/doems/ems_alpha36/sequential_safety.py
-          test -f custom_components/doems/ems_alpha36_adapter.py
-          grep -F 'alpha80_cheapest_energy_safety_v1' custom_components/doems/ems_alpha36_adapter.py
-          grep -F 'alpha39_planstore_commitment_replay_v1' custom_components/doems/ems_alpha36_adapter.py
-          grep -F 'doems_alpha38_split_reserve_safety_reachability_v1' custom_components/doems/ems_alpha36/planner_72h.py
-          grep -F 'fixed_operational_reserve_v1' custom_components/doems/ems_alpha36/sequential_safety.py
-          grep -F 'split_reserve_safety_reachability_v1' custom_components/doems/ems_alpha36/sequential_safety.py
-          grep -F 'safety_target_soc' custom_components/doems/ems_alpha36/sequential_safety.py
-          grep -F 'precharge_protection_soc' custom_components/doems/ems_alpha36/sequential_safety.py
-          grep -F 'from .ems_alpha36_adapter import SOURCE_TAG, planner_reference, run_ems_chain' custom_components/doems/ems_multirate.py
-          grep -F 'alpha39_multirate_runtime_v1' custom_components/doems/ems_multirate.py
-          grep -F 'self._planner_active_signature' custom_components/doems/ems_runtime.py
-          grep -F 'self._planner_pending_request' custom_components/doems/ems_runtime.py
-          grep -F 'self._request_planner_refresh("start_critical")' custom_components/doems/ems_runtime.py
-          grep -F 'RestoreEntity' custom_components/doems/switch.py
-          grep -F 'previous.attributes.get("mode") == "live_guarded"' custom_components/doems/switch.py
-          grep -F 'planned_energy_reached' custom_components/doems/ems_execution.py
-          grep -F 'abs(actual_setpoint - expected_power) > 10' custom_components/doems/ems_execution.py
-          grep -F 'self.execution.evaluate_final_revalidation(' custom_components/doems/ems_runtime.py
-          grep -F 'self.execution.evaluate_mode_switch_transaction(' custom_components/doems/ems_runtime.py
-          ! grep -F 'DOEMSManualPhysicalExecution' custom_components/doems/ems_runtime.py
-          test -f custom_components/doems/ems_physical_test.py
-          test -f tests/test_alpha32_full_anker_alpha76_parity.py
-          test -f tests/test_alpha33_runtime_serialization_adapter.py
-          test -f tests/test_alpha34_verified_setpoint_handoff_adapter.py
-          test -f tests/test_alpha35_sequential_safety_exception.py
-          test -f tests/test_alpha36_best_of_both.py
-          test -f custom_components/doems/ems_alpha76/planner_72h_sequential_safety.py
-          grep -F 'alpha34_verified_physical_setpoint_handoff_v1' custom_components/doems/ems_runtime.py
-          grep -F 'alpha35_sequential_safety_exception_v1' custom_components/doems/ems_alpha76_adapter.py
-          grep -F 'doems_sequential_safety_exception_v1' custom_components/doems/ems_alpha76/planner_72h_sequential_safety.py
-          grep -F '_PLATFORM_SETPOINT_HANDOFF_TOLERANCE_W = 10.0' custom_components/doems/ems_runtime.py
-          grep -F 'self._state_publish_lock = asyncio.Lock()' custom_components/doems/ems_runtime.py
-          grep -F 'alpha33_alpha76_serialized_coordinator_v1' custom_components/doems/ems_runtime.py
-          test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
-
-
-  publish-r8-test:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install pytest pytest-asyncio homeassistant==${{ matrix.homeassistant }}
+      - run: python -m compileall -q custom_components/doems scripts
+      - run: python -m pytest -q --junitxml=test-results.xml
+      - run: python scripts/import_smoke.py
+      - name: Preserve approved brand icon
+        run: test "$(git hash-object custom_components/doems/brand/icon.png)" = "fb0dd2dee9b6c7074da8bdde0f5663260677c779"
+      - run: python scripts/release_contract.py --build dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-release-${{ matrix.python }}
+          path: dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.python }}
+          path: test-results.xml
+  publish:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Package R8 test prerelease
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          manifest = Path("custom_components/doems/manifest.json")
-          data = json.loads(manifest.read_text(encoding="utf-8"))
-          data["version"] = "0.2.0-alpha.8.0.8"
-          manifest.write_text(json.dumps(data, indent=2), encoding="utf-8")
-          const = Path("custom_components/doems/const.py")
-          source = const.read_text(encoding="utf-8")
-          source = source
-          const.write_text(source, encoding="utf-8")
-          PY
-          zip -r doems-r8.zip custom_components/doems examples LICENSE README.md hacs.json
-          sha256sum doems-r8.zip > SHA256SUMS-r8.txt
-      - name: Publish installable R8 test prerelease
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-release-3.14
+          path: dist
+      - name: Validate tested artifact and refuse existing tags or releases
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cat > R8_RELEASE_NOTES.md <<'EOF'
-          # DOEMS 0.2.0-alpha.8.0.8 - R8 live test
-          
-          R8 controller and Combined planner integration test build from main.
-          Frozen Alpha76 controller sources are preserved.
-          Native forecast/planning horizon: 15 minutes, 72 hours, 288 slots.
-          This is a prerelease for Home Assistant validation, not a claim of completed live validation.
-          Physical execution remains subject to the integration's existing safety and authorization gates.
-          
-          Install with HACS prereleases enabled, or use the attached archive.
-          EOF
-          if gh release view 0.2.0-alpha.8.0.8 >/dev/null 2>&1; then
-            gh release edit 0.2.0-alpha.8.0.8 --title "DOEMS 0.2.0-alpha.8.0.8 - R8 live test" --notes-file R8_RELEASE_NOTES.md --prerelease
-            gh release upload 0.2.0-alpha.8.0.8 doems-r8.zip SHA256SUMS-r8.txt --clobber
-          else
-            gh release create 0.2.0-alpha.8.0.8 doems-r8.zip SHA256SUMS-r8.txt --target main --title "DOEMS 0.2.0-alpha.8.0.8 - R8 live test" --notes-file R8_RELEASE_NOTES.md --prerelease
+          set -euo pipefail
+          version=$(python -c 'import json; print(json.load(open("custom_components/doems/manifest.json"))["version"])')
+          tag="v$version"
+          python scripts/release_contract.py --tag "$tag" --verify-archive dist/doems.zip
+          (cd dist && sha256sum --check SHA256SUMS.txt)
+          if git show-ref --verify --quiet "refs/tags/$tag"; then
+            echo "Existing tag must never be overwritten: $tag"
+            exit 1
           fi
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Existing release must never be overwritten: $tag"
+            exit 1
+          fi
+          gh release create "$tag" dist/doems.zip dist/SHA256SUMS.txt \
+            --target "$GITHUB_SHA" --prerelease \
+            --title "DOEMS $version" --notes-file "RELEASE_NOTES_$version.md"
+          gh release view "$tag" --json tagName,isPrerelease,targetCommitish,assets
+          mkdir downloaded
+          gh release download "$tag" --dir downloaded --pattern doems.zip --pattern SHA256SUMS.txt
+          (cd downloaded && sha256sum --check SHA256SUMS.txt)
+          python scripts/release_contract.py --tag "$tag" --verify-archive downloaded/doems.zip
+          test "$(git ls-remote origin "refs/tags/$tag" | cut -f1)" = "$GITHUB_SHA"

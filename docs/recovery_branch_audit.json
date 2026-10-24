@@ -1,0 +1,2372 @@
+{
+  "main": "4384d90c7c9c4b26808edb239ada3baf7d17a6b1",
+  "recovery": "86affccd8823d453ef071a067e3eb436547e79a1",
+  "p0": "8cdb84f9d658b2cd6bb6648ef3d61d68a6f34038",
+  "branches": [
+    {
+      "branch": "alpha20-cheapest-energy-safety",
+      "sha": "002606456795cd57f74d9747e5eddcb3bd328ba3",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 123,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 199,
+      "diff_inventory_sha256": "b0010a8fe4f8fad35ab929d78c0a4829ba869a4c177355cdcc5fb365a1971c89"
+    },
+    {
+      "branch": "alpha25-solar-array-performance-factor",
+      "sha": "a577e1016f5b69a1bf19256d1459e0c2d99e7ccf",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 137,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 203,
+      "diff_inventory_sha256": "95115b82675d4e5b3de431aac45b9ac67e1a66267ce67cc080ded5ca97180b24"
+    },
+    {
+      "branch": "alpha26-step15a-manual-physical-execution",
+      "sha": "97e85bc40fad43ad15e6e97ad7d182d55919f3f4",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 151,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 205,
+      "diff_inventory_sha256": "1e45cc93aefa54971aeb713d2e8e018d285837dce96484156191405362b2b551"
+    },
+    {
+      "branch": "alpha28-signature-gate-fail-closed",
+      "sha": "4296b7badef031b486ff799e53498f54b773bc15",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 132,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 210,
+      "diff_inventory_sha256": "f1159654aab5e60f494d64a67322b75b0607ef73e75752a80e555b4a0bfd3ae1"
+    },
+    {
+      "branch": "alpha29-signature-warning-physical-parity",
+      "sha": "6453bb7b11f99f6fda2e9ed4d9fbbd5ace55611a",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 137,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 211,
+      "diff_inventory_sha256": "3feebc970c121b4c1d220f0d1e07722120a09b324f9281833c6401f7e4cc563c"
+    },
+    {
+      "branch": "alpha3-maintenance",
+      "sha": "47eb1fcc34d07251ee6eb9bb83fe460913a374ee",
+      "covered_by": [],
+      "recovery_only": 316,
+      "branch_only": 11,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 146,
+      "diff_inventory_sha256": "1579b6e01b07a1ff20571edd5802c6460ae915ddaab8669611a9f40b7604509e"
+    },
+    {
+      "branch": "alpha30-safety-trade-parity-restore",
+      "sha": "73e692643a93be1dfeaab539397f3afecfef23e8",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 143,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 212,
+      "diff_inventory_sha256": "679747a87aa7ef1d975cca443923e6fb7d289deadf935d7a694d0aadac25c84f"
+    },
+    {
+      "branch": "alpha31-exact-anker61-76-planner-parity",
+      "sha": "e1bb31d33ee9c4430a28af60afa1bd114f1cb4ec",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 151,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 212,
+      "diff_inventory_sha256": "a2ccaea00d7117a66a4decd0c6fdcd2fc2116cf55819e886d6252ede289294cd"
+    },
+    {
+      "branch": "alpha32-full-anker-alpha76-parity-reconstruction",
+      "sha": "b93f07adb12c8a1686a8f5419b6019ccf28ae867",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 157,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 218,
+      "diff_inventory_sha256": "1b2bcfb6fca8cb1d5b175aa59c22425b133f8bd36e48ad8e736b20d819258432"
+    },
+    {
+      "branch": "alpha33-runtime-serialization-adapter",
+      "sha": "128fb0c7c1818d4808249541be54f995578aec8c",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 169,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 220,
+      "diff_inventory_sha256": "32e8efe6e6192699a28876323ec0e170130a3c582f633607eb88efabe9f9a9eb"
+    },
+    {
+      "branch": "alpha34-verified-setpoint-handoff-adapter",
+      "sha": "c6b7d44868354608f4b61d730745e56aff14712d",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 187,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 222,
+      "diff_inventory_sha256": "77bb38cc5c058c6711c571636ef5e0d66958bf691dd8968ff5152de6958e5c8e"
+    },
+    {
+      "branch": "alpha35-sequential-safety-exception",
+      "sha": "7f273f4f16e6522f929fe6b16a104ca41a8c46d4",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 208,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 225,
+      "diff_inventory_sha256": "a25f92205e326c55ad6f078129ddcda0c49bd91e979f63359a333780d10108c7"
+    },
+    {
+      "branch": "alpha36-best-of-both",
+      "sha": "20d4693f4733df7bca468e9b554a3cb1fcb745a1",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 233,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 232,
+      "diff_inventory_sha256": "a39ef5a81db6cc42be1969bf40588c663fa20f81e3e1f481b49fefea222c6e40"
+    },
+    {
+      "branch": "alpha38-split-reserve-safety-reachability",
+      "sha": "4475cedc1eb33dc9e63f6a37c580367281953f7b",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 226,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 234,
+      "diff_inventory_sha256": "ef5e34947a5c5e99e928aa627d57b54027d9a76c42d88da4ac6712faf9a31e00"
+    },
+    {
+      "branch": "alpha39-planstore-commitment-replay",
+      "sha": "a83434aae3e3f49c62fe7d7c699b4b2620d69fe9",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 230,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 235,
+      "diff_inventory_sha256": "aada8885fa8b9a86c5cb098c810f30c02e573d9f760add4abfa779c0113942e3"
+    },
+    {
+      "branch": "alpha4-solar-reference-freeze",
+      "sha": "88d93fff1961f23a3cea99dd82167e4f8e64a170",
+      "covered_by": [],
+      "recovery_only": 315,
+      "branch_only": 14,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 151,
+      "diff_inventory_sha256": "da2beedf7a605e3e91fea56ba5d00725a44c70b0a4cd07a1b59179cbf7c1f2d4"
+    },
+    {
+      "branch": "alpha5-1-solar-options-hotfix",
+      "sha": "4334882a932a15b4f09a78b42b95f861a17be12b",
+      "covered_by": [],
+      "recovery_only": 312,
+      "branch_only": 8,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 147,
+      "diff_inventory_sha256": "697a9d4cf104b6f054d8c6210759aa50434dd866d7bc483661180991f41fcaa5"
+    },
+    {
+      "branch": "alpha5-2-status-options-hotfix",
+      "sha": "42f4cc9865cd11d75e1ca47cab84a70fa20e5b87",
+      "covered_by": [],
+      "recovery_only": 311,
+      "branch_only": 9,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 146,
+      "diff_inventory_sha256": "9c900e9b6d528be28cb940624c7f7b08c9ef6da7569457b8e5ffd7af290ad7d4"
+    },
+    {
+      "branch": "alpha5-solar-p3-foundation",
+      "sha": "f8236bc732f9ca870e9a92ada28648aa7cc69d74",
+      "covered_by": [],
+      "recovery_only": 313,
+      "branch_only": 15,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 148,
+      "diff_inventory_sha256": "b276d8b35518b668d57e599f948a72191d774ed8e9695f64b7cbc5df4ff771a4"
+    },
+    {
+      "branch": "alpha7-1-prices-config-flow-hotfix",
+      "sha": "1aa3c58cced2d7ab83a9d83fbd107759b37eaa4e",
+      "covered_by": [],
+      "recovery_only": 308,
+      "branch_only": 8,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 140,
+      "diff_inventory_sha256": "310e4255c5fdbbd48b015ad115e7b52fec41a0663cc412aa064fef4a76532997"
+    },
+    {
+      "branch": "alpha7-10-release-title-fix",
+      "sha": "75940e6dc09024998576ec360ec6f64f1f7a9a54",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 7,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 118,
+      "diff_inventory_sha256": "4fcdfe6ade5d74b6eab59c7ab4db2ff0dab117d5984e79fe4f587db8c0df8f52"
+    },
+    {
+      "branch": "alpha7-11-release-title-fix",
+      "sha": "b6271d5ec9003f391938d96bc9960a282ea1a893",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 9,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 121,
+      "diff_inventory_sha256": "fcfff50f5f00ef98f93fc61b3cf94692638ae96b558b0cd4346234a7444d6afd"
+    },
+    {
+      "branch": "alpha7-12-release-title-fix",
+      "sha": "dac05eaedb2c7892ffc5796053ef892e5c1d8051",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 11,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 122,
+      "diff_inventory_sha256": "c9ef67319cb2ba91ab4c312faf46176d80bcba0a92a0bf7999f3c237b0f16cc7"
+    },
+    {
+      "branch": "alpha7-2-prices-entity-registration",
+      "sha": "1e45ab70eb22e37efb673eaac5235151f9257e20",
+      "covered_by": [],
+      "recovery_only": 307,
+      "branch_only": 11,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 139,
+      "diff_inventory_sha256": "fa3a3330c73a0ab59a981658736ba7e759d553e5c83fafad6139f6657232a973"
+    },
+    {
+      "branch": "alpha7-3-prices-gas-market-semantics",
+      "sha": "937a35c000e929e7460d54244dbc92ae96fd9cc0",
+      "covered_by": [],
+      "recovery_only": 306,
+      "branch_only": 3,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 138,
+      "diff_inventory_sha256": "bb1cac53b2a3ed0bf14c0fabe960057048a61474eee694daee0539657812befc"
+    },
+    {
+      "branch": "alpha7-4-prices-gas-vs-electricity",
+      "sha": "c4ad68fac99e30146cc8bd9d61a7d85720f9e141",
+      "covered_by": [],
+      "recovery_only": 305,
+      "branch_only": 12,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 136,
+      "diff_inventory_sha256": "e831bc8176c0995dcbe2df32f822f5cfee5fb24960b20289eec6e67b0d77497b"
+    },
+    {
+      "branch": "alpha7-4-release-title-fix",
+      "sha": "d69202df50cf998576b8453c9530f36532d1b4b8",
+      "covered_by": [],
+      "recovery_only": 304,
+      "branch_only": 1,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 136,
+      "diff_inventory_sha256": "e831bc8176c0995dcbe2df32f822f5cfee5fb24960b20289eec6e67b0d77497b"
+    },
+    {
+      "branch": "alpha7-5-general-doems-icon-fix",
+      "sha": "7a060eb7baa09db667ef2aac814c4ac61a48bfc3",
+      "covered_by": [],
+      "recovery_only": 303,
+      "branch_only": 7,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 135,
+      "diff_inventory_sha256": "cea6634f1c7621f1c6dd8b48d149ed2f47a3b0909a676c2c11afa77a38902cb3"
+    },
+    {
+      "branch": "alpha7-6-exact-existing-brand-icon",
+      "sha": "fccff9ce8f7c6d0a4cf2abed36518518afe21a74",
+      "covered_by": [],
+      "recovery_only": 302,
+      "branch_only": 5,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 122,
+      "diff_inventory_sha256": "f694c40fdd6fc960e494d4b01b8466792924061077cbe3e5fbe8f242167e4740"
+    },
+    {
+      "branch": "alpha7-8-release-title-fix",
+      "sha": "f466f6d06bb01c02fe7b692e067a8295080eefca",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 3,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 116,
+      "diff_inventory_sha256": "6b5e483187eab59dc3273562da892f5ecb49b0d40030d1edfef65cf1b7fcb051"
+    },
+    {
+      "branch": "alpha7-9-release-title-fix",
+      "sha": "38baa7d5073c5b847b0c3e5756fdb4f99d4b603e",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 5,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 117,
+      "diff_inventory_sha256": "58b16fc92f652020f946358e3adf670053ec05e8853e1ce6fd2a7d2d393d2ef2"
+    },
+    {
+      "branch": "alpha7-prices-p4-1-runtime",
+      "sha": "c0b655d10262527fac3a1080643f6d22fb8e3172",
+      "covered_by": [],
+      "recovery_only": 309,
+      "branch_only": 20,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 146,
+      "diff_inventory_sha256": "93771d7e19ba316a4e9da3dc99b17c2c7905a5a3c26eafdaf15b7a0b5c221a4f"
+    },
+    {
+      "branch": "alpha7-prices-p4-runtime",
+      "sha": "5dffd37546062cd2f1a9188af845bb6d209d29b9",
+      "covered_by": [],
+      "recovery_only": 309,
+      "branch_only": 20,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 141,
+      "diff_inventory_sha256": "90d7a82b2fa9bbddc791e6f36de35a8b836fbbe287e972badc7e3a188ab5d242"
+    },
+    {
+      "branch": "alpha8-ems-plans-foundation",
+      "sha": "a301e27985e5cccbb3c987253be2b409af0af351",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 55,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 149,
+      "diff_inventory_sha256": "c3da27ff49f65a2b745be5e03dc1d0e928c5bfeffd27c84364d4ebfb38cf41ac"
+    },
+    {
+      "branch": "alpha8-ems-plans-foundation-v2",
+      "sha": "b98c7ede39e353661e3d2e60555b74a7ba0ccce6",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 78,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 161,
+      "diff_inventory_sha256": "b4f8f3802a46b41066b14a1bcb6b1a697b40b8427e045c38242a5890e3922973"
+    },
+    {
+      "branch": "alpha9-release-title-fix",
+      "sha": "0f178b7dc850dc8c56df636a68bf4a7ecca687eb",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 93,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 167,
+      "diff_inventory_sha256": "0931a0c42b8dd67478b4f7a12a4a2fc9c29934dbce380150f4f5d6550004bafb"
+    },
+    {
+      "branch": "beta2-automatic-plan72-cutover",
+      "sha": "6f80e40beabb607c574e8b51a82c780ae81d68b8",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 140,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 208,
+      "diff_inventory_sha256": "ecb12e590d10c2b5a0f27fdb54b7d80926b08a98ee50b77140009a929770e1fb"
+    },
+    {
+      "branch": "feature/execution-complete-20261018",
+      "sha": "0ac790c17e5e65c7a58b521727d7dc27eb1d03a7",
+      "covered_by": [],
+      "recovery_only": 69,
+      "branch_only": 76,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 50,
+      "diff_inventory_sha256": "fabc623455ef421e85f8d9b0eff2dca7ff206d93b8f6a0367cab84a18c9679df"
+    },
+    {
+      "branch": "feature/manual-concept-expiry-20261014",
+      "sha": "8dc87ba041b43aa08116ebee379f50416030d031",
+      "covered_by": [],
+      "recovery_only": 70,
+      "branch_only": 14,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 33,
+      "diff_inventory_sha256": "c59f42b9132895caf7d5df987f91f18c2e898d0830275dc1e824a15b9356b6c3"
+    },
+    {
+      "branch": "feature/p0-combined-physical-execution",
+      "sha": "8cdb84f9d658b2cd6bb6648ef3d61d68a6f34038",
+      "covered_by": [
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 6,
+      "branch_only": 30,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 12,
+      "diff_inventory_sha256": "199c74db6755463418a245f29a05921e9915738fada170e52831c545b1e6321e"
+    },
+    {
+      "branch": "feature/r6-automatic-three-slot-sync",
+      "sha": "cbe5990d124859a993053e165b50b799854e0da3",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 86,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 58,
+      "diff_inventory_sha256": "3f55dae3e932a1ac8297fec3ef781eba37c94ac88330087c37d7508607a04948"
+    },
+    {
+      "branch": "feature/r7-quarter-contract-validated-release",
+      "sha": "c621e70213f38cdf65ba04248bbde305bc305971",
+      "covered_by": [],
+      "recovery_only": 71,
+      "branch_only": 8,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 39,
+      "diff_inventory_sha256": "d8072653f60624131775b3259d82fa16a4304ca39b94f3ea82e11525ce2d920e"
+    },
+    {
+      "branch": "feature/r7-quarter-hour-contract-fix",
+      "sha": "dfc19f39977aea4d8dbebfe38e5e3a78fdbd2dad",
+      "covered_by": [],
+      "recovery_only": 73,
+      "branch_only": 15,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 40,
+      "diff_inventory_sha256": "234d2a4b89f3c95f251a7df6a95493c666290c3dd035e0209ec06f33086d4061"
+    },
+    {
+      "branch": "feature/r7-scheduler-safety-prestart",
+      "sha": "276bd48310957e91c07fff6ce76d5b719f1f11ee",
+      "covered_by": [],
+      "recovery_only": 75,
+      "branch_only": 18,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 49,
+      "diff_inventory_sha256": "2d48b143b129e8b8a5b712a43c6ac57e2b60b0b88d1fcddf7a666a8606fec982"
+    },
+    {
+      "branch": "feature/r8a-execution-readiness",
+      "sha": "9f1e6ac184ead13a625e4454b6db15d59972cd35",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 221,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 238,
+      "diff_inventory_sha256": "326814c45145865d34f5185a6301e01180d26c496c2de6011b2df46eb0c833c7"
+    },
+    {
+      "branch": "feature/r8a-runtime-readonly-20261018",
+      "sha": "0b671b4c04a6d673653188c9500f4aae791f255a",
+      "covered_by": [],
+      "recovery_only": 69,
+      "branch_only": 22,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 40,
+      "diff_inventory_sha256": "b61cd16d0f68ddeea388f9def1de8115627bf0dd5f15946e30efeaff96e88a7c"
+    },
+    {
+      "branch": "feature/r9-combined-execution-shadow",
+      "sha": "2f0215d517f5163957891a6e51f5297672982125",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 27,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 19,
+      "diff_inventory_sha256": "e867ec11352fefc345362415b8f39dd9ac40c9fbb45cbcc868e7c0e45296807a"
+    },
+    {
+      "branch": "fix-alpha39-parity-guard",
+      "sha": "8aa64a7fa072bf80e6768366d1e75c9f1d651324",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 223,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 235,
+      "diff_inventory_sha256": "aada8885fa8b9a86c5cb098c810f30c02e573d9f760add4abfa779c0113942e3"
+    },
+    {
+      "branch": "fix-alpha40-manual-plan-derived-fields",
+      "sha": "44334ea94f9f212593b77c9edf0b0155015e2f53",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 220,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 236,
+      "diff_inventory_sha256": "53a6dd76b2dae25885dc6d94adfd353720a6cedec127c03ee82e99f7c5b2a553"
+    },
+    {
+      "branch": "fix-plan72-observability-parity",
+      "sha": "83a9a2dfd8100d268f1ab593be40dd6aa8d08363",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 105,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 176,
+      "diff_inventory_sha256": "31f714e978d116de3791290b2fa1983034d1dcba509acbd494b5415cbe6c4558"
+    },
+    {
+      "branch": "fix-plan72-solar-horizon-semantics",
+      "sha": "fb82a45ed4bf34eb13f9d155ca8dec3949e75c2b",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 110,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 177,
+      "diff_inventory_sha256": "a0194b56fab890cb22d2992eb3f69bc34c66e1d72e30d3583f9af430907f63f9"
+    },
+    {
+      "branch": "fix-self-consumption-planner-alpha19",
+      "sha": "b8dc95d823686611617655d102882b2dcd5b10fd",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 121,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 196,
+      "diff_inventory_sha256": "5aaad5968f4fc17fd5126e7f22050c51fc0a70b9b33a5235bed74c32e5a9575a"
+    },
+    {
+      "branch": "fix/alpha21-multirate-runtime",
+      "sha": "2cddcabb6b961dbb601531a984c29c12a9213c7b",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 135,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 202,
+      "diff_inventory_sha256": "87fd6fe2628873931dfda5771c94f250e36be0c904b80cccb572b84c8ca78ec0"
+    },
+    {
+      "branch": "fix/alpha24-release-title",
+      "sha": "6573b36b8cd202f6574ad23968d1177372c24813",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 118,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 204,
+      "diff_inventory_sha256": "5250212bc7ac1c9ee396b6b90fa4071015e7880edc0f27b1aaf0d9e55e62b9c0"
+    },
+    {
+      "branch": "fix/alpha36-startup-nonblocking",
+      "sha": "cfc379a08fd64140c9a90ab162ac08fea5adc349",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 220,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 233,
+      "diff_inventory_sha256": "6ca3ccacc22712e9e8c39e6007e8799a39cd7d39385c997ea6181eb1ce77c716"
+    },
+    {
+      "branch": "fix/alpha7.7-release-title",
+      "sha": "1621d2a8d5299c67d755eb9e453d31363663b4e9",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 1,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 115,
+      "diff_inventory_sha256": "0e18e96d099638cd03b57b3a11f7348b365ee482e68bfe5d3df4ff4f38e9339a"
+    },
+    {
+      "branch": "fix/alpha8-manual-plan-lifecycle",
+      "sha": "3df0d56c5fe6f28d3f66e0b766ca12c790bebe07",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 90,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 162,
+      "diff_inventory_sha256": "9d37fde6e272fe090f71b91a2c4c4ccd220c934ccd5145921e7de6f999838238"
+    },
+    {
+      "branch": "fix/execution-naming-cleanup-alpha23",
+      "sha": "40471585deeda3cbd9250511dacc39994bd320aa",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 145,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 205,
+      "diff_inventory_sha256": "1039de48b6e54dead6a7e4cfe3588fd2542440c90d15576b6d40f8972da1cffe"
+    },
+    {
+      "branch": "fix/execution-neutral-naming-alpha23",
+      "sha": "fa21483a376ff73bc1d72e4cee2e6b2425245fc8",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 115,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 203,
+      "diff_inventory_sha256": "308c32467297f85420c29a985d5463824f9bbc1c9ad6c9c68a09c054551d922b"
+    },
+    {
+      "branch": "fix/execution-public-names-20261018",
+      "sha": "1e9c9729209d63dead15022d70250722f11857ef",
+      "covered_by": [],
+      "recovery_only": 69,
+      "branch_only": 36,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 43,
+      "diff_inventory_sha256": "6c1ff817a98d623f347607f2d17ab7b9de6336650d7cda4116c7bee3868cc135"
+    },
+    {
+      "branch": "fix/prices-dst-fallback-alpha9-20261023",
+      "sha": "c412ebadde6a22871c568d3ca4d49f26ed720b96",
+      "covered_by": [],
+      "recovery_only": 7,
+      "branch_only": 6,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 3,
+      "diff_inventory_sha256": "2b79a6dd6b24dc58a729caa4cae6375e19378fdbb2703adaf1c8eb6dd873bb67"
+    },
+    {
+      "branch": "fix/prices-energyzero-startup-retry-20261023",
+      "sha": "eb23963a1c78f1fc95ea3bade681bcc517b74383",
+      "covered_by": [],
+      "recovery_only": 7,
+      "branch_only": 2,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 7,
+      "diff_inventory_sha256": "e0cc5ad5917a0dad7930e4f3f48c95e4b971ef07dd89082703bd72fbb2e5bbbe"
+    },
+    {
+      "branch": "fix/r7-manual-independent-safety-20261022",
+      "sha": "647db429d95bb761831aa8dfde9eab6282e17cb5",
+      "covered_by": [],
+      "recovery_only": 25,
+      "branch_only": 10,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 16,
+      "diff_inventory_sha256": "ad9065329902dc7766bcfa373b1881105966d7894f24487cab3c5f706535ec31"
+    },
+    {
+      "branch": "fix/r8-planner-entities-20261020",
+      "sha": "b1996a8b3090cf3f4241ba44b90b50273aa8be15",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 229,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 251,
+      "diff_inventory_sha256": "1189b5a58ed3cdd1ff0a57f5bf3e9111e1fa0410e755bd4571c76693ab8e9193"
+    },
+    {
+      "branch": "fix/remove-alpha41-solar-freeze",
+      "sha": "4357eed0a04a41beff39393bd88e001d7ba20389",
+      "covered_by": [],
+      "recovery_only": 301,
+      "branch_only": 9,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 116,
+      "diff_inventory_sha256": "e59aa98a06159dbc3c3aa49cffc9d6ddfa460e84f9d20f29fc13c782c2aae228"
+    },
+    {
+      "branch": "fix/reset-solar-actual-quarter",
+      "sha": "87f70bbf9ddd0c129cd5dd015a646563c332e2a7",
+      "covered_by": [],
+      "recovery_only": 84,
+      "branch_only": 7,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 52,
+      "diff_inventory_sha256": "ff80d5347bf183471cead8b4b9d7678ef5a6a8c322ad8042ab909e0d759b8f19"
+    },
+    {
+      "branch": "fix/reset-solar-per-array-factor",
+      "sha": "31f6a42bb24e1c4da34d2b6002c5de4668c677c9",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 93,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 67,
+      "diff_inventory_sha256": "4ce78baf96f513d3f814b13e36aa47332b08a9c74449e69df5567def4a759cc0"
+    },
+    {
+      "branch": "fix/scheduler-status-identity",
+      "sha": "4c9e061d78aae1662a3d940884e002694d2c1c0d",
+      "covered_by": [],
+      "recovery_only": 74,
+      "branch_only": 13,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 45,
+      "diff_inventory_sha256": "708ab4da1d1da09cc828648e4a5ae2665c64e6b0f85473ffe1e0226543aeadda"
+    },
+    {
+      "branch": "fix/solar-actual-quarter-validation-alpha24",
+      "sha": "598b8b71f25411252fa7771d7f1413893499e651",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 133,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 204,
+      "diff_inventory_sha256": "5250212bc7ac1c9ee396b6b90fa4071015e7880edc0f27b1aaf0d9e55e62b9c0"
+    },
+    {
+      "branch": "fix/solar-quarter-roll-publication",
+      "sha": "3c8a54d144ccbdff8f0cc7cb6bbb6fd85ba23eb7",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 124,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 203,
+      "diff_inventory_sha256": "308c32467297f85420c29a985d5463824f9bbc1c9ad6c9c68a09c054551d922b"
+    },
+    {
+      "branch": "fix/threadsafe-r9-r7-alpha92",
+      "sha": "79eec4f4de068bd6a81b5621c68ca64bdf529991",
+      "covered_by": [],
+      "recovery_only": 21,
+      "branch_only": 5,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 12,
+      "diff_inventory_sha256": "b24b6b4a6dfe6ef33ff712094878cd62942963b884e2ae4221e18433e34960ca"
+    },
+    {
+      "branch": "g6-alpha7-23-quarter-roll-identity-continuity",
+      "sha": "7d615b56ba7245a45768876d605a1d6e60f10c35",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 31,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 168,
+      "diff_inventory_sha256": "a11ec74dc9f3d9fb35dbbfb2edd538483e3af412e88d1f0b768541aaa5a0c616"
+    },
+    {
+      "branch": "g6-away-presence-entities",
+      "sha": "73872a3db9c4c5dc6b382af81a97eef6441a566a",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 37,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 129,
+      "diff_inventory_sha256": "9714abf68da191ae4c94eb99c1454f1768e0986d7d37657751961b554f044fd0"
+    },
+    {
+      "branch": "g6-step3a-ems-config-screen",
+      "sha": "1f30a0059f14028e849ca5e902aa70c00d5cc561",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 116,
+      "diff_inventory_sha256": "6b5e483187eab59dc3273562da892f5ecb49b0d40030d1edfef65cf1b7fcb051"
+    },
+    {
+      "branch": "g6-step3b-ems-config-screen",
+      "sha": "3e1eb010105ba82561fadf8946f4df94469fd813",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 16,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 117,
+      "diff_inventory_sha256": "58b16fc92f652020f946358e3adf670053ec05e8853e1ce6fd2a7d2d393d2ef2"
+    },
+    {
+      "branch": "g6-step3c-ems-time-mode-config",
+      "sha": "bea48960c006682da8c31c6e7bab402e6ac73d36",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 16,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 118,
+      "diff_inventory_sha256": "4fcdfe6ade5d74b6eab59c7ab4db2ff0dab117d5984e79fe4f587db8c0df8f52"
+    },
+    {
+      "branch": "g6-step4a-ems-backend-validation",
+      "sha": "f106467ab20bf4d546619f747b368e0055f5a2db",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 19,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 121,
+      "diff_inventory_sha256": "fcfff50f5f00ef98f93fc61b3cf94692638ae96b558b0cd4346234a7444d6afd"
+    },
+    {
+      "branch": "g6-step4b-ems-combination-validation",
+      "sha": "355302d8e66b0ede04940783139d9f1f7adcc651",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 21,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 122,
+      "diff_inventory_sha256": "c9ef67319cb2ba91ab4c312faf46176d80bcba0a92a0bf7999f3c237b0f16cc7"
+    },
+    {
+      "branch": "g6-step5a-complete-native-ems-core",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-consumer-wiring-part1",
+      "sha": "000541f100d3387854867ae37cab749375ab9204",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 33,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 142,
+      "diff_inventory_sha256": "d816dc3f6ef768967f151d2f7d6c839301635fb7bf1feb9f80c2c0559f7391c2"
+    },
+    {
+      "branch": "g6-step5a-control-path-observation-contract",
+      "sha": "d3d2b2cdaee081e43c7d304e331334c2d74b2979",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 30,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 163,
+      "diff_inventory_sha256": "1774863da0010e499cc7ddd0505f4c8946c9d9679dd446947aedfd96751cbb69"
+    },
+    {
+      "branch": "g6-step5a-downstream-shadow-parity",
+      "sha": "7ca3e73f418008a152d359328f1f3928c4d1f58c",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 36,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 161,
+      "diff_inventory_sha256": "555efc844dbc7f9dbab18b2f7561296b65e70a8c649b729bcb11e4345a2f256d"
+    },
+    {
+      "branch": "g6-step5a-ems-consumer-wiring",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-ems-core-config-consumers",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-ems-core-config-wiring",
+      "sha": "5817156e919128beb78685af8d5345958d82442d",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 14,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 133,
+      "diff_inventory_sha256": "66a982b5098c7c0c83f44acc32c1944fdf6945b2c593b2cb40e4a71c2534b9b2"
+    },
+    {
+      "branch": "g6-step5a-ems-core-config-wiring-v2",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-ems-core-consumer-wiring",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-ems-core-native-quarter",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-ems-core-settings-consumers",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-ems-core-settings-wiring",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-ems-settings-config-reads",
+      "sha": "02e10e530f458346b0b1e4169fcd862951c65bef",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 30,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-ems-settings-consumer-wiring",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-final-automatic-execution-shadow",
+      "sha": "8949d8f324bb59b7e188ba075dc1cc66d6535602",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 30,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 166,
+      "diff_inventory_sha256": "e557a2e974390c3c16c95bcad35c87fb9226d795b0b47d8a76c00b78b9cce9e1"
+    },
+    {
+      "branch": "g6-step5a-forecast-contract-diagnostics",
+      "sha": "e5c9d906910c86f5d9201ef61979488d8956fb29",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 29,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 153,
+      "diff_inventory_sha256": "4a22c196f73a1a9bc467471cce568ee7887fede46924712bf6b85a935be674ee"
+    },
+    {
+      "branch": "g6-step5a-frozen-core-config-consumers",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-frozen-core-native-15m",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-frozen-core-native15",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-frozen-core-settings-consumers",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-frozen-core-settings-wiring",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-frozen-ems-consumers",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-frozen-ems-core-config-wiring",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-frozen-ems-core-wiring",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-live-soc-runtime",
+      "sha": "63b03e4dd549154456f69acc5e1784e627d414c4",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 31,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 146,
+      "diff_inventory_sha256": "6ca8d5e5179a6be05e1b319c2c88052a6d936ec1b51210dc20557dfda87021ab"
+    },
+    {
+      "branch": "g6-step5a-native-15m-consumer-wiring",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-native-core-alpha715",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-native-core-config-consumers",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-native-core-config-wiring",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-native-core-consumer-wiring",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-native-core-consumers",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-native-core-settings-wiring",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-native-core-settings-wiring-v2",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-native-core-wiring",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-native-core-wiring-alpha715",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-native-ems-consumer-wiring",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-native-ems-consumers",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-native-ems-core",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-native-ems-core-config-wiring",
+      "sha": "f6c92a5fb066cbc8c1eef289fac313f638dbee45",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 14,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 133,
+      "diff_inventory_sha256": "38637f292f310533f1a4331eb6261451165130daab65b0fed65e4041568a3001"
+    },
+    {
+      "branch": "g6-step5a-native-ems-core-consumers",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-native-ems-core-settings-consumers",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-native-ems-core-settings-wiring",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-native-ems-core-wiring",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-native15-consumer-wiring-alpha715",
+      "sha": "dd3ce6225181628a516737e99fa8429f1c9122da",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 13,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 132,
+      "diff_inventory_sha256": "7329fe5108321c122847864c8e0409b1de171beaebd0ad46e17859cb35f47a77"
+    },
+    {
+      "branch": "g6-step5a-prices-76h-window-fix",
+      "sha": "546062bcf65911c142305dfa2861846eeff33818",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 40,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 155,
+      "diff_inventory_sha256": "445e3c106d28ea352d5456bd054e0df45e36394bdd5c46e4d7e324ec0a7be152"
+    },
+    {
+      "branch": "g6-step5a-shadow-bridge-planstore-scheduler",
+      "sha": "4b4eccae84c55bc83e22dbbe91484984389f6f62",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 32,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 151,
+      "diff_inventory_sha256": "06aaab8b84ba13323eb8a36caf8bfc9bbf57f7a904ca88f06237009cceef814d"
+    },
+    {
+      "branch": "g6-step5b-execution-authority-preparation",
+      "sha": "3722619b0dfc8b547485e33901bbd6775ca24bc5",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 32,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 171,
+      "diff_inventory_sha256": "28e52cd3b2950c3e6c7b280dab82d97fc6a0ecd204d6c2caa20311bb82c653c0"
+    },
+    {
+      "branch": "g6-step5c-authority-transfer-foundation",
+      "sha": "60611e6412498080530c104aed52eb06ebb05cea",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 38,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 174,
+      "diff_inventory_sha256": "f1a068a47946a397ce6b289d03e7f80c1b5408dc9a56144dc1c328636aadc5e7"
+    },
+    {
+      "branch": "main",
+      "sha": "4384d90c7c9c4b26808edb239ada3baf7d17a6b1",
+      "covered_by": [
+        "origin/main"
+      ],
+      "recovery_only": 299,
+      "branch_only": 231,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 251,
+      "diff_inventory_sha256": "1189b5a58ed3cdd1ff0a57f5bf3e9111e1fa0410e755bd4571c76693ab8e9193"
+    },
+    {
+      "branch": "p2-1-energy-forecast",
+      "sha": "3d060a2b82f28d6f0d8f677b7b69a4d2ba36e397",
+      "covered_by": [],
+      "recovery_only": 317,
+      "branch_only": 4,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 140,
+      "diff_inventory_sha256": "17598fed97b68f2b3cc7ed46b9369afa1db1c69c2c1adda57d6e6afb89eaffdd"
+    },
+    {
+      "branch": "p3-1-solar-open-meteo-runtime",
+      "sha": "09651cb910c9568ca099fbc6e4908cd4a243497b",
+      "covered_by": [],
+      "recovery_only": 310,
+      "branch_only": 20,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 143,
+      "diff_inventory_sha256": "9b5ec7200bfa151e0713f7654e39c8dcca44752d735652d079cdfbeb686fa88a"
+    },
+    {
+      "branch": "p4-1-prices-runtime",
+      "sha": "209baae13359846e0deb48adac1c55b706f3423c",
+      "covered_by": [],
+      "recovery_only": 309,
+      "branch_only": 4,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 143,
+      "diff_inventory_sha256": "db5120ad5a8cd62c0dcf13014413c0864cbcf969367d64e277180ecd8e218776"
+    },
+    {
+      "branch": "recorder-attribute-budget-guard",
+      "sha": "acc871375c22345dec302d19a90f7061a39b5c1d",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 104,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 196,
+      "diff_inventory_sha256": "5aaad5968f4fc17fd5126e7f22050c51fc0a70b9b33a5235bed74c32e5a9575a"
+    },
+    {
+      "branch": "release-0.2.0-alpha.9.0",
+      "sha": "9eb92298f0f83a2c8d80a709405e59567c1481d0",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 61,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 32,
+      "diff_inventory_sha256": "a0b653fa178bd648098886c37ba5fbb0198cb79151743be4cb8b04ff36f680b8"
+    },
+    {
+      "branch": "release-execution-supervision-20261018",
+      "sha": "6c8329e2947d497c8411cdb3a218a4d950c0dddb",
+      "covered_by": [],
+      "recovery_only": 69,
+      "branch_only": 77,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 50,
+      "diff_inventory_sha256": "fabc623455ef421e85f8d9b0eff2dca7ff206d93b8f6a0367cab84a18c9679df"
+    },
+    {
+      "branch": "release-r8-shadow-original-route-20261018",
+      "sha": "4c5da97ea2b45153f2645d0eb68bf89d8f72175f",
+      "covered_by": [],
+      "recovery_only": 69,
+      "branch_only": 23,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 41,
+      "diff_inventory_sha256": "e0abf2ade2d361460be39edd18d367282e129c27f1ed79b0f6a1551e439b502f"
+    },
+    {
+      "branch": "release-r8a-20261017",
+      "sha": "68bbcfcab79ae81c010d9c873e9dd1d1b77c7201",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 217,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 239,
+      "diff_inventory_sha256": "c419934687e86fae173440a1aaabc36c64e3b805dfd18bd257cb0201f4ad93c1"
+    },
+    {
+      "branch": "release-r8a-v2-isolated-20261017",
+      "sha": "0d9210e279b83561cee0d4d587b7076b48fc8360",
+      "covered_by": [],
+      "recovery_only": 69,
+      "branch_only": 12,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 37,
+      "diff_inventory_sha256": "a81ec1888b69516fdd8b078fb77efa4b0aec625106fe38b028f763581122c475"
+    },
+    {
+      "branch": "release/0.2.0-alpha.9.0-r7-baseline",
+      "sha": "a89efb2697e01995556a215a4a79e5eed3ff2334",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 69,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 33,
+      "diff_inventory_sha256": "c59f42b9132895caf7d5df987f91f18c2e898d0830275dc1e824a15b9356b6c3"
+    },
+    {
+      "branch": "release/alpha7.7-freeze-cleanup",
+      "sha": "d2b32090431dee898552988342534345f64a0fd1",
+      "covered_by": [],
+      "recovery_only": 300,
+      "branch_only": 7,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 115,
+      "diff_inventory_sha256": "0e18e96d099638cd03b57b3a11f7348b365ee482e68bfe5d3df4ff4f38e9339a"
+    },
+    {
+      "branch": "release/alpha9.4-publish-20261023",
+      "sha": "86affccd8823d453ef071a067e3eb436547e79a1",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023"
+      ],
+      "recovery_only": 0,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 0,
+      "diff_inventory_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "branch": "release/r9-manual-independent-alpha9.2",
+      "sha": "478cb9c4736b304555fad5ff8b043c0d17ec1a7f",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 15,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 12,
+      "diff_inventory_sha256": "b24b6b4a6dfe6ef33ff712094878cd62942963b884e2ae4221e18433e34960ca"
+    },
+    {
+      "branch": "release/r9-preview-alpha9.0",
+      "sha": "ae75fa3c6081ca9f82195bd2ac4973f0081b016b",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 24,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 16,
+      "diff_inventory_sha256": "ad9065329902dc7766bcfa373b1881105966d7894f24487cab3c5f706535ec31"
+    },
+    {
+      "branch": "release/r9-threadsafe-alpha9.3",
+      "sha": "ce165f84c11797563cfc1cdcb5636a24b220bb92",
+      "covered_by": [
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 6,
+      "branch_only": 1,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 2,
+      "diff_inventory_sha256": "3182919a4e21dc7f7cea3bd13a168066ed87041dc476a8de1d10ab649584341b"
+    },
+    {
+      "branch": "reset-0.2.0-alpha.1",
+      "sha": "8f80b9e6e06a912d6f672911cc201d264407048f",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 292,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 114,
+      "diff_inventory_sha256": "49d6e1c06fa908d8ccb120c93b773781e94a63d32ffd8421a61106e83089bad7"
+    },
+    {
+      "branch": "reset-0.2.0-alpha.2",
+      "sha": "fea05cfc008728d3e95c1b5b3585ab65b931d050",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 276,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 111,
+      "diff_inventory_sha256": "d81c03b69287aa3509004b0f3554e4da907f4ed705f5015e59abd1e6dc86e3f5"
+    },
+    {
+      "branch": "reset-0.2.0-alpha.2.1",
+      "sha": "1013ae252656936490024cd816ff719e83af1b77",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 263,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 109,
+      "diff_inventory_sha256": "8da4dbde1ca2157c37d61bd2c1a8a0dd1dc4a10b9a988dc34143b8830fef0282"
+    },
+    {
+      "branch": "reset-0.2.0-alpha.3",
+      "sha": "d6e0676fe74449f302d8077c24d9e4ded0602d76",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 243,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 103,
+      "diff_inventory_sha256": "80737d88ec310b71d418a381508ddfb0c1630252ec1ca0e5ad7fc3c9b541ff73"
+    },
+    {
+      "branch": "reset-0.2.0-alpha.4",
+      "sha": "6cc4a8c69ea733a986ce10ba2b119fe57932079b",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 228,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 101,
+      "diff_inventory_sha256": "0bdd0484d86b7f0d484149c17b089f3ea68839560dc8f825cc084d10ac33e626"
+    },
+    {
+      "branch": "reset-0.2.0-alpha.5",
+      "sha": "327ba61aeeff6064e4b704abe1c66b4ae2507c49",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 214,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 99,
+      "diff_inventory_sha256": "98a75f83e0af60dfada664cf57e35f2e62b332e35d40231de48363df25bdd5c9"
+    },
+    {
+      "branch": "reset-0.2.0-alpha.6",
+      "sha": "d49b7100cdff5e5af32336cc705bdb880861def3",
+      "covered_by": [],
+      "recovery_only": 214,
+      "branch_only": 19,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 103,
+      "diff_inventory_sha256": "c8595267182dba9dc3060b1ab20d7100fce4a11ab8ffe927e6841687ff2d6804"
+    },
+    {
+      "branch": "reset-0.2.0-alpha.6.1",
+      "sha": "61ff2fdf409f4f6934f11a0d02c124435b5395aa",
+      "covered_by": [],
+      "recovery_only": 214,
+      "branch_only": 32,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 106,
+      "diff_inventory_sha256": "18dde9a36539919d9c35a86aac8e9c746387dbb154253dc5c09c91c454d79715"
+    },
+    {
+      "branch": "reset-0.2.0-alpha.6.2",
+      "sha": "84a1084784876eff5978a1ae05c35b3f4655b402",
+      "covered_by": [],
+      "recovery_only": 214,
+      "branch_only": 45,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 108,
+      "diff_inventory_sha256": "f82fa42288b2ab3e7e9fc558fbe7b9ece36211b6122243d91d91fd02ae936c2d"
+    },
+    {
+      "branch": "reset-0.2.0-alpha.6.3",
+      "sha": "40d661881acd1e3cbdff2b15d776bfb1c6655ee8",
+      "covered_by": [],
+      "recovery_only": 214,
+      "branch_only": 61,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 110,
+      "diff_inventory_sha256": "a3b309fbe4ed348a4ab79ef326ad3b0bfc75a4c6487a34479558d0aa19f475d2"
+    },
+    {
+      "branch": "reset-0.2.0-alpha.7",
+      "sha": "7de8d0e5c77502b0e5548497b4d3f968ef6715a1",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 196,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 99,
+      "diff_inventory_sha256": "d10e9870275336cd24381dd56f1f42f864a65521217656015b5eab4c73d9c581"
+    },
+    {
+      "branch": "reset-0.2.0-alpha.7.1",
+      "sha": "2d860d64c246cc55d7a0c936cee2ac735237262e",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 169,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 96,
+      "diff_inventory_sha256": "656018d466eb0aaf98c6014eee14847892e835a0debb513e5c24e3fe22b08a4f"
+    },
+    {
+      "branch": "reset-0.2.0-alpha.7.1.1",
+      "sha": "0c05bc3c0d7a4ee878f851c4770d43c3c1ca8d3f",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 158,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 94,
+      "diff_inventory_sha256": "8d8c840fc249202a4a3d62c945854bf2e49e1402d30db869cb5f8bf1e29901bb"
+    },
+    {
+      "branch": "reset-0.2.0-alpha.7.1.10",
+      "sha": "4c91f3479f6cf8018bc9f8a61b71e2303e78ba2f",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 84,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 57,
+      "diff_inventory_sha256": "8a778660b34d379db5c666dd3569124b5d71569c15be9347b94f5f82aafeb94e"
+    },
+    {
+      "branch": "reset-0.2.0-alpha.7.1.11",
+      "sha": "f879120588b2df46e669e8f7b4df59035c697572",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 75,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 51,
+      "diff_inventory_sha256": "0d26c8abef74cdf884c14475331ab054507a94bf88df0b71e4ff1981700987ff"
+    },
+    {
+      "branch": "reset-0.2.0-alpha.7.1.12",
+      "sha": "2d39cfc282d6a5f405e44bc4ce4c5705b8840e3b",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 74,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 49,
+      "diff_inventory_sha256": "2d48b143b129e8b8a5b712a43c6ac57e2b60b0b88d1fcddf7a666a8606fec982"
+    },
+    {
+      "branch": "reset-0.2.0-alpha.7.1.13",
+      "sha": "24beb94b8fe9372adba6dd046165e24df4a950e4",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 73,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 45,
+      "diff_inventory_sha256": "708ab4da1d1da09cc828648e4a5ae2665c64e6b0f85473ffe1e0226543aeadda"
+    },
+    {
+      "branch": "reset-0.2.0-alpha.7.1.14",
+      "sha": "a5bc21cb74450b601ec68185a992b2f70ef274aa",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 71,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 40,
+      "diff_inventory_sha256": "234d2a4b89f3c95f251a7df6a95493c666290c3dd035e0209ec06f33086d4061"
+    },
+    {
+      "branch": "reset-0.2.0-alpha.7.1.15",
+      "sha": "7e14d69452b46090c253c4ec8c9eec20be69bb61",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 70,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 39,
+      "diff_inventory_sha256": "d8072653f60624131775b3259d82fa16a4304ca39b94f3ea82e11525ce2d920e"
+    },
+    {
+      "branch": "reset-0.2.0-alpha.7.1.16",
+      "sha": "a89efb2697e01995556a215a4a79e5eed3ff2334",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 69,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 33,
+      "diff_inventory_sha256": "c59f42b9132895caf7d5df987f91f18c2e898d0830275dc1e824a15b9356b6c3"
+    },
+    {
+      "branch": "reset-0.2.0-alpha.7.1.2",
+      "sha": "a195d3418e18f197ba40e94252812b4280288bfb",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 146,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 92,
+      "diff_inventory_sha256": "36d093a3d03dd8177e96c85bda5e73dc23bbeeee3e2fe7d8cee48f98112b3559"
+    },
+    {
+      "branch": "reset-0.2.0-alpha.7.1.3",
+      "sha": "804502552d28400921717ce8088df6dba612b5b9",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 134,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 91,
+      "diff_inventory_sha256": "7658c65d3403d2e319ed2e1bc65d1329ab8bff70719c5032d140004ebc052e93"
+    },
+    {
+      "branch": "reset-0.2.0-alpha.7.1.4",
+      "sha": "75dc3087b91e1319ef5cad09ab47eeb67fd938fd",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 115,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 89,
+      "diff_inventory_sha256": "ed2eb6c294ccf54ad280e55598ab923ffc364bf4abe9d9062f6d673094fc9717"
+    },
+    {
+      "branch": "reset-0.2.0-alpha.7.1.5",
+      "sha": "fe4a83474b135160b90496344c9361fc466a3448",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 97,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 85,
+      "diff_inventory_sha256": "281ec422ba8680b2f6a2d8f4ef57f110db855cbcfd11ebb7965a17da66b8e994"
+    },
+    {
+      "branch": "reset-0.2.0-alpha.7.1.6",
+      "sha": "2c8345b3e0a23f9a67b513903e03c6b684765920",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 96,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 82,
+      "diff_inventory_sha256": "fd314638c93677fae007078160dde54f5fa68672c1515507df3faba2be73371c"
+    },
+    {
+      "branch": "reset-0.2.0-alpha.7.1.7",
+      "sha": "543e3c43d46f5788029f4c2824edbb3d6071a460",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 95,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 80,
+      "diff_inventory_sha256": "182f68025508d0e002c2c7c8be2eb09936da5fc4c644d8f9ee88693aa12f1b2e"
+    },
+    {
+      "branch": "reset-0.2.0-alpha.7.1.8",
+      "sha": "6cabf88cc9cb7cb3475cc2105f3884abd3aa52af",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 94,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 75,
+      "diff_inventory_sha256": "15e38e33c97b1c738d33fd3c0a1e47707fd40b13063757742cc745a555bd88da"
+    },
+    {
+      "branch": "reset-0.2.0-alpha.7.1.9",
+      "sha": "47f6272eeb1ee78bd6dccab851468323b5ddce50",
+      "covered_by": [
+        "origin/release/alpha9.4-publish-20261023",
+        "origin/feature/p0-combined-physical-execution"
+      ],
+      "recovery_only": 90,
+      "branch_only": 0,
+      "disposition": "included_by_ancestry",
+      "differing_file_count": 66,
+      "diff_inventory_sha256": "3c88013075485288a78b949f54f27c12cfac712d0a716726cfad59f45c53251c"
+    },
+    {
+      "branch": "step0-clean-foundation",
+      "sha": "8010cdcec2d8cb745a771b2be4a71d64a239b19c",
+      "covered_by": [],
+      "recovery_only": 318,
+      "branch_only": 1,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 145,
+      "diff_inventory_sha256": "e0ebfb76547b52567ada5b222cae50fcf56676d51bbce9149af62dbc2280e3a8"
+    },
+    {
+      "branch": "step11-safety-prestart",
+      "sha": "b7386715543e51ed2b03556271345b3ad8006d32",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 106,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 167,
+      "diff_inventory_sha256": "0931a0c42b8dd67478b4f7a12a4a2fc9c29934dbce380150f4f5d6550004bafb"
+    },
+    {
+      "branch": "step12-1-control-path-readiness",
+      "sha": "6e04e3bf32c3677bbcc6ab06056f092a81f9a2c6",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 108,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 170,
+      "diff_inventory_sha256": "1859220d229db3cc9f8c8626367642731ee59d364cbcd29d7732ca8080d833fd"
+    },
+    {
+      "branch": "step12-2-action-controller-execution-handoff",
+      "sha": "f20b0ae69dd0c7c07f6a6d84d6dada0e878bc52f",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 109,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 174,
+      "diff_inventory_sha256": "ee817631144d2c8880cb223ae98f9ae49701e1d0b8c522a83833a6df99c53f39"
+    },
+    {
+      "branch": "step12-3-final-revalidation-mode-switch-preview",
+      "sha": "1f39b859b39ddd6d84d2013e8f1c068bf8efcb14",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 111,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 181,
+      "diff_inventory_sha256": "79c9be8598ddc5b1411dcc5fd384bcfcd43d95e1046cea52b93a4006180976d0"
+    },
+    {
+      "branch": "step12-4-automatic-execution-gate",
+      "sha": "c9e5b097d5fe0e21c8d31c55aac863c6b2b94e36",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 119,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 184,
+      "diff_inventory_sha256": "3e1ccac0590a8713de000d7ba8ab7407ce3c38012e0e6483efdb52f472b64f54"
+    },
+    {
+      "branch": "step12-5-execution-controller-shadow",
+      "sha": "e9dbd1f544a7bf04d55d1843b85325d5e752245d",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 114,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 187,
+      "diff_inventory_sha256": "8620ab72bdb7c3dc882261e9e63aa2923484ad351a44aa65d77ea8345bce3303"
+    },
+    {
+      "branch": "step12-6-restart-recovery-observability",
+      "sha": "007247a53312f9e029d139df52eb73fbdbff1210",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 113,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 189,
+      "diff_inventory_sha256": "f6cc80fab0a4a68db7a6db813993f6b0ad49e1d04bc35e24780954c1687b1f69"
+    },
+    {
+      "branch": "step13-g5-frozen-live-parity",
+      "sha": "701b2c1fe119a2feda317439b75569865f6f2331",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 115,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 195,
+      "diff_inventory_sha256": "6ed7fab22dfd0842a7b3e30fd3e63726c4e1346f7b98313cec52c2923c5e3d4d"
+    },
+    {
+      "branch": "work/r8-controller-validation-clean-20261018",
+      "sha": "2b1155482b8aae3790746ab58a2dac78c848061b",
+      "covered_by": [],
+      "recovery_only": 299,
+      "branch_only": 279,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 250,
+      "diff_inventory_sha256": "dcd993f7cb0d1aaa6332406e4fc5f9de05e44c11899f24e2a90fdc302dfe5f90"
+    },
+    {
+      "branch": "work/r8-independent-execution-20261018",
+      "sha": "abedd6df1961f55c6734522a71c36312c2052ce1",
+      "covered_by": [],
+      "recovery_only": 69,
+      "branch_only": 113,
+      "disposition": "preserved_historical_or_alternative_branch",
+      "differing_file_count": 53,
+      "diff_inventory_sha256": "4cf0d042b13d90446e9faa6f11d1a6707c42f609383276d72d85a6b30782b55c"
+    }
+  ],
+  "tags": [
+    "179b83e0709afd72ff3ef41a9087394dee755caa refs/tags/0.1.0-alpha.1",
+    "442a69b5216fb97d0492b809cc0889460367cc7d refs/tags/0.1.0-alpha.10",
+    "e98ac3df53ef93c6556f2f2881dd298fb8332e5c refs/tags/0.1.0-alpha.11",
+    "81052fddf011e673e03dafaa3a81d6a58efe75ca refs/tags/0.1.0-alpha.12",
+    "4f593a2c65235143f1fe10dcf031fc6e1fc3bbc9 refs/tags/0.1.0-alpha.13",
+    "0185c05aa91b593577be32f015c4b18b3c7d34fb refs/tags/0.1.0-alpha.14",
+    "5d6309a47b916e2135e68b1c6b154b00e3e933e0 refs/tags/0.1.0-alpha.15",
+    "bcfe48dc4a97d18161b33d5e62065bdcd4809761 refs/tags/0.1.0-alpha.16",
+    "c35049d5f356194146e6869f811219e7e365c227 refs/tags/0.1.0-alpha.17",
+    "6f8c30c6c41b4e6e651d93c88e26237042f7bd29 refs/tags/0.1.0-alpha.18",
+    "52e8e9dcce35462cefa852747beb35e589840a37 refs/tags/0.1.0-alpha.19",
+    "f96830321c4ed7190aca60c310856413a66f391f refs/tags/0.1.0-alpha.2",
+    "6b20cee60f89b9bb83c8495981acd74c65c341ba refs/tags/0.1.0-alpha.20",
+    "29d6546fbb1e145b5137b5a7695b3f6520384767 refs/tags/0.1.0-alpha.21",
+    "fa21483a376ff73bc1d72e4cee2e6b2425245fc8 refs/tags/0.1.0-alpha.22",
+    "f4c7e820183afa84c6d1adbb14b28b09d289a1bc refs/tags/0.1.0-alpha.23",
+    "4ecd12d7f25ea64b3e0ac66ce5228f879a0be6eb refs/tags/0.1.0-alpha.24",
+    "2a26b72bfa93897d2c4717600a0f49638d4f989e refs/tags/0.1.0-alpha.25",
+    "9beb5c1996451e2239238b453e5ba5ee5b975018 refs/tags/0.1.0-alpha.26",
+    "00f0fae8bbd6519e3570e9dfb428f811980dce91 refs/tags/0.1.0-alpha.27",
+    "ca1c9f01b73abaa8a45e954cead2819cd140b132 refs/tags/0.1.0-alpha.28",
+    "2c9531678ef77e53d258e562bb1af71dd8f6f54a refs/tags/0.1.0-alpha.29",
+    "20dc2b3875f9ed69fb86d1c54a17b32497031d77 refs/tags/0.1.0-alpha.3",
+    "fcae7c7c7f6dfff9c3874fca23e6c5dfd45967f0 refs/tags/0.1.0-alpha.30",
+    "ed761baeccf6e77c009f7bd2e3a4e7cbb31b146e refs/tags/0.1.0-alpha.31",
+    "f3c93d632a3105e85323eafc4916663c977f4b9a refs/tags/0.1.0-alpha.32",
+    "f5d195052889639b4c9f9b8c1a8e8b268cb5e6ff refs/tags/0.1.0-alpha.33",
+    "81d895b144ecfa32d35de5af59608a886e04b847 refs/tags/0.1.0-alpha.34",
+    "497a310ec7a66846bc4bedc136ea2246985b18ba refs/tags/0.1.0-alpha.35",
+    "54f36f1e3f063bd91b1d9564cab6922b64c1ff04 refs/tags/0.1.0-alpha.36",
+    "56f86e2ccee7028e8896ad0bbad9e90bc23ab0a6 refs/tags/0.1.0-alpha.37",
+    "69d42735e5e9bb1cf3343fcc1dc47db5bb962f5b refs/tags/0.1.0-alpha.38",
+    "e308b4d4d219f3a5554c07e16bbe23215037ae4b refs/tags/0.1.0-alpha.39",
+    "72293952f66521f9f6e0eac5731387500be68615 refs/tags/0.1.0-alpha.4",
+    "5df1bd137cd1e6ba5bba0e756dac1a98b4cb897d refs/tags/0.1.0-alpha.40",
+    "13c4a8fefe9eb74a0b77f935210b6f3e224a4c74 refs/tags/0.1.0-alpha.5",
+    "f53d89c1801698505a3b4a14f57c1ea4a05f119c refs/tags/0.1.0-alpha.5.1",
+    "1c8ec74897049e65c0c2bf7c92121628fbaa5aab refs/tags/0.1.0-alpha.5.2",
+    "9bcb8f242be8f965adc4df721fb31da7fd8c42d9 refs/tags/0.1.0-alpha.6",
+    "e558037c15b17b13be0ea1182d25e65ebc564a6b refs/tags/0.1.0-alpha.7",
+    "0c0f2521f3732f84aade9fb66cd1458e575a2866 refs/tags/0.1.0-alpha.7.1",
+    "030d977bab27ea4e1ed8a7d8d25a4e9ee8ddb605 refs/tags/0.1.0-alpha.7.10",
+    "6790148f9f7e0a115fc42db52756360f67e95fcc refs/tags/0.1.0-alpha.7.11",
+    "b5c283fce8e9285a8d33b1a7ee77272d97a6bc63 refs/tags/0.1.0-alpha.7.12",
+    "70858c90024096d27b9b06715608bdb71b2925ea refs/tags/0.1.0-alpha.7.13",
+    "dd3ce6225181628a516737e99fa8429f1c9122da refs/tags/0.1.0-alpha.7.14",
+    "1de9e3c3c63932becc8eda0e9562b616db1d17cd refs/tags/0.1.0-alpha.7.15",
+    "50d4b78416b77e4d051043a1a9afc9a4871f3b3d refs/tags/0.1.0-alpha.7.16",
+    "c33bf392a5ff0ea2686b2c42d03e7c7616839e6e refs/tags/0.1.0-alpha.7.17",
+    "80c86d7a31cf3d8ed30b121f12625e8d735ef72e refs/tags/0.1.0-alpha.7.18",
+    "20cb79aaac6647c05bae10a909dbba1e883ecee1 refs/tags/0.1.0-alpha.7.19",
+    "4a491ed42c4349a53a03e48a42486c3fb103257f refs/tags/0.1.0-alpha.7.2",
+    "fcdb1931567107023c0593a0747690825ff169e6 refs/tags/0.1.0-alpha.7.20",
+    "4f75e7c98141cdcce5cdcf139901b33e6c0d7a4a refs/tags/0.1.0-alpha.7.21",
+    "c19df8911836a4a41397fc0368caaaa51c140fc9 refs/tags/0.1.0-alpha.7.22",
+    "1bbdb1fb7f149318a067fb5020d1727c22122f31 refs/tags/0.1.0-alpha.7.23",
+    "d26498f2382ccd3f754cb1f21e65679dd8c34c7f refs/tags/0.1.0-alpha.7.24",
+    "3c7af63b499b788057a08abafed86b57f0a44a59 refs/tags/0.1.0-alpha.7.25",
+    "2f63ae166473efa489d381418fd0ac1b38df395c refs/tags/0.1.0-alpha.7.3",
+    "ee002a4aa4957ba313c9b06e819cc7c17c3a5c6c refs/tags/0.1.0-alpha.7.4",
+    "953f064a1b756cfb0a9ca4a70e9210512026d834 refs/tags/0.1.0-alpha.7.5",
+    "2c28d2b1b2c999ffe260638f9aef432092782d94 refs/tags/0.1.0-alpha.7.6",
+    "eb01911a40e01c5f01264e2a4d5e297a8ea3870d refs/tags/0.1.0-alpha.7.7",
+    "5cb85c5c408436ad9fdbc37aa15d07e3b1418ecc refs/tags/0.1.0-alpha.7.8",
+    "f0b448f9d5ac7d1040da67a0273bba5f862340c6 refs/tags/0.1.0-alpha.7.9",
+    "fd6627d910b5ae2b9f1022d9329d32fc2dcb64a0 refs/tags/0.1.0-alpha.8",
+    "3908e43f6e3e91caea883702698075b48a18fcce refs/tags/0.1.0-alpha.8.1",
+    "571988de1dbcc3df8f08467cd6eb6f9c644035a7 refs/tags/0.1.0-alpha.9",
+    "8f80b9e6e06a912d6f672911cc201d264407048f refs/tags/0.2.0-alpha.1",
+    "fea05cfc008728d3e95c1b5b3585ab65b931d050 refs/tags/0.2.0-alpha.2",
+    "1013ae252656936490024cd816ff719e83af1b77 refs/tags/0.2.0-alpha.2.1",
+    "d6e0676fe74449f302d8077c24d9e4ded0602d76 refs/tags/0.2.0-alpha.3",
+    "6cc4a8c69ea733a986ce10ba2b119fe57932079b refs/tags/0.2.0-alpha.4",
+    "327ba61aeeff6064e4b704abe1c66b4ae2507c49 refs/tags/0.2.0-alpha.5",
+    "52f1ea02d15520b24e43c74eb8e9b654a4456e1f refs/tags/0.2.0-alpha.6",
+    "61ff2fdf409f4f6934f11a0d02c124435b5395aa refs/tags/0.2.0-alpha.6.1",
+    "84a1084784876eff5978a1ae05c35b3f4655b402 refs/tags/0.2.0-alpha.6.2",
+    "40d661881acd1e3cbdff2b15d776bfb1c6655ee8 refs/tags/0.2.0-alpha.6.3",
+    "7de8d0e5c77502b0e5548497b4d3f968ef6715a1 refs/tags/0.2.0-alpha.7",
+    "2d860d64c246cc55d7a0c936cee2ac735237262e refs/tags/0.2.0-alpha.7.1",
+    "0c05bc3c0d7a4ee878f851c4770d43c3c1ca8d3f refs/tags/0.2.0-alpha.7.1.1",
+    "4c91f3479f6cf8018bc9f8a61b71e2303e78ba2f refs/tags/0.2.0-alpha.7.1.10",
+    "f879120588b2df46e669e8f7b4df59035c697572 refs/tags/0.2.0-alpha.7.1.11",
+    "2d39cfc282d6a5f405e44bc4ce4c5705b8840e3b refs/tags/0.2.0-alpha.7.1.12",
+    "24beb94b8fe9372adba6dd046165e24df4a950e4 refs/tags/0.2.0-alpha.7.1.13",
+    "737bb6f21652e2253cb6804ea08d6ff443bf0535 refs/tags/0.2.0-alpha.7.1.14",
+    "7e14d69452b46090c253c4ec8c9eec20be69bb61 refs/tags/0.2.0-alpha.7.1.15",
+    "a89efb2697e01995556a215a4a79e5eed3ff2334 refs/tags/0.2.0-alpha.7.1.16",
+    "a195d3418e18f197ba40e94252812b4280288bfb refs/tags/0.2.0-alpha.7.1.2",
+    "804502552d28400921717ce8088df6dba612b5b9 refs/tags/0.2.0-alpha.7.1.3",
+    "75dc3087b91e1319ef5cad09ab47eeb67fd938fd refs/tags/0.2.0-alpha.7.1.4",
+    "fe4a83474b135160b90496344c9361fc466a3448 refs/tags/0.2.0-alpha.7.1.5",
+    "2c8345b3e0a23f9a67b513903e03c6b684765920 refs/tags/0.2.0-alpha.7.1.6",
+    "543e3c43d46f5788029f4c2824edbb3d6071a460 refs/tags/0.2.0-alpha.7.1.7",
+    "6cabf88cc9cb7cb3475cc2105f3884abd3aa52af refs/tags/0.2.0-alpha.7.1.8",
+    "47f6272eeb1ee78bd6dccab851468323b5ddce50 refs/tags/0.2.0-alpha.7.1.9",
+    "9cd50922ab85afda834f8d937f92eb5428718c10 refs/tags/0.2.0-alpha.8.0.1",
+    "0d9210e279b83561cee0d4d587b7076b48fc8360 refs/tags/0.2.0-alpha.8.0.2",
+    "4c5da97ea2b45153f2645d0eb68bf89d8f72175f refs/tags/0.2.0-alpha.8.0.3",
+    "1e9c9729209d63dead15022d70250722f11857ef refs/tags/0.2.0-alpha.8.0.4",
+    "0ac790c17e5e65c7a58b521727d7dc27eb1d03a7 refs/tags/0.2.0-alpha.8.0.5",
+    "723226c8cd693c4d8cf4b55f23e6f79df12fc86b refs/tags/0.2.0-alpha.8.0.6",
+    "e95a1fa5984062028b2bf850e39365afe9eb8f2f refs/tags/0.2.0-alpha.8.0.7",
+    "4384d90c7c9c4b26808edb239ada3baf7d17a6b1 refs/tags/0.2.0-alpha.8.0.8",
+    "9eb92298f0f83a2c8d80a709405e59567c1481d0 refs/tags/0.2.0-alpha.9.0",
+    "b915b6b8db0958fb346189803f8b92dd6455f056 refs/tags/v0.2.0-alpha.9.0",
+    "7c836a96f6cee4625682b058f355c29bac5aa52f refs/tags/v0.2.0-alpha.9.1",
+    "55a875a23d99455666441ceee967cc50addf0b71 refs/tags/v0.2.0-alpha.9.2",
+    "0f12528b8cc2d65e29aa1194db1c63c510f86533 refs/tags/v0.2.0-alpha.9.3",
+    "ce165f84c11797563cfc1cdcb5636a24b220bb92 refs/tags/v0.2.0-alpha.9.4"
+  ],
+  "main_file_differences": [
+    "M\t.github/workflows/p2-energy-forecast-release.yml",
+    "A\t.github/workflows/publish-r9-preview.yml",
+    "D\t.github/workflows/r8-controller-tests.yml",
+    "A\t.github/workflows/r9-preview-validation.yml",
+    "M\tREADME.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.10.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.11.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.12.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.13.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.14.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.15.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.16.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.17.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.18.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.20.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.21.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.22.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.23.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.24.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.25.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.26.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.27.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.28.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.29.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.30.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.31.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.32.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.33.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.34.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.35.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.36.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.37.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.38.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.39.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.40.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.7.10.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.7.11.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.7.12.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.7.13.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.7.14.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.7.15.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.7.16.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.7.17.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.7.18.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.7.19.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.7.20.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.7.21.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.7.22.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.7.23.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.7.24.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.7.25.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.7.8.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.7.9.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.8.1.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.8.md",
+    "D\tRELEASE_NOTES_0.1.0-alpha.9.md",
+    "A\tRELEASE_NOTES_0.2.0-alpha.1.md",
+    "A\tRELEASE_NOTES_0.2.0-alpha.2.1.md",
+    "A\tRELEASE_NOTES_0.2.0-alpha.2.md",
+    "A\tRELEASE_NOTES_0.2.0-alpha.3.md",
+    "A\tRELEASE_NOTES_0.2.0-alpha.4.md",
+    "A\tRELEASE_NOTES_0.2.0-alpha.5.md",
+    "A\tRELEASE_NOTES_0.2.0-alpha.7.1.1.md",
+    "A\tRELEASE_NOTES_0.2.0-alpha.7.1.10.md",
+    "A\tRELEASE_NOTES_0.2.0-alpha.7.1.11.md",
+    "A\tRELEASE_NOTES_0.2.0-alpha.7.1.12.md",
+    "A\tRELEASE_NOTES_0.2.0-alpha.7.1.13.md",
+    "A\tRELEASE_NOTES_0.2.0-alpha.7.1.14.md",
+    "A\tRELEASE_NOTES_0.2.0-alpha.7.1.15.md",
+    "A\tRELEASE_NOTES_0.2.0-alpha.7.1.16.md",
+    "A\tRELEASE_NOTES_0.2.0-alpha.7.1.2.md",
+    "A\tRELEASE_NOTES_0.2.0-alpha.7.1.3.md",
+    "A\tRELEASE_NOTES_0.2.0-alpha.7.1.4.md",
+    "A\tRELEASE_NOTES_0.2.0-alpha.7.1.5.md",
+    "A\tRELEASE_NOTES_0.2.0-alpha.7.1.6.md",
+    "A\tRELEASE_NOTES_0.2.0-alpha.7.1.7.md",
+    "A\tRELEASE_NOTES_0.2.0-alpha.7.1.8.md",
+    "A\tRELEASE_NOTES_0.2.0-alpha.7.1.9.md",
+    "A\tRELEASE_NOTES_0.2.0-alpha.7.1.md",
+    "A\tRELEASE_NOTES_0.2.0-alpha.7.md",
+    "A\tRELEASE_NOTES_0.2.0-alpha.9.0.md",
+    "M\tcustom_components/doems/__init__.py",
+    "A\tcustom_components/doems/automatic_combined_planner.py",
+    "A\tcustom_components/doems/automatic_combined_planner_model.py",
+    "A\tcustom_components/doems/automatic_combined_planner_runtime.py",
+    "A\tcustom_components/doems/automatic_plan_contract.py",
+    "A\tcustom_components/doems/automatic_slot_bridge.py",
+    "A\tcustom_components/doems/automatic_slot_bridge_model.py",
+    "A\tcustom_components/doems/battery_contract.py",
+    "A\tcustom_components/doems/battery_contract_model.py",
+    "M\tcustom_components/doems/binary_sensor.py",
+    "D\tcustom_components/doems/button.py",
+    "A\tcustom_components/doems/combined_anker_bridge.py",
+    "A\tcustom_components/doems/combined_execution_contract.py",
+    "A\tcustom_components/doems/combined_execution_shadow.py",
+    "A\tcustom_components/doems/combined_execution_shadow_runtime.py",
+    "M\tcustom_components/doems/config_flow.py",
+    "M\tcustom_components/doems/const.py",
+    "M\tcustom_components/doems/datetime.py",
+    "D\tcustom_components/doems/ems_action_controller.py",
+    "D\tcustom_components/doems/ems_alpha36/__init__.py",
+    "D\tcustom_components/doems/ems_alpha36/energy_need.py",
+    "D\tcustom_components/doems/ems_alpha36/planner_72h.py",
+    "D\tcustom_components/doems/ems_alpha36/sequential_safety.py",
+    "D\tcustom_components/doems/ems_alpha36_adapter.py",
+    "D\tcustom_components/doems/ems_alpha76/__init__.py",
+    "D\tcustom_components/doems/ems_alpha76/const.py",
+    "D\tcustom_components/doems/ems_alpha76/energy_need.py",
+    "D\tcustom_components/doems/ems_alpha76/planner_72h.py",
+    "D\tcustom_components/doems/ems_alpha76/planner_72h_sequential_safety.py",
+    "D\tcustom_components/doems/ems_alpha76/planner_preview.py",
+    "D\tcustom_components/doems/ems_alpha76_adapter.py",
+    "D\tcustom_components/doems/ems_alpha76_surface.py",
+    "D\tcustom_components/doems/ems_automatic_execution_gate.py",
+    "D\tcustom_components/doems/ems_config_validation.py",
+    "D\tcustom_components/doems/ems_control_path.py",
+    "D\tcustom_components/doems/ems_execution.py",
+    "D\tcustom_components/doems/ems_execution_handoff.py",
+    "D\tcustom_components/doems/ems_execution_readiness.py",
+    "D\tcustom_components/doems/ems_final_revalidation.py",
+    "D\tcustom_components/doems/ems_g5_live_parity.py",
+    "D\tcustom_components/doems/ems_g5_live_parity_runtime.py",
+    "D\tcustom_components/doems/ems_g5_live_parity_sensor.py",
+    "D\tcustom_components/doems/ems_input_contract.py",
+    "D\tcustom_components/doems/ems_live_input.py",
+    "D\tcustom_components/doems/ems_manual_physical_execution.py",
+    "D\tcustom_components/doems/ems_mode_switch_preview.py",
+    "D\tcustom_components/doems/ems_multirate.py",
+    "D\tcustom_components/doems/ems_physical_test.py",
+    "D\tcustom_components/doems/ems_plan_store.py",
+    "D\tcustom_components/doems/ems_planner_bridge.py",
+    "D\tcustom_components/doems/ems_prestart_validator.py",
+    "D\tcustom_components/doems/ems_runtime.py",
+    "D\tcustom_components/doems/ems_safety_guard.py",
+    "D\tcustom_components/doems/ems_scheduler.py",
+    "D\tcustom_components/doems/ems_settings.py",
+    "D\tcustom_components/doems/ems_soc.py",
+    "M\tcustom_components/doems/energy_coordinator.py",
+    "D\tcustom_components/doems/execution_alpha76_bridge.py",
+    "M\tcustom_components/doems/execution_anker_adapter.py",
+    "D\tcustom_components/doems/execution_handover.py",
+    "D\tcustom_components/doems/execution_model.py",
+    "D\tcustom_components/doems/execution_planner_bridge.py",
+    "D\tcustom_components/doems/execution_runtime.py",
+    "M\tcustom_components/doems/manifest.json",
+    "A\tcustom_components/doems/manual_plan_lifecycle.py",
+    "A\tcustom_components/doems/manual_plan_lifecycle_model.py",
+    "A\tcustom_components/doems/manual_plan_model.py",
+    "A\tcustom_components/doems/manual_plan_services.py",
+    "A\tcustom_components/doems/manual_plan_store.py",
+    "A\tcustom_components/doems/manual_soc_projection.py",
+    "A\tcustom_components/doems/manual_soc_projection_model.py",
+    "M\tcustom_components/doems/number.py",
+    "A\tcustom_components/doems/planner_diagnostics.py",
+    "A\tcustom_components/doems/planner_migration.py",
+    "D\tcustom_components/doems/presence.py",
+    "M\tcustom_components/doems/prices.py",
+    "M\tcustom_components/doems/prices_model.py",
+    "M\tcustom_components/doems/prices_runtime.py",
+    "A\tcustom_components/doems/r7_model.py",
+    "A\tcustom_components/doems/r7_runtime.py",
+    "A\tcustom_components/doems/safety_planner.py",
+    "M\tcustom_components/doems/select.py",
+    "M\tcustom_components/doems/sensor.py",
+    "M\tcustom_components/doems/services.yaml",
+    "M\tcustom_components/doems/solar_forecast.py",
+    "M\tcustom_components/doems/strings.json",
+    "D\tcustom_components/doems/switch.py",
+    "M\tcustom_components/doems/translations/en.json",
+    "M\tcustom_components/doems/translations/nl.json",
+    "D\texamples/beta2_automatic_plan72_cutover_card.yaml",
+    "A\texamples/doems_planner_dashboard.yaml",
+    "A\texamples/doems_scheduler_status_card.yaml",
+    "D\tpytest.ini",
+    "R100\tcustom_components/doems/ems_alpha36/planner_preview.py\ttests/fixtures/alpha39_planner_preview.py.txt",
+    "D\ttests/test_alpha21_multirate_runtime.py",
+    "D\ttests/test_alpha23_execution_naming_cleanup.py",
+    "D\ttests/test_alpha25_solar_array_performance.py",
+    "D\ttests/test_alpha26_step15a_manual_physical_execution.py",
+    "D\ttests/test_alpha27_beta2_automatic_plan72_cutover.py",
+    "D\ttests/test_alpha29_signature_warning_physical_parity.py",
+    "A\ttests/test_alpha2_battery_input_contract.py",
+    "D\ttests/test_alpha31_exact_anker_planner_parity.py",
+    "D\ttests/test_alpha32_full_anker_alpha76_parity.py",
+    "D\ttests/test_alpha33_runtime_serialization_adapter.py",
+    "D\ttests/test_alpha34_verified_setpoint_handoff_adapter.py",
+    "D\ttests/test_alpha35_sequential_safety_exception.py",
+    "D\ttests/test_alpha36_best_of_both.py",
+    "A\ttests/test_alpha3_manual_plan_store_contract.py",
+    "A\ttests/test_alpha4_manual_soc_projection_contract.py",
+    "M\ttests/test_alpha5_2_status_hotfix_contract.py",
+    "A\ttests/test_alpha5_manual_lifecycle_expiry_contract.py",
+    "M\ttests/test_alpha6_solar_p31_release_contract.py",
+    "D\ttests/test_alpha76_automatic_handoff_regression.py",
+    "D\ttests/test_alpha76_restart_recovery_behavior.py",
+    "D\ttests/test_alpha76_setpoint_readback_behavior.py",
+    "A\ttests/test_alpha7_1_planner_migration_contract.py",
+    "M\ttests/test_alpha7_prices_release_contract.py",
+    "D\ttests/test_alpha8_ems_plans_foundation.py",
+    "D\ttests/test_ems_config_validation.py",
+    "D\ttests/test_ems_settings_contract.py",
+    "M\ttests/test_energy_forecast_contract.py",
+    "D\ttests/test_execution_controller.py",
+    "D\ttests/test_execution_handover.py",
+    "M\ttests/test_foundation_contract.py",
+    "A\ttests/test_manual_concept_model.py",
+    "A\ttests/test_manual_concept_store_integration.py",
+    "A\ttests/test_p0_anker_reference_guards.py",
+    "A\ttests/test_p0_combined_slot_guards.py",
+    "A\ttests/test_p0_combined_wiring.py",
+    "A\ttests/test_p0_execution_runtime_guards.py",
+    "D\ttests/test_plan72_observability_parity.py",
+    "D\ttests/test_presence_runtime_contract.py",
+    "M\ttests/test_prices_p4_contract.py",
+    "A\ttests/test_r5_automatic_policy_parity.py",
+    "A\ttests/test_r5_economic_soc_policy.py",
+    "A\ttests/test_r5_historical_safety_port.py",
+    "A\ttests/test_r5_manager_sequential_async.py",
+    "A\ttests/test_r5_runtime_diagnostics.py",
+    "A\ttests/test_r5_runtime_recovery_performance.py",
+    "A\ttests/test_r5_staged_sequential_planner.py",
+    "A\ttests/test_r6_slot_bridge_model.py",
+    "A\ttests/test_r6_slot_bridge_runtime.py",
+    "A\ttests/test_r6_slot_store.py",
+    "D\ttests/test_r7_alpha76_handoff_integration.py",
+    "A\ttests/test_r7_auto_quarter_contract.py",
+    "A\ttests/test_r7_plan_store_promotion.py",
+    "A\ttests/test_r7_quarter_integration.py",
+    "A\ttests/test_r7_r6_quarter_chain.py",
+    "A\ttests/test_r7_runtime_boundary.py",
+    "A\ttests/test_r7_scheduler_prestart.py",
+    "D\ttests/test_r8_alpha76_bridge.py",
+    "D\ttests/test_r8_live_planner_entities.py",
+    "D\ttests/test_r8_planner_bridge.py",
+    "D\ttests/test_r8_planner_execution_contract.py",
+    "D\ttests/test_r8_proven_controller_contract.py",
+    "D\ttests/test_r8a_execution_readiness.py",
+    "A\ttests/test_r9_combined_execution_shadow.py",
+    "A\ttests/test_r9_execution_handoff_contract.py",
+    "D\ttests/test_recorder_attribute_budget.py",
+    "A\ttests/test_reset_solar_array_performance_recovery.py",
+    "A\ttests/test_scheduler_identity_migration.py",
+    "M\ttests/test_solar_foundation_contract.py",
+    "M\ttests/test_solar_p31_runtime_contract.py",
+    "D\ttests/test_step11_safety_prestart_contract.py",
+    "D\ttests/test_step12_1_control_path_contract.py",
+    "D\ttests/test_step12_2_action_handoff_contract.py",
+    "D\ttests/test_step12_3_final_revalidation_mode_switch_preview.py",
+    "D\ttests/test_step12_4_automatic_execution_gate.py",
+    "D\ttests/test_step12_5_execution_controller.py",
+    "D\ttests/test_step12_6_restart_recovery_observability.py",
+    "D\ttests/test_step13_g5_frozen_live_parity.py",
+    "D\ttests/test_step5a_consumer_wiring_part1.py",
+    "D\ttests/test_step5a_forecast_diagnostics.py",
+    "D\ttests/test_step5a_prices_76h_window_fix.py",
+    "A\ttests/test_threadsafe_r7_r9_runtime.py"
+  ]
+}

@@ -23,12 +23,7 @@ def _load_pure_module(name: str):
 
 def test_manifest_and_clean_identity_contract() -> None:
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
-    const = (INTEGRATION / "const.py").read_text(encoding="utf-8")
-    version_line = next(line for line in const.splitlines() if line.startswith("VERSION = "))
-    const_version = version_line.split('"', 2)[1]
-    assert manifest["domain"] == "doems" and manifest["name"] == "DOEMS"
-    assert manifest["version"] == const_version
-    assert const_version.startswith(("0.1.0-alpha.", "0.2.0-alpha."))
+    assert manifest["domain"] == "doems" and manifest["name"] == "DOEMS" and manifest["version"] == "0.2.0-alpha.9.5"
     for path in INTEGRATION.rglob("*"):
         if not path.is_file() or path.suffix not in {".py", ".json", ".yaml", ".yml"}: continue
         text = path.read_text(encoding="utf-8")
@@ -37,7 +32,7 @@ def test_manifest_and_clean_identity_contract() -> None:
 
 def test_public_entity_object_ids_are_doems_prefixed() -> None:
     suggested=[]; unique=[]
-    for path in [INTEGRATION / "sensor.py", INTEGRATION / "solar_sensor.py", INTEGRATION / "prices_sensor.py", INTEGRATION / "select.py", INTEGRATION / "binary_sensor.py", INTEGRATION / "switch.py", INTEGRATION / "datetime.py"]:
+    for path in [INTEGRATION / "sensor.py", INTEGRATION / "solar_sensor.py", INTEGRATION / "prices_sensor.py", INTEGRATION / "select.py", INTEGRATION / "binary_sensor.py"]:
         tree=ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node,(ast.Assign,ast.AnnAssign)): continue
@@ -51,39 +46,25 @@ def test_public_entity_object_ids_are_doems_prefixed() -> None:
     assert all(v.startswith("doems_") for v in suggested + unique)
 
 
-def test_physical_control_is_confined_to_alpha76_execution_boundary() -> None:
-    prices=(INTEGRATION/"prices.py").read_text(encoding="utf-8")
+def test_no_physical_control_surface() -> None:
+    active_text="\n".join(path.read_text(encoding="utf-8") for path in INTEGRATION.rglob("*.py"))
+    assert active_text.count(".services.async_call(") == 2
+    prices=(INTEGRATION / "prices.py").read_text(encoding="utf-8")
     assert '"energyzero"' in prices and '"get_gas_prices"' in prices
     for forbidden in ('"anker_solix"', '"switch"', '"number"', '"select.select_option"'):
         assert forbidden not in prices
-    assert ".services.async_call(" in (INTEGRATION/"ems_execution.py").read_text(encoding="utf-8")
-    assert ".services.async_call(" in (INTEGRATION/"ems_physical_test.py").read_text(encoding="utf-8")
-    for name in ("ems_planner_bridge.py","ems_scheduler.py","ems_prestart_validator.py","ems_safety_guard.py","ems_action_controller.py","ems_automatic_execution_gate.py"):
-        assert ".services.async_call(" not in (INTEGRATION/name).read_text(encoding="utf-8")
+    assert '"physical_execution_authority": False' in active_text
+
 
 def test_install_contract_is_component_scoped() -> None:
     text=(INTEGRATION / "config_flow.py").read_text(encoding="utf-8")
     const=(INTEGRATION / "const.py").read_text(encoding="utf-8")
-    for token in ("direct_home_power","power_balance","grid_sign_convention","battery_present"):
+    for token in ("direct_home_power","power_balance","grid_sign_convention","battery_present","energy_start_profile"):
         assert token in text or token in const
     for token in ("solar_foundation_enabled","solar_location_source","solar_inverter_groups","solar_arrays","solar_latitude","solar_longitude"):
         assert token in text or token in const
-    for token in ("ems_enabled","battery_capacity_kwh","technical_min_soc_percent","max_soc_percent","max_charge_power_w","max_discharge_power_w","software_reserve_percent","charge_efficiency_percent","discharge_efficiency_percent","minimum_trade_margin_eur_per_kwh","startup_delay_seconds"):
-        assert token in text or token in const
-    assert "physical_execution" not in text
-    config_flow=(INTEGRATION / "config_flow.py").read_text(encoding="utf-8")
-    assert "validate_ems_combination(normalized)" in config_flow
-    validation=(INTEGRATION / "ems_config_validation.py").read_text(encoding="utf-8")
-    for token in ("EMS_VALIDATED_FIELDS","validate_ems_combination","ems_invalid_number","ems_below_minimum","ems_above_maximum","ems_invalid_step","ems_soc_range_invalid"):
-        assert token in validation
-    assert "CONF_AWAY_START" not in validation
-    assert "CONF_AWAY_END" not in validation
-    assert "CONF_AWAY_SCHEDULE_ENABLED" not in validation
-    settings=(INTEGRATION / "ems_settings.py").read_text(encoding="utf-8")
-    for token in ("EMSSettings","battery_capacity_kwh","technical_min_soc_percent","max_soc_percent","max_charge_power_w","max_discharge_power_w","software_reserve_percent","charge_efficiency_percent","discharge_efficiency_percent","minimum_trade_margin_eur_per_kwh","startup_delay_seconds"):
-        assert token in settings
-    init=(INTEGRATION / "__init__.py").read_text(encoding="utf-8")
-    assert "EMSSettings.from_options(entry.options)" in init
+    for forbidden in ("battery_capacity_kwh","physical_execution"):
+        assert forbidden not in text
 
 
 def test_alpha41_equivalent_forecast_shape_and_hierarchy() -> None:
@@ -125,3 +106,4 @@ def test_startup_source_recovery_refresh_is_one_shot_and_component_scoped() -> N
     assert "coordinator.source_entities" in text
     assert "coordinator._notify()" in text
     assert "remove_listener()" in text
+

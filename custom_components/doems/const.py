@@ -4,7 +4,7 @@ from __future__ import annotations
 
 DOMAIN = "doems"
 NAME = "DOEMS"
-VERSION = "0.2.0-alpha.8.0.8"
+VERSION = "0.2.0-alpha.9.5"
 
 CONF_INSTANCE_NAME = "instance_name"
 DEFAULT_INSTANCE_NAME = NAME
@@ -17,75 +17,32 @@ CONF_GRID_NET_POWER_ENTITY = "grid_net_power_entity"
 CONF_GRID_SIGN_CONVENTION = "grid_sign_convention"
 CONF_SOLAR_POWER_ENTITY = "solar_power_entity"
 CONF_BATTERY_PRESENT = "battery_present"
+CONF_BATTERY_OBSERVATION_ENABLED = "battery_observation_enabled"
+CONF_BATTERY_SOC_ENTITY = "battery_soc_entity"
+CONF_BATTERY_CAPACITY_ENTITY = "battery_capacity_entity"
 CONF_BATTERY_CHARGE_POWER_ENTITY = "battery_charge_power_entity"
 CONF_BATTERY_DISCHARGE_POWER_ENTITY = "battery_discharge_power_entity"
+CONF_BATTERY_STATUS_ENTITY = "battery_status_entity"
+BATTERY_INPUT_CONTRACT_VERSION = 1
 
-# G6 EMS configuration contract - Steps 3A/3B/3C.
-CONF_EMS_ENABLED = "ems_enabled"
-CONF_SOC_ENTITY = "soc_entity"
-CONF_DEVICE_STATUS_ENTITY = "device_status_entity"
-CONF_BATTERY_CAPACITY_KWH = "battery_capacity_kwh"
-CONF_TECHNICAL_MIN_SOC_PERCENT = "technical_min_soc_percent"
-CONF_MAX_SOC_PERCENT = "max_soc_percent"
-CONF_MAX_CHARGE_POWER_W = "max_charge_power_w"
-CONF_MAX_DISCHARGE_POWER_W = "max_discharge_power_w"
-CONF_SOFTWARE_RESERVE_PERCENT = "software_reserve_percent"
-CONF_CHARGE_EFFICIENCY_PERCENT = "charge_efficiency_percent"
-CONF_DISCHARGE_EFFICIENCY_PERCENT = "discharge_efficiency_percent"
-CONF_MINIMUM_TRADE_MARGIN_EUR_PER_KWH = "minimum_trade_margin_eur_per_kwh"
-CONF_STARTUP_DELAY_SECONDS = "startup_delay_seconds"
+# Physical actuator mapping is configuration only; it never grants authority.
+CONF_ANKER_OPERATING_MODE_ENTITY = "anker_operating_mode_entity"
+CONF_ANKER_ACTION_DIRECTION_ENTITY = "anker_action_direction_entity"
+CONF_ANKER_POWER_SETPOINT_ENTITY = "anker_power_setpoint_entity"
 
-# Step 12.1 read-only battery control-path mappings.
-CONF_OPERATING_MODE_ENTITY = "operating_mode_entity"
-CONF_ACTION_DIRECTION_ENTITY = "action_direction_entity"
-CONF_POWER_SETPOINT_ENTITY = "power_setpoint_entity"
-CONTROL_PATH_STABLE_SECONDS = 60
-CONTROL_PATH_OBSERVER_INTERVAL_SECONDS = 10
-
-# Legacy Alpha7.10-7.12 Away Options keys. Kept only for one-time migration into
-# the runtime PresenceStore; they are no longer exposed as Options.
-CONF_AWAY_SCHEDULE_ENABLED = "away_schedule_enabled"
-CONF_AWAY_START = "away_start"
-CONF_AWAY_END = "away_end"
-
-DEFAULT_BATTERY_CAPACITY_KWH = 7.2
-# Frozen Anker alpha76 execution/Scheduler SOC contract. These are deliberately
-# not configurable policy knobs during the parity reconstruction.
-MIN_SOC_PERCENT = 5
-MAX_SOC_PERCENT = 100
-DEFAULT_TECHNICAL_MIN_SOC_PERCENT = MIN_SOC_PERCENT
-DEFAULT_MAX_SOC_PERCENT = MAX_SOC_PERCENT
-DEFAULT_MAX_CHARGE_POWER_W = 3200
-DEFAULT_MAX_DISCHARGE_POWER_W = 3200
-DEFAULT_SOFTWARE_RESERVE_PERCENT = 7.0
-DEFAULT_CHARGE_EFFICIENCY_PERCENT = 92.0
-DEFAULT_DISCHARGE_EFFICIENCY_PERCENT = 92.0
-DEFAULT_MINIMUM_TRADE_MARGIN_EUR_PER_KWH = 0.10
-MIN_ACTIONABLE_SAFETY_CHARGE_KWH = 0.10
-DEFAULT_STARTUP_DELAY_SECONDS = 30
-DEFAULT_AWAY_SCHEDULE_ENABLED = False
-EMS_MIN_STARTUP_DELAY_SECONDS = 30
-EMS_MAX_STARTUP_DELAY_SECONDS = 300
-EMS_MAX_POWER_W = 3500
-PLAN_SLOT_COUNT = 3
-
-# Frozen Anker alpha76 service and bounded physical-test contract.
-SERVICE_START_CHARGE_TEST = "start_charge_test"
-SERVICE_START_DISCHARGE_TEST = "start_discharge_test"
-SERVICE_STOP_PHYSICAL_TEST = "stop_physical_test"
-SERVICE_EXECUTE_SELECTED_PLAN = "execute_selected_plan"
-SERVICE_STOP_EXECUTION = "stop_execution"
-SERVICE_SCHEDULE_PLAN = "schedule_plan"
-SERVICE_START_PLAN_NOW = "start_plan_now"
-SERVICE_CANCEL_PLAN = "cancel_plan"
-SERVICE_STOP_ALL = "stop_all"
-
-TEST_MIN_POWER_W = 100
-TEST_MAX_POWER_W = 500
-TEST_DEFAULT_POWER_W = 300
-TEST_MIN_DURATION_S = 10
-TEST_MAX_DURATION_S = 120
-TEST_DEFAULT_DURATION_S = 120
+# Planner configuration. These permanent keys are independent from the
+# temporary alpha.6.x and alpha.7 naming used before the planner identities
+# were finalized.
+CONF_PLANNER_SOFTWARE_RESERVE_PERCENT = "planner_software_reserve_percent"
+CONF_PLANNER_MAX_CHARGE_POWER_W = "planner_max_charge_power_w"
+CONF_PLANNER_MAX_DISCHARGE_POWER_W = "planner_max_discharge_power_w"
+CONF_PLANNER_MINIMUM_TRADE_MARGIN_EUR_PER_KWH = (
+    "planner_minimum_trade_margin_eur_per_kwh"
+)
+DEFAULT_PLANNER_SOFTWARE_RESERVE_PERCENT = 5.0
+DEFAULT_PLANNER_MAX_CHARGE_POWER_W = 3500.0
+DEFAULT_PLANNER_MAX_DISCHARGE_POWER_W = 3500.0
+DEFAULT_PLANNER_MINIMUM_TRADE_MARGIN_EUR_PER_KWH = 0.10
 
 ENERGY_SOURCE_DIRECT = "direct_home_power"
 ENERGY_SOURCE_BALANCE = "power_balance"
@@ -102,10 +59,6 @@ PROFILE_UNCLASSIFIED = "unclassified"
 PROFILE_MIXED = "mixed"
 PROFILE_LEARNING_OPTIONS = [PROFILE_NORMAL, PROFILE_AWAY]
 PROFILE_OPTIONS = [PROFILE_NORMAL, PROFILE_AWAY, PROFILE_UNCLASSIFIED]
-
-# Shared DOEMS Presence/Away runtime contract.
-PRESENCE_STORAGE_VERSION = 1
-PRESENCE_STORAGE_KEY = f"{DOMAIN}.presence"
 
 # Solar P3 Foundation/install contract.
 CONF_SOLAR_FOUNDATION_ENABLED = "solar_foundation_enabled"
@@ -181,9 +134,10 @@ MIN_VALID_COVERAGE = 0.90
 STORAGE_VERSION = 1
 STORAGE_KEY = f"{DOMAIN}.energy_forecast"
 ENERGY_STORE_SCHEMA_VERSION = 1
-PLATFORMS = ["sensor", "select", "number", "binary_sensor", "switch", "datetime", "button"]
+PLATFORMS = ["sensor", "select", "binary_sensor", "number", "datetime"]
 DEVICE_IDENTIFIER = "main"
 FOUNDATION_PHASE = "solar_p3_0_foundation"
 CANONICAL_HOME_POWER_ENTITY = "sensor.doems_source_home_power"
 
 PUBLIC_OBJECT_ID_PREFIX = "doems_"
+

@@ -20,6 +20,8 @@ class DOEMSRegisteredPricesManager(DOEMSPricesManager):
 
     async def async_shutdown(self) -> None:
         """Stop runtime listeners without touching entity-platform states."""
+        self._shutdown = True
+        self._cancel_gas_startup_retry()
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()

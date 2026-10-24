@@ -13,28 +13,20 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_ANKER_OPERATING_MODE_ENTITY,
+    CONF_ANKER_ACTION_DIRECTION_ENTITY,
+    CONF_ANKER_POWER_SETPOINT_ENTITY,
+    CONF_BATTERY_CAPACITY_ENTITY,
     CONF_BATTERY_CHARGE_POWER_ENTITY,
     CONF_BATTERY_DISCHARGE_POWER_ENTITY,
+    CONF_BATTERY_OBSERVATION_ENABLED,
     CONF_BATTERY_PRESENT,
-    CONF_BATTERY_CAPACITY_KWH,
-    CONF_TECHNICAL_MIN_SOC_PERCENT,
-    CONF_MAX_SOC_PERCENT,
-    CONF_MAX_CHARGE_POWER_W,
-    CONF_MAX_DISCHARGE_POWER_W,
-    CONF_SOFTWARE_RESERVE_PERCENT,
-    CONF_CHARGE_EFFICIENCY_PERCENT,
-    CONF_DISCHARGE_EFFICIENCY_PERCENT,
-    CONF_MINIMUM_TRADE_MARGIN_EUR_PER_KWH,
-    CONF_STARTUP_DELAY_SECONDS,
-    CONF_AWAY_SCHEDULE_ENABLED,
-    CONF_AWAY_START,
-    CONF_AWAY_END,
-    CONF_EMS_ENABLED,
-    CONF_SOC_ENTITY,
-    CONF_DEVICE_STATUS_ENTITY,
-    CONF_OPERATING_MODE_ENTITY,
-    CONF_ACTION_DIRECTION_ENTITY,
-    CONF_POWER_SETPOINT_ENTITY,
+    CONF_BATTERY_SOC_ENTITY,
+    CONF_BATTERY_STATUS_ENTITY,
+    CONF_PLANNER_MAX_CHARGE_POWER_W,
+    CONF_PLANNER_MAX_DISCHARGE_POWER_W,
+    CONF_PLANNER_MINIMUM_TRADE_MARGIN_EUR_PER_KWH,
+    CONF_PLANNER_SOFTWARE_RESERVE_PERCENT,
     CONF_ELECTRICITY_EXPORT_SUPPLIER,
     CONF_ELECTRICITY_EXPORT_TAX,
     CONF_ELECTRICITY_FIXED_SUPPLY_PER_DAY,
@@ -74,21 +66,10 @@ from .const import (
     CONF_TARIFF_VALID_FROM,
     CONF_VAT_PERCENT,
     DEFAULT_INSTANCE_NAME,
-    DEFAULT_BATTERY_CAPACITY_KWH,
-    DEFAULT_TECHNICAL_MIN_SOC_PERCENT,
-    DEFAULT_MAX_SOC_PERCENT,
-    DEFAULT_MAX_CHARGE_POWER_W,
-    DEFAULT_MAX_DISCHARGE_POWER_W,
-    DEFAULT_SOFTWARE_RESERVE_PERCENT,
-    DEFAULT_CHARGE_EFFICIENCY_PERCENT,
-    DEFAULT_DISCHARGE_EFFICIENCY_PERCENT,
-    DEFAULT_MINIMUM_TRADE_MARGIN_EUR_PER_KWH,
-    DEFAULT_STARTUP_DELAY_SECONDS,
-    EMS_MIN_STARTUP_DELAY_SECONDS,
-    EMS_MAX_STARTUP_DELAY_SECONDS,
-    EMS_MAX_POWER_W,
-    MIN_SOC_PERCENT,
-    MAX_SOC_PERCENT,
+    DEFAULT_PLANNER_MAX_CHARGE_POWER_W,
+    DEFAULT_PLANNER_MAX_DISCHARGE_POWER_W,
+    DEFAULT_PLANNER_MINIMUM_TRADE_MARGIN_EUR_PER_KWH,
+    DEFAULT_PLANNER_SOFTWARE_RESERVE_PERCENT,
     DOMAIN,
     ENERGY_SOURCE_BALANCE,
     ENERGY_SOURCE_DIRECT,
@@ -100,6 +81,8 @@ from .const import (
     PRICES_RESOLUTION_15_MIN,
     PRICES_RESOLUTION_60_MIN,
     PRICES_RESOLUTION_AUTO,
+    PROFILE_AWAY,
+    PROFILE_NORMAL,
     SOLAR_LOCATION_HOME_ASSISTANT,
     SOLAR_LOCATION_OVERRIDE,
     SOLAR_DEFAULT_PERFORMANCE_FACTOR,
@@ -107,8 +90,6 @@ from .const import (
     SOLAR_MAX_INVERTER_GROUPS,
 )
 from .energy_sources import normalize_power_w
-from .ems_soc import UNAVAILABLE_SOC_STATES, parse_soc_percent
-from .ems_config_validation import EMS_VALIDATED_FIELDS, validate_ems_combination, validate_ems_field
 from .solar_foundation_model import validate_solar_foundation
 
 
@@ -118,10 +99,6 @@ def _power_selector() -> selector.EntitySelector:
 
 def _sensor_selector() -> selector.EntitySelector:
     return selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor"))
-
-
-def _entity_selector(domain: str) -> selector.EntitySelector:
-    return selector.EntitySelector(selector.EntitySelectorConfig(domain=domain))
 
 
 def _energyzero_config_entry_selector() -> selector.ConfigEntrySelector:
@@ -184,11 +161,9 @@ def _validate_power_entity(hass: HomeAssistant, entity_id: str | None, *, allow_
     return None
 
 
-
-def _validate_soc_entity(hass: HomeAssistant, entity_id: str | None) -> str | None:
-    """Validate an optional generic read-only SOC percentage sensor."""
+def _validate_percent_entity(hass: HomeAssistant, entity_id: str | None) -> str | None:
     if not entity_id:
-        return None
+        return "source_required"
     object_id = entity_id.split(".", 1)[1] if "." in entity_id else entity_id
     if object_id.startswith("doems_"):
         return "doems_source_not_allowed"
@@ -196,9 +171,46 @@ def _validate_soc_entity(hass: HomeAssistant, entity_id: str | None) -> str | No
     if state is None:
         return "source_not_found"
     if state.attributes.get("unit_of_measurement") != "%":
-        return "unsupported_soc_unit"
-    if state.state not in UNAVAILABLE_SOC_STATES and parse_soc_percent(state.state) is None:
-        return "invalid_soc_value"
+        return "unsupported_percentage_unit"
+    if state.state not in {"unknown", "unavailable"}:
+        try:
+            value = float(state.state)
+        except (TypeError, ValueError):
+            return "invalid_percentage_value"
+        if not 0.0 <= value <= 100.0:
+            return "invalid_percentage_value"
+    return None
+
+
+def _validate_capacity_entity(hass: HomeAssistant, entity_id: str | None) -> str | None:
+    if not entity_id:
+        return "source_required"
+    object_id = entity_id.split(".", 1)[1] if "." in entity_id else entity_id
+    if object_id.startswith("doems_"):
+        return "doems_source_not_allowed"
+    state = hass.states.get(entity_id)
+    if state is None:
+        return "source_not_found"
+    if str(state.attributes.get("unit_of_measurement") or "").lower() not in {"wh", "kwh"}:
+        return "unsupported_capacity_unit"
+    if state.state not in {"unknown", "unavailable"}:
+        try:
+            value = float(state.state)
+        except (TypeError, ValueError):
+            return "invalid_capacity_value"
+        if value <= 0.0:
+            return "invalid_capacity_value"
+    return None
+
+
+def _validate_status_entity(hass: HomeAssistant, entity_id: str | None) -> str | None:
+    if not entity_id:
+        return "source_required"
+    object_id = entity_id.split(".", 1)[1] if "." in entity_id else entity_id
+    if object_id.startswith("doems_"):
+        return "doems_source_not_allowed"
+    if hass.states.get(entity_id) is None:
+        return "source_not_found"
     return None
 
 
@@ -223,7 +235,7 @@ def _validate_gas_market_entity(hass: HomeAssistant, entity_id: str | None) -> s
 
 class DOEMSConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
-    MINOR_VERSION = 5
+    MINOR_VERSION = 7
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         await self.async_set_unique_id(DOMAIN)
@@ -251,65 +263,102 @@ class DOEMSOptionsFlow(OptionsFlow):
         return self._pending.get(key, default)
 
     def _save(self) -> ConfigFlowResult:
-        # Away/profile runtime state is owned by PresenceStore entities, not Options.
-        for key in (
-            CONF_AWAY_SCHEDULE_ENABLED,
-            CONF_AWAY_START,
-            CONF_AWAY_END,
-            CONF_ENERGY_START_PROFILE,
-        ):
-            self._pending.pop(key, None)
+        if not self._pending.get(CONF_BATTERY_OBSERVATION_ENABLED, False):
+            for key in (CONF_BATTERY_SOC_ENTITY, CONF_BATTERY_CAPACITY_ENTITY, CONF_BATTERY_STATUS_ENTITY):
+                self._pending.pop(key, None)
+            if not self._pending.get(CONF_BATTERY_PRESENT, False):
+                self._pending.pop(CONF_BATTERY_CHARGE_POWER_ENTITY, None)
+                self._pending.pop(CONF_BATTERY_DISCHARGE_POWER_ENTITY, None)
         return self.async_create_entry(title="", data=self._pending)
 
     async def _continue_after_energy(self) -> ConfigFlowResult:
+        if self._pending.get(CONF_BATTERY_OBSERVATION_ENABLED, False):
+            return await self.async_step_battery_observation()
         if self._pending.get(CONF_SOLAR_FOUNDATION_ENABLED, False):
             return await self.async_step_solar_system()
         if self._pending.get(CONF_PRICES_ENABLED, False):
             return await self.async_step_prices()
-        if self._pending.get(CONF_EMS_ENABLED, False):
-            return await self.async_step_ems()
-        return self._save()
+        return await self.async_step_anker_control_entities()
+
+    async def _continue_after_battery_observation(self) -> ConfigFlowResult:
+        if self._pending.get(CONF_SOLAR_FOUNDATION_ENABLED, False):
+            return await self.async_step_solar_system()
+        if self._pending.get(CONF_PRICES_ENABLED, False):
+            return await self.async_step_prices()
+        return await self.async_step_anker_control_entities()
 
     async def _continue_after_solar(self) -> ConfigFlowResult:
         if self._pending.get(CONF_PRICES_ENABLED, False):
             return await self.async_step_prices()
-        if self._pending.get(CONF_EMS_ENABLED, False):
-            return await self.async_step_ems()
-        return self._save()
-
-    async def _continue_after_prices(self) -> ConfigFlowResult:
-        if self._pending.get(CONF_EMS_ENABLED, False):
-            return await self.async_step_ems()
-        return self._save()
+        return await self.async_step_anker_control_entities()
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
             self._pending.update(user_input)
             if self._pending.get(CONF_ENERGY_FORECAST_ENABLED, False):
                 return await self.async_step_energy_forecast()
+            if self._pending.get(CONF_BATTERY_OBSERVATION_ENABLED, False):
+                return await self.async_step_battery_observation()
             if self._pending.get(CONF_SOLAR_FOUNDATION_ENABLED, False):
                 return await self.async_step_solar_system()
             if self._pending.get(CONF_PRICES_ENABLED, False):
                 return await self.async_step_prices()
-            if self._pending.get(CONF_EMS_ENABLED, False):
-                return await self.async_step_ems()
-            return self._save()
+            return await self.async_step_anker_control_entities()
 
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
                 vol.Optional(CONF_INSTANCE_NAME, default=self._current(CONF_INSTANCE_NAME, DEFAULT_INSTANCE_NAME)): str,
                 vol.Required(CONF_ENERGY_FORECAST_ENABLED, default=bool(self._current(CONF_ENERGY_FORECAST_ENABLED, False))): bool,
+                vol.Required(CONF_BATTERY_OBSERVATION_ENABLED, default=bool(self._current(CONF_BATTERY_OBSERVATION_ENABLED, False))): bool,
                 vol.Required(CONF_SOLAR_FOUNDATION_ENABLED, default=bool(self._current(CONF_SOLAR_FOUNDATION_ENABLED, False))): bool,
                 vol.Required(CONF_PRICES_ENABLED, default=bool(self._current(CONF_PRICES_ENABLED, False))): bool,
-                vol.Required(CONF_EMS_ENABLED, default=bool(self._current(CONF_EMS_ENABLED, False))): bool,
+                vol.Required(CONF_PLANNER_SOFTWARE_RESERVE_PERCENT, default=float(self._current(CONF_PLANNER_SOFTWARE_RESERVE_PERCENT, DEFAULT_PLANNER_SOFTWARE_RESERVE_PERCENT))): _number(0.0, 30.0, 0.5, "%"),
+                vol.Required(CONF_PLANNER_MAX_CHARGE_POWER_W, default=float(self._current(CONF_PLANNER_MAX_CHARGE_POWER_W, DEFAULT_PLANNER_MAX_CHARGE_POWER_W))): _number(100.0, 3500.0, 100.0, "W"),
+                vol.Required(CONF_PLANNER_MAX_DISCHARGE_POWER_W, default=float(self._current(CONF_PLANNER_MAX_DISCHARGE_POWER_W, DEFAULT_PLANNER_MAX_DISCHARGE_POWER_W))): _number(100.0, 3500.0, 100.0, "W"),
+                vol.Required(CONF_PLANNER_MINIMUM_TRADE_MARGIN_EUR_PER_KWH, default=float(self._current(CONF_PLANNER_MINIMUM_TRADE_MARGIN_EUR_PER_KWH, DEFAULT_PLANNER_MINIMUM_TRADE_MARGIN_EUR_PER_KWH))): _number(0.0, 2.0, 0.01, "EUR/kWh"),
             }),
+        )
+
+    async def async_step_anker_control_entities(self, user_input=None):
+        """Configure Anker control entities; configuration never enables execution."""
+        fields = (
+            (CONF_ANKER_OPERATING_MODE_ENTITY, "select"),
+            (CONF_ANKER_ACTION_DIRECTION_ENTITY, "select"),
+            (CONF_ANKER_POWER_SETPOINT_ENTITY, "number"),
+        )
+        errors = {}
+        if user_input is not None:
+            chosen = [user_input.get(key) for key, _ in fields]
+            if any(chosen) and not all(chosen):
+                errors["base"] = "anker_control_incomplete"
+            else:
+                for key, domain in fields:
+                    value = user_input.get(key)
+                    if value and (not value.startswith(domain + ".") or self.hass.states.get(value) is None):
+                        errors[key] = "source_not_found"
+                    elif value and value.split(".", 1)[1].startswith("doems_"):
+                        errors[key] = "doems_source_not_allowed"
+                if not errors:
+                    for key, _ in fields:
+                        if user_input.get(key):
+                            self._pending[key] = user_input[key]
+                        else:
+                            self._pending.pop(key, None)
+                    return self._save()
+        return self.async_show_form(
+            step_id="anker_control_entities",
+            data_schema=vol.Schema({
+                _optional_entity(CONF_ANKER_OPERATING_MODE_ENTITY, self._current(CONF_ANKER_OPERATING_MODE_ENTITY)): selector.EntitySelector(selector.EntitySelectorConfig(domain="select")),
+                _optional_entity(CONF_ANKER_ACTION_DIRECTION_ENTITY, self._current(CONF_ANKER_ACTION_DIRECTION_ENTITY)): selector.EntitySelector(selector.EntitySelectorConfig(domain="select")),
+                _optional_entity(CONF_ANKER_POWER_SETPOINT_ENTITY, self._current(CONF_ANKER_POWER_SETPOINT_ENTITY)): selector.EntitySelector(selector.EntitySelectorConfig(domain="number")),
+            }),
+            errors=errors,
         )
 
     async def async_step_energy_forecast(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
             self._pending.update(user_input)
-            self._pending.pop(CONF_ENERGY_START_PROFILE, None)
             if user_input[CONF_ENERGY_SOURCE_MODE] == ENERGY_SOURCE_DIRECT:
                 return await self.async_step_energy_direct()
             return await self.async_step_energy_balance()
@@ -319,6 +368,9 @@ class DOEMSOptionsFlow(OptionsFlow):
                 vol.Required(CONF_ENERGY_SOURCE_MODE, default=self._current(CONF_ENERGY_SOURCE_MODE, ENERGY_SOURCE_DIRECT)): _select([
                     (ENERGY_SOURCE_DIRECT, "Direct Home Power"),
                     (ENERGY_SOURCE_BALANCE, "Power Balance"),
+                ]),
+                vol.Required(CONF_ENERGY_START_PROFILE, default=self._current(CONF_ENERGY_START_PROFILE, PROFILE_NORMAL)): _select([
+                    (PROFILE_NORMAL, "Normal"), (PROFILE_AWAY, "Away")
                 ]),
             }),
         )
@@ -332,8 +384,11 @@ class DOEMSOptionsFlow(OptionsFlow):
             else:
                 self._pending.update(user_input)
                 self._pending[CONF_BATTERY_PRESENT] = False
-                for key in (CONF_GRID_NET_POWER_ENTITY, CONF_GRID_SIGN_CONVENTION, CONF_SOLAR_POWER_ENTITY, CONF_BATTERY_CHARGE_POWER_ENTITY, CONF_BATTERY_DISCHARGE_POWER_ENTITY):
+                for key in (CONF_GRID_NET_POWER_ENTITY, CONF_GRID_SIGN_CONVENTION, CONF_SOLAR_POWER_ENTITY):
                     self._pending.pop(key, None)
+                if not self._pending.get(CONF_BATTERY_OBSERVATION_ENABLED, False):
+                    self._pending.pop(CONF_BATTERY_CHARGE_POWER_ENTITY, None)
+                    self._pending.pop(CONF_BATTERY_DISCHARGE_POWER_ENTITY, None)
                 return await self._continue_after_energy()
         return self.async_show_form(
             step_id="energy_direct",
@@ -353,8 +408,9 @@ class DOEMSOptionsFlow(OptionsFlow):
                 self._pending.pop(CONF_HOME_POWER_ENTITY, None)
                 if user_input.get(CONF_BATTERY_PRESENT):
                     return await self.async_step_energy_battery()
-                self._pending.pop(CONF_BATTERY_CHARGE_POWER_ENTITY, None)
-                self._pending.pop(CONF_BATTERY_DISCHARGE_POWER_ENTITY, None)
+                if not self._pending.get(CONF_BATTERY_OBSERVATION_ENABLED, False):
+                    self._pending.pop(CONF_BATTERY_CHARGE_POWER_ENTITY, None)
+                    self._pending.pop(CONF_BATTERY_DISCHARGE_POWER_ENTITY, None)
                 return await self._continue_after_energy()
         return self.async_show_form(
             step_id="energy_balance",
@@ -386,6 +442,65 @@ class DOEMSOptionsFlow(OptionsFlow):
                 _required_entity(CONF_BATTERY_CHARGE_POWER_ENTITY, self._current(CONF_BATTERY_CHARGE_POWER_ENTITY)): _power_selector(),
                 _required_entity(CONF_BATTERY_DISCHARGE_POWER_ENTITY, self._current(CONF_BATTERY_DISCHARGE_POWER_ENTITY)): _power_selector(),
             }),
+            errors=errors,
+        )
+
+    def _battery_power_sources_reusable(self) -> bool:
+        """Return whether Energy already supplied valid charge/discharge sources."""
+        for key in (CONF_BATTERY_CHARGE_POWER_ENTITY, CONF_BATTERY_DISCHARGE_POWER_ENTITY):
+            entity_id = self._current(key)
+            if not entity_id:
+                return False
+            if _validate_power_entity(self.hass, entity_id, allow_negative=False):
+                return False
+        return True
+
+    async def async_step_battery_observation(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        reuse_power_sources = self._battery_power_sources_reusable()
+        if user_input is not None:
+            validators = {
+                CONF_BATTERY_SOC_ENTITY: _validate_percent_entity,
+                CONF_BATTERY_CAPACITY_ENTITY: _validate_capacity_entity,
+                CONF_BATTERY_STATUS_ENTITY: _validate_status_entity,
+            }
+            for key, validator in validators.items():
+                error = validator(self.hass, user_input.get(key))
+                if error:
+                    errors[key] = error
+            if not reuse_power_sources:
+                for key in (CONF_BATTERY_CHARGE_POWER_ENTITY, CONF_BATTERY_DISCHARGE_POWER_ENTITY):
+                    error = _validate_power_entity(self.hass, user_input.get(key), allow_negative=False)
+                    if error:
+                        errors[key] = error
+            if not errors:
+                self._pending.update(user_input)
+                return await self._continue_after_battery_observation()
+
+        schema: dict[vol.Marker, Any] = {
+            _required_entity(CONF_BATTERY_SOC_ENTITY, self._current(CONF_BATTERY_SOC_ENTITY)): _sensor_selector(),
+            _required_entity(CONF_BATTERY_CAPACITY_ENTITY, self._current(CONF_BATTERY_CAPACITY_ENTITY)): _sensor_selector(),
+        }
+        if not reuse_power_sources:
+            schema[
+                _required_entity(
+                    CONF_BATTERY_CHARGE_POWER_ENTITY,
+                    self._current(CONF_BATTERY_CHARGE_POWER_ENTITY),
+                )
+            ] = _power_selector()
+            schema[
+                _required_entity(
+                    CONF_BATTERY_DISCHARGE_POWER_ENTITY,
+                    self._current(CONF_BATTERY_DISCHARGE_POWER_ENTITY),
+                )
+            ] = _power_selector()
+        schema[
+            _required_entity(CONF_BATTERY_STATUS_ENTITY, self._current(CONF_BATTERY_STATUS_ENTITY))
+        ] = _sensor_selector()
+
+        return self.async_show_form(
+            step_id="battery_observation",
+            data_schema=vol.Schema(schema),
             errors=errors,
         )
 
@@ -537,101 +652,6 @@ class DOEMSOptionsFlow(OptionsFlow):
             errors=errors,
         )
 
-    async def async_step_ems(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Configure and individually validate the G6 EMS settings."""
-        errors: dict[str, str] = {}
-        if user_input is not None:
-            for key in EMS_VALIDATED_FIELDS:
-                if key in user_input:
-                    error = validate_ems_field(key, user_input[key])
-                    if error:
-                        errors[key] = error
-            soc_error = _validate_soc_entity(self.hass, user_input.get(CONF_SOC_ENTITY))
-            if soc_error:
-                errors[CONF_SOC_ENTITY] = soc_error
-
-            control_keys = (
-                CONF_OPERATING_MODE_ENTITY,
-                CONF_ACTION_DIRECTION_ENTITY,
-                CONF_POWER_SETPOINT_ENTITY,
-            )
-            configured_control_keys = [key for key in control_keys if user_input.get(key)]
-            if configured_control_keys and len(configured_control_keys) != len(control_keys):
-                errors["base"] = "control_path_incomplete"
-
-            if not errors:
-                normalized = dict(user_input)
-                # Frozen Alpha76 parity: these are no longer user policy inputs.
-                normalized[CONF_TECHNICAL_MIN_SOC_PERCENT] = MIN_SOC_PERCENT
-                normalized[CONF_MAX_SOC_PERCENT] = MAX_SOC_PERCENT
-                errors.update(validate_ems_combination(normalized))
-                if not errors:
-                    self._pending.update(normalized)
-                    if not normalized.get(CONF_SOC_ENTITY):
-                        self._pending.pop(CONF_SOC_ENTITY, None)
-                    if not normalized.get(CONF_DEVICE_STATUS_ENTITY):
-                        self._pending.pop(CONF_DEVICE_STATUS_ENTITY, None)
-                    for key in control_keys:
-                        if not normalized.get(key):
-                            self._pending.pop(key, None)
-                    return self._save()
-
-        return self.async_show_form(
-            step_id="ems",
-            data_schema=vol.Schema({
-                _optional_entity(CONF_SOC_ENTITY, self._current(CONF_SOC_ENTITY)): _sensor_selector(),
-                _optional_entity(
-                    CONF_DEVICE_STATUS_ENTITY,
-                    self._current(CONF_DEVICE_STATUS_ENTITY),
-                ): _sensor_selector(),
-                _optional_entity(
-                    CONF_OPERATING_MODE_ENTITY,
-                    self._current(CONF_OPERATING_MODE_ENTITY),
-                ): _entity_selector("select"),
-                _optional_entity(
-                    CONF_ACTION_DIRECTION_ENTITY,
-                    self._current(CONF_ACTION_DIRECTION_ENTITY),
-                ): _entity_selector("select"),
-                _optional_entity(
-                    CONF_POWER_SETPOINT_ENTITY,
-                    self._current(CONF_POWER_SETPOINT_ENTITY),
-                ): _entity_selector("number"),
-                vol.Required(
-                    CONF_BATTERY_CAPACITY_KWH,
-                    default=float(self._current(CONF_BATTERY_CAPACITY_KWH, DEFAULT_BATTERY_CAPACITY_KWH)),
-                ): _number(1.0, 30.0, 0.1, "kWh"),
-                vol.Required(
-                    CONF_MAX_CHARGE_POWER_W,
-                    default=int(self._current(CONF_MAX_CHARGE_POWER_W, DEFAULT_MAX_CHARGE_POWER_W)),
-                ): _number(100, EMS_MAX_POWER_W, 100, "W"),
-                vol.Required(
-                    CONF_MAX_DISCHARGE_POWER_W,
-                    default=int(self._current(CONF_MAX_DISCHARGE_POWER_W, DEFAULT_MAX_DISCHARGE_POWER_W)),
-                ): _number(100, EMS_MAX_POWER_W, 100, "W"),
-                vol.Required(
-                    CONF_SOFTWARE_RESERVE_PERCENT,
-                    default=float(self._current(CONF_SOFTWARE_RESERVE_PERCENT, DEFAULT_SOFTWARE_RESERVE_PERCENT)),
-                ): _number(0, 30, 1, "%"),
-                vol.Required(
-                    CONF_CHARGE_EFFICIENCY_PERCENT,
-                    default=float(self._current(CONF_CHARGE_EFFICIENCY_PERCENT, DEFAULT_CHARGE_EFFICIENCY_PERCENT)),
-                ): _number(50, 100, 1, "%"),
-                vol.Required(
-                    CONF_DISCHARGE_EFFICIENCY_PERCENT,
-                    default=float(self._current(CONF_DISCHARGE_EFFICIENCY_PERCENT, DEFAULT_DISCHARGE_EFFICIENCY_PERCENT)),
-                ): _number(50, 100, 1, "%"),
-                vol.Required(
-                    CONF_MINIMUM_TRADE_MARGIN_EUR_PER_KWH,
-                    default=float(self._current(CONF_MINIMUM_TRADE_MARGIN_EUR_PER_KWH, DEFAULT_MINIMUM_TRADE_MARGIN_EUR_PER_KWH)),
-                ): _number(0.0, 1.0, 0.01, "EUR/kWh"),
-                vol.Required(
-                    CONF_STARTUP_DELAY_SECONDS,
-                    default=int(self._current(CONF_STARTUP_DELAY_SECONDS, DEFAULT_STARTUP_DELAY_SECONDS)),
-                ): _number(EMS_MIN_STARTUP_DELAY_SECONDS, EMS_MAX_STARTUP_DELAY_SECONDS, 5, "s"),
-            }),
-            errors=errors,
-        )
-
     async def async_step_prices(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Configure provider-neutral electricity tariff inputs for Prices P4."""
         if user_input is not None:
@@ -648,7 +668,7 @@ class DOEMSOptionsFlow(OptionsFlow):
                 CONF_GAS_GRID_PER_DAY,
             ):
                 self._pending.pop(key, None)
-            return await self._continue_after_prices()
+            return await self.async_step_anker_control_entities()
         return self.async_show_form(
             step_id="prices",
             data_schema=vol.Schema({
@@ -704,7 +724,7 @@ class DOEMSOptionsFlow(OptionsFlow):
                     self._pending.pop(CONF_GAS_MARKET_ENTITY, None)
                 else:
                     self._pending.pop(CONF_GAS_ENERGYZERO_CONFIG_ENTRY, None)
-                return await self._continue_after_prices()
+                return await self.async_step_anker_control_entities()
 
         current_mode = str(
             self._current(CONF_GAS_SOURCE_MODE, GAS_SOURCE_HOME_ASSISTANT_ENTITY)

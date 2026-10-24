@@ -130,14 +130,30 @@ def test_electricity_to_gas_ratio_and_missing_semantics():
     assert m.gas_equivalent_eur_kwh(1.71, energy_factor_kwh_m3=0) is None
 
 
-def test_price_window_rolls_inside_304_slot_buffer_without_losing_last_quarter():
+def test_dst_fallback_uses_higher_neighbor_and_preserves_utc_quarters():
     m = _load("prices_model")
-    start = datetime(2026, 9, 20, 19, 0, tzinfo=timezone.utc)
-    buffer_starts = m.expected_quarter_starts(start, m.PRICE_BUFFER_SLOT_COUNT)
-    assert len(buffer_starts) == 304
-    # A consumer moving one quarter forward still has a complete 288-slot window.
-    shifted = start + timedelta(minutes=15)
-    selected = [ts for ts in buffer_starts if shifted <= ts < shifted + timedelta(minutes=15 * 288)]
-    assert len(selected) == 288
-    assert selected[0] == shifted
-    assert selected[-1] == shifted + timedelta(minutes=15 * 287)
+    from zoneinfo import ZoneInfo
+    local = ZoneInfo("Europe/Amsterdam")
+    first = datetime(2026, 10, 25, 2, tzinfo=local, fold=0).astimezone(timezone.utc)
+    second = datetime(2026, 10, 25, 2, tzinfo=local, fold=1).astimezone(timezone.utc)
+    after = second + timedelta(hours=1)
+    assert first == datetime(2026, 10, 25, 0, tzinfo=timezone.utc)
+    assert second == datetime(2026, 10, 25, 1, tzinfo=timezone.utc)
+    indexed = {}
+    for start, price in [(first, 0.10890), (after, 0.08236)]:
+        for ts in m.expected_quarter_starts(start, 4):
+            indexed[ts] = m.PricePoint(ts, price, price, price, price, "forecast_hour", 60)
+    missing, price = m.dst_fallback_missing_hour(indexed, year=2026)
+    assert missing == m.expected_quarter_starts(second, 4)
+    assert price == 0.10890
+    indexed[second] = m.PricePoint(second, 0.09, 0.09, 0.09, 0.09, "known_pt15m", 15)
+    assert m.dst_fallback_missing_hour(indexed, year=2026) is None
+
+
+def test_dst_fallback_requires_genuine_complete_neighboring_forecasts():
+    m = _load("prices_model")
+    start = datetime(2026, 10, 25, 0, tzinfo=timezone.utc)
+    indexed = {}
+    for ts in m.expected_quarter_starts(start, 4):
+        indexed[ts] = m.PricePoint(ts, 0.1, 0.1, 0.1, 0.1, "forecast_hour", 60)
+    assert m.dst_fallback_missing_hour(indexed, year=2026) is None

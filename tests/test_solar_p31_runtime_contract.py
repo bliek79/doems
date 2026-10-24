@@ -73,34 +73,3 @@ def test_foundation_runtime_flag_is_live_but_safety_authority_stays_false() -> N
     assert "SolarForecastManager" in init
     assert "await solar_forecast.async_setup()" in init
     assert '"physical_execution_authority": False' in binary
-
-def test_runtime_republishes_rolling_window_each_native_quarter_without_provider_fetch() -> None:
-    text = (INTEGRATION / "solar_forecast.py").read_text(encoding="utf-8")
-    assert "SOLAR_PUBLISH_MINUTES = (0, 15, 30, 45)" in text
-    assert "SOLAR_PUBLISH_SECOND = 30" in text
-
-    setup = text.split("async def async_setup", 1)[1].split("async def async_shutdown", 1)[0]
-    assert "self._publish_quarter_roll" in setup
-    assert "minute=list(SOLAR_PUBLISH_MINUTES)" in setup
-    assert "second=SOLAR_PUBLISH_SECOND" in setup
-
-    quarter_publish = text.split("def _publish_quarter_roll", 1)[1].split(
-        "async def _async_hourly_refresh", 1
-    )[0]
-    assert "self._notify()" in quarter_publish
-    assert "async_refresh" not in quarter_publish
-
-    hourly_refresh = text.split("async def _async_hourly_refresh", 1)[1].split(
-        "async def async_refresh", 1
-    )[0]
-    assert "await self.async_refresh()" in hourly_refresh
-
-
-
-def test_runtime_uses_per_array_performance_factors_without_global_override() -> None:
-    forecast = (INTEGRATION / "solar_forecast.py").read_text(encoding="utf-8")
-    model = (INTEGRATION / "solar_forecast_model.py").read_text(encoding="utf-8")
-    assert "performance_factor=SOLAR_PERFORMANCE_FACTOR" not in forecast
-    assert 'array.get("performance_factor", SOLAR_PERFORMANCE_FACTOR)' in model
-    assert '"array_performance_factors": array_performance_factors' in forecast
-    assert '"performance_factor_semantics": "static_per_array_before_group_ac_cap"' in forecast

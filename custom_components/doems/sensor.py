@@ -13,8 +13,9 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.util import dt as dt_util
 
+from .battery_contract import DOEMSBatteryInputContract
 from .const import (
-    CONF_EMS_ENABLED,
+    CONF_BATTERY_OBSERVATION_ENABLED,
     CONF_ENERGY_FORECAST_ENABLED,
     CONF_INSTANCE_NAME,
     DEFAULT_INSTANCE_NAME,
@@ -30,16 +31,17 @@ from .const import (
     STORAGE_KEY,
     VERSION,
 )
-from .ems_settings import EMSSettings
-from .ems_alpha76_surface import build_alpha76_sensors
-from .ems_runtime import DOEMSEMSRuntime
-from .ems_g5_live_parity_runtime import get_g5_live_parity_runtime
-from .ems_g5_live_parity_sensor import DOEMSG5LiveParitySensor
 from .energy_coordinator import DOEMSEnergyCoordinator
+from .manual_plan_lifecycle import DOEMSManualPlanLifecycle
+from .manual_plan_model import PLAN_SLOT_COUNT
+from .manual_plan_store import DOEMSManualPlanStore
+from .manual_soc_projection import DOEMSManualSOCProjection
 from .energy_forecast import EnergyBaselineForecast, ceil_quarter
 from .prices import DOEMSPricesManager
-from .presence import DOEMSPresenceStore
 from .prices_sensor import build_prices_sensors
+from .automatic_combined_planner import DOEMSPlannerManager
+from .r7_runtime import DOEMSR7Scheduler
+from .combined_execution_shadow_runtime import DOEMSCombinedExecutionShadowRuntime
 from .solar_actual import SolarActualQuarterManager
 from .solar_forecast import SolarForecastManager
 from .solar_sensor import build_solar_sensors
@@ -82,40 +84,6 @@ async def async_setup_entry(
         )
 
     entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
-    presence = entry_data.get("presence")
-    if isinstance(presence, DOEMSPresenceStore):
-        entities.append(DOEMSPresenceContextSensor(entry, presence))
-
-    ems_settings = entry_data.get("ems_settings")
-    ems_runtime = entry_data.get("ems_runtime")
-    if isinstance(ems_settings, EMSSettings):
-        entities.append(
-            DOEMSEMSSettingsSensor(
-                entry,
-                ems_settings,
-                ems_runtime if isinstance(ems_runtime, DOEMSEMSRuntime) else None,
-            )
-        )
-    if isinstance(ems_runtime, DOEMSEMSRuntime):
-        entities.extend(
-            [
-                DOEMSEMSStatusSensor(entry, ems_runtime),
-                DOEMSManualPlannerSensor(entry, ems_runtime),
-                DOEMSAutomaticPlannerSensor(entry, ems_runtime),
-                DOEMSCombinedPlannerSensor(entry, ems_runtime),
-                *build_plan72_sensors(entry, ems_runtime),
-                DOEMSSchedulerStatusSensor(entry, ems_runtime),
-                DOEMSEMSR8ExecutionStatusSensor(entry, ems_runtime),
-                DOEMSEMSR8SafetyStatusSensor(entry, ems_runtime),
-                *(DOEMSPlanStatusSensor(entry, ems_runtime, slot) for slot in range(1, 4)),
-                DOEMSG5LiveParitySensor(
-                    entry,
-                    get_g5_live_parity_runtime(ems_runtime),
-                ),
-                *build_alpha76_sensors(entry, ems_runtime),
-            ]
-        )
-
     solar_forecast = entry_data.get("solar_forecast")
     solar_actual = entry_data.get("solar_actual")
     if isinstance(solar_forecast, SolarForecastManager):
@@ -131,97 +99,54 @@ async def async_setup_entry(
     if isinstance(prices, DOEMSPricesManager):
         entities.extend(build_prices_sensors(entry, prices))
 
+    battery_input = entry_data.get("battery_input")
+    if isinstance(battery_input, DOEMSBatteryInputContract):
+        entities.append(DOEMSBatteryInputStatusSensor(entry, battery_input))
+
+    manual_plan_store = entry_data.get("manual_plan_store")
+    if isinstance(manual_plan_store, DOEMSManualPlanStore):
+        entities.extend(
+            DOEMSManualPlanStatusSensor(entry, manual_plan_store, slot)
+            for slot in range(1, PLAN_SLOT_COUNT + 1)
+        )
+
+    manual_plan_lifecycle = entry_data.get("manual_plan_lifecycle")
+    if isinstance(manual_plan_lifecycle, DOEMSManualPlanLifecycle):
+        entities.append(
+            DOEMSManualPlanLifecycleStatusSensor(entry, manual_plan_lifecycle)
+        )
+
+    manual_soc_projection = entry_data.get("manual_soc_projection")
+    if isinstance(manual_soc_projection, DOEMSManualSOCProjection):
+        entities.extend(
+            [
+                DOEMSManualPlannerSensor(entry, manual_soc_projection),
+                DOEMSManualSOCProjectionTimelineSensor(
+                    entry, manual_soc_projection
+                ),
+            ]
+        )
+
+    planner = entry_data.get("planner")
+    if isinstance(planner, DOEMSPlannerManager):
+        entities.extend(
+            [
+                DOEMSAutomaticPlannerSensor(entry, planner),
+                DOEMSAutomaticSOCProjectionTimelineSensor(entry, planner),
+                DOEMSCombinedPlannerSensor(entry, planner),
+                DOEMSCombinedSOCProjectionTimelineSensor(entry, planner),
+            ]
+        )
+
+    r7_scheduler = entry_data.get("r7_scheduler")
+    if isinstance(r7_scheduler, DOEMSR7Scheduler):
+        entities.append(DOEMSR7SchedulerStatusSensor(entry, r7_scheduler))
+
+    combined_execution = entry_data.get("combined_execution_shadow")
+    if isinstance(combined_execution, DOEMSCombinedExecutionShadowRuntime):
+        entities.append(DOEMSCombinedExecutionStatusSensor(entry, combined_execution))
+
     async_add_entities(entities)
-
-
-
-class DOEMSPresenceContextSensor(SensorEntity):
-    """Expose the shared DOEMS Presence/Away runtime context."""
-
-    _attr_should_poll = False
-    _attr_has_entity_name = False
-    _attr_name = "DOEMS Presence Context"
-    _attr_unique_id = "doems_presence_context"
-    _attr_suggested_object_id = "doems_presence_context"
-    _attr_icon = "mdi:home-account"
-
-    def __init__(self, entry: ConfigEntry, presence: DOEMSPresenceStore) -> None:
-        self.presence = presence
-        self._remove_listener = None
-        self._attr_device_info = _device_info(entry)
-
-    @property
-    def native_value(self) -> str:
-        return self.presence.effective_profile
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        return self.presence.context()
-
-    async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
-        self._remove_listener = self.presence.async_add_listener(self._handle_update)
-
-    async def async_will_remove_from_hass(self) -> None:
-        if self._remove_listener is not None:
-            self._remove_listener()
-        await super().async_will_remove_from_hass()
-
-    @callback
-    def _handle_update(self) -> None:
-        self.async_write_ha_state()
-
-
-class DOEMSEMSSettingsSensor(SensorEntity):
-    """Expose the immutable Step-5A EMS settings snapshot for live validation."""
-
-    _attr_should_poll = False
-    _attr_has_entity_name = False
-    _attr_name = "DOEMS EMS Settings"
-    _attr_unique_id = "doems_ems_settings"
-    _attr_suggested_object_id = "doems_ems_settings"
-    _attr_icon = "mdi:tune-variant"
-
-    def __init__(
-        self,
-        entry: ConfigEntry,
-        settings: EMSSettings,
-        runtime: DOEMSEMSRuntime | None = None,
-    ) -> None:
-        self.settings = settings
-        self.runtime = runtime
-        self._remove_listener = None
-        self._attr_device_info = _device_info(entry)
-
-    @property
-    def native_value(self) -> str:
-        return "ready"
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        return {
-            **self.settings.as_contract(),
-            "settings_source": "config_entry_options",
-            "settings_snapshot_immutable": True,
-            "startup_delay_runtime_gate_active": False,
-            "planner_logic_active": self.runtime is not None,
-            "planning_runtime_status": self.runtime.status if self.runtime is not None else None,
-            "physical_execution_authority": False,
-        }
-
-    async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
-        if self.runtime is not None:
-            self._remove_listener = self.runtime.async_add_listener(self._handle_runtime_update)
-
-    async def async_will_remove_from_hass(self) -> None:
-        if self._remove_listener is not None:
-            self._remove_listener()
-        await super().async_will_remove_from_hass()
-
-    @callback
-    def _handle_runtime_update(self) -> None:
-        self.async_write_ha_state()
 
 
 class DOEMSFoundationStatusSensor(SensorEntity):
@@ -259,8 +184,12 @@ class DOEMSFoundationStatusSensor(SensorEntity):
             "energy_storage_key": STORAGE_KEY if enabled else None,
             "installation_required_input_count": configured_fields if enabled else 0,
             "forecast_enabled": enabled,
-            "ems_enabled": bool(self.entry.options.get(CONF_EMS_ENABLED, False)),
-            "physical_execution_authority": False,
+            "battery_input_enabled": bool(self.entry.options.get(CONF_BATTERY_OBSERVATION_ENABLED, False)),
+            "manual_plan_store_enabled": True,
+            "manual_plan_lifecycle_enabled": True,
+            "manual_soc_projection_enabled": True,
+            "ems_enabled": False,
+            "physical_execution_enabled": False,
             "identity_pure": True,
             "public_object_id_prefix": "doems_",
         }
@@ -609,20 +538,33 @@ class DOEMSEnergyForecastConfidenceSensor(DOEMSEnergyBaseSensor):
 
 
 
-class _DOEMSEMSRuntimeSensor(SensorEntity):
-    """Base entity for the definitive Alpha8 DOEMS EMS runtime."""
+class DOEMSBatteryInputStatusSensor(SensorEntity):
+    """Expose the read-only R1 battery input contract."""
 
     _attr_should_poll = False
     _attr_has_entity_name = False
+    _attr_name = "DOEMS Battery Input Status"
+    _attr_unique_id = "doems_battery_input_status"
+    _attr_suggested_object_id = "doems_battery_input_status"
+    _attr_icon = "mdi:battery-check-outline"
 
-    def __init__(self, entry: ConfigEntry, runtime: DOEMSEMSRuntime) -> None:
-        self.runtime = runtime
+    def __init__(self, entry: ConfigEntry, contract: DOEMSBatteryInputContract) -> None:
+        self.entry = entry
+        self.contract = contract
         self._remove_listener = None
         self._attr_device_info = _device_info(entry)
 
+    @property
+    def native_value(self) -> str:
+        return str(self.contract.snapshot()["status"])
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return self.contract.snapshot()
+
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
-        self._remove_listener = self.runtime.async_add_listener(self._handle_update)
+        self._remove_listener = self.contract.async_add_listener(self._handle_update)
 
     async def async_will_remove_from_hass(self) -> None:
         if self._remove_listener is not None:
@@ -634,421 +576,642 @@ class _DOEMSEMSRuntimeSensor(SensorEntity):
         self.async_write_ha_state()
 
 
-class DOEMSEMSStatusSensor(_DOEMSEMSRuntimeSensor):
-    """Central non-actuating DOEMS EMS status."""
 
-    _unrecorded_attributes = frozenset({
-        "auto_final_revalidation_checks",
-        "auto_mode_switch_preview_transaction",
-        "auto_execution_gate_checks",
-        "execution_transaction",
-        "runtime_safety_checks",
-        "safe_return_steps",
-        "execution_trace",
-        "execution_run_history",
-        "auto_execution_gate_blockers",
-        "auto_execution_gate_warnings",
-        "prestart_reasons",
-        "prestart_warnings",
-        "safety_handoff_reasons",
-        "safety_handoff_warnings",
-        "execution_handoff_reasons",
-        "execution_handoff_warnings",
-        "setpoint_handoff_adapter",
-        "setpoint_handoff_status",
-        "setpoint_handoff_expected_w",
-        "setpoint_handoff_observed_w",
-        "setpoint_handoff_samples",
-        "setpoint_handoff_last_checked_at",
-        "setpoint_handoff_failure_count",
-        "planner_active_signature",
-        "planner_pending_signature",
-        "planner_last_start_critical_key",
-        "planner_worker_active",
-        "planner_request_prepare_active",
-    })
-    _attr_name = "DOEMS EMS"
-    _attr_unique_id = "doems_ems"
-    _attr_suggested_object_id = "doems_ems"
-    _attr_icon = "mdi:home-lightning-bolt"
+class DOEMSManualPlanStatusSensor(SensorEntity):
+    """Status and diagnostics for an existing shared Manual/R6 slot."""
 
-    @property
-    def native_value(self) -> str:
-        return self.runtime.status
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        return self.runtime.snapshot()
-
-
-
-def _plan72_summary_attrs(data: dict[str, Any]) -> dict[str, Any]:
-    """Source-parity public Plan72 summary attributes."""
-    return {
-        "valid": data.get("auto_plan_72h_valid", False),
-        "reason": data.get("auto_plan_72h_reason"),
-        "count": data.get("auto_plan_72h_count"),
-        "start": data.get("auto_plan_72h_start"),
-        "end": data.get("auto_plan_72h_end"),
-        "start_soc": data.get("auto_plan_72h_start_soc"),
-        "end_soc": data.get("auto_plan_72h_end_soc"),
-        "min_soc": data.get("auto_plan_72h_min_soc"),
-        "max_soc": data.get("auto_plan_72h_max_soc"),
-        "reserve_floor_soc": data.get("auto_plan_72h_reserve_floor_soc"),
-        "dynamic_reserve_min_soc": data.get("auto_plan_72h_dynamic_reserve_min_soc"),
-        "dynamic_reserve_max_soc": data.get("auto_plan_72h_dynamic_reserve_max_soc"),
-        "execution_buffer_percent": data.get("auto_plan_72h_execution_buffer_percent"),
-        "max_charge_power_w": data.get("auto_plan_72h_max_charge_power_w"),
-        "max_discharge_power_w": data.get("auto_plan_72h_max_discharge_power_w"),
-        "execution_reserve_floor_soc": data.get("auto_plan_72h_execution_reserve_floor_soc"),
-        "execution_reserve_min_soc": data.get("auto_plan_72h_execution_reserve_min_soc"),
-        "execution_reserve_max_soc": data.get("auto_plan_72h_execution_reserve_max_soc"),
-        "min_execution_headroom_soc": data.get("auto_plan_72h_min_execution_headroom_soc"),
-        "execution_buffer_breach_hours": data.get("auto_plan_72h_execution_buffer_breach_hours"),
-        "execution_buffer_safe": data.get("auto_plan_72h_execution_buffer_safe", False),
-        "solar_horizon_complete": data.get("auto_plan_72h_solar_horizon_complete"),
-        "solar_horizon_incomplete_hours": data.get("auto_plan_72h_solar_horizon_incomplete_hours"),
-        "solar_charge_kwh": data.get("auto_plan_72h_solar_charge_kwh"),
-        "grid_safety_charge_kwh": data.get("auto_plan_72h_grid_safety_charge_kwh"),
-        "grid_trade_charge_kwh": data.get("auto_plan_72h_grid_trade_charge_kwh"),
-        "home_discharge_kwh": data.get("auto_plan_72h_home_discharge_kwh"),
-        "grid_trade_discharge_kwh": data.get("auto_plan_72h_grid_trade_discharge_kwh"),
-        "grid_import_for_home_kwh": data.get("auto_plan_72h_grid_import_for_home_kwh"),
-        "solar_export_kwh": data.get("auto_plan_72h_solar_export_kwh"),
-        "charge_efficiency_percent": data.get("auto_plan_72h_charge_efficiency_percent"),
-        "discharge_efficiency_percent": data.get("auto_plan_72h_discharge_efficiency_percent"),
-        "observational_only": data.get("auto_plan_72h_observational_only", True),
-        "execution_enabled": data.get("auto_plan_72h_execution_enabled", False),
-        "note": data.get("auto_plan_72h_note"),
-    }
-
-
-class DOEMSEMSPlan72Sensor(_DOEMSEMSRuntimeSensor):
-    """Expose the existing Plan72 calculation with source-parity observability."""
-
-    _attr_icon = "mdi:chart-timeline-variant-shimmer"
+    _attr_should_poll = False
+    _attr_has_entity_name = False
 
     def __init__(
         self,
         entry: ConfigEntry,
-        runtime: DOEMSEMSRuntime,
-        *,
-        suffix: str,
-        name: str,
-        value_key: str | None = None,
-        unit: str | None = None,
-        include_plan: bool = False,
-        solar_horizon_status: bool = False,
+        store: DOEMSManualPlanStore,
+        slot: int,
     ) -> None:
-        super().__init__(entry, runtime)
-        self._suffix = suffix
-        self._value_key = value_key
-        self._include_plan = include_plan
-        self._solar_horizon_status = solar_horizon_status
-        self._attr_name = name
-        self._attr_unique_id = f"doems_ems_plan72_{suffix}"
-        self._attr_suggested_object_id = f"doems_ems_plan72_{suffix}"
-        if unit is not None:
-            self._attr_native_unit_of_measurement = unit
-        if include_plan:
-            self._unrecorded_attributes = frozenset({"plan"})
-
-    def _data(self) -> dict[str, Any]:
-        planner = self.runtime.planner_result or {}
-        return dict(planner.get("plan72") or {})
+        self.store = store
+        self.slot = slot
+        self._remove_listener = None
+        self._attr_name = f"DOEMS Plan {slot} Status"
+        self._attr_unique_id = f"doems_plan_{slot}_status"
+        self._attr_suggested_object_id = f"doems_plan_{slot}_status"
+        self._attr_icon = "mdi:clipboard-text-clock-outline"
+        self._attr_device_info = _device_info(entry)
 
     @property
-    def native_value(self) -> Any:
-        data = self._data()
-        if self._solar_horizon_status:
-            return data.get("auto_plan_72h_solar_horizon_status") or "no_data"
-        return data.get(self._value_key) if self._value_key else None
+    def native_value(self) -> str:
+        return self.store.plan_status(self.slot)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        data = self._data()
-        if self._solar_horizon_status:
-            return {
-                "forecast_coverage_hours": data.get(
-                    "auto_plan_72h_solar_forecast_coverage_hours"
-                ),
-                "forecast_missing_hours": data.get(
-                    "auto_plan_72h_solar_forecast_missing_hours"
-                ),
-                "forecast_coverage_percent": data.get(
-                    "auto_plan_72h_solar_forecast_coverage_percent"
-                ),
-                "forecast_complete": data.get(
-                    "auto_plan_72h_solar_forecast_complete", False
-                ),
-                "next_usable_solar_available": data.get(
-                    "auto_plan_72h_next_usable_solar_available", False
-                ),
-                "next_usable_solar": data.get(
-                    "auto_plan_72h_next_usable_solar"
-                ),
-                "hours_until_next_usable_solar": data.get(
-                    "auto_plan_72h_hours_until_next_usable_solar"
-                ),
-                "last_usable_solar": data.get(
-                    "auto_plan_72h_last_usable_solar"
-                ),
-                "plan_start": data.get("auto_plan_72h_start"),
-                "plan_end": data.get("auto_plan_72h_end"),
-                "hours_after_last_usable_solar": data.get(
-                    "auto_plan_72h_hours_after_last_usable_solar"
-                ),
-                "lookahead_limited_by_plan_end": data.get(
-                    "auto_plan_72h_lookahead_limited_by_plan_end", False
-                ),
-                "reason": data.get("auto_plan_72h_solar_horizon_reason"),
-                "observational_only": data.get(
-                    "auto_plan_72h_observational_only", True
-                ),
-            }
+        plan = self.store.get_plan(self.slot)
+        return {
+            "slot": self.slot,
+            "action": plan.get("action"),
+            "execution_mode": plan.get("execution_mode"),
+            "start_time": plan.get("start_time"),
+            "power_w": plan.get("power_w"),
+            "target_soc": plan.get("target_soc"),
+            "max_runtime_h": plan.get("max_runtime_h"),
+            "max_start_delay_min": plan.get("max_start_delay_min"),
+            "lifecycle_status": plan.get("lifecycle_status"),
+            "lifecycle_reason": plan.get("lifecycle_reason"),
+            "lifecycle_updated_at": plan.get("lifecycle_updated_at"),
+            "origin": plan.get("origin"),
+            "purpose": plan.get("purpose"),
+            "planned_end_time": plan.get("planned_end_time"),
+            "planned_energy_kwh": plan.get("planned_energy_kwh"),
+            "planner_identity": plan.get("planner_identity"),
+            "planner_signature": plan.get("planner_signature"),
+            "price_sources": plan.get("price_sources"),
+            "all_prices_known": plan.get("all_prices_known"),
+            "last_terminal_event": self.store.last_terminal_event(self.slot),
+            "schedule_blockers": self.store.schedule_blockers(self.slot),
+            "persistent": True,
+            "manual_only": plan.get("origin") != "automatic_72h_planner",
+            "r6_automatic_proposal": plan.get("origin") == "automatic_72h_planner",
+            "soc_projection_active": True,
+            "scheduler_enabled": False,
+            "physical_execution_enabled": False,
+        }
 
-        attrs = _plan72_summary_attrs(data)
-        if self._include_plan:
-            attrs["plan"] = data.get("auto_plan_72h_plan", [])
-        return attrs
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._remove_listener = self.store.add_listener(self._handle_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._remove_listener is not None:
+            self._remove_listener()
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
 
 
-def build_plan72_sensors(
-    entry: ConfigEntry,
-    runtime: DOEMSEMSRuntime,
-) -> list[SensorEntity]:
-    """Build the Plan72 public sensor set copied from the working source."""
-    specs = [
-        ("status", "DOEMS EMS Plan72 Status", "auto_plan_72h_status", None, False, False),
-        ("hours", "DOEMS EMS Plan72 Hours", "auto_plan_72h_count", "h", True, False),
-        ("end_soc", "DOEMS EMS Plan72 End SOC", "auto_plan_72h_end_soc", PERCENTAGE, False, False),
-        ("min_soc", "DOEMS EMS Plan72 Minimum SOC", "auto_plan_72h_min_soc", PERCENTAGE, False, False),
-        ("dynamic_reserve_now", "DOEMS EMS Plan72 Reserve", "auto_plan_72h_reserve_floor_soc", PERCENTAGE, False, False),
-        ("dynamic_reserve_max", "DOEMS EMS Plan72 Maximum Reserve", "auto_plan_72h_dynamic_reserve_max_soc", PERCENTAGE, False, False),
-        ("execution_reserve_now", "DOEMS EMS Plan72 Execution Reserve", "auto_plan_72h_execution_reserve_floor_soc", PERCENTAGE, False, False),
-        ("execution_headroom_min", "DOEMS EMS Plan72 Execution Margin", "auto_plan_72h_min_execution_headroom_soc", PERCENTAGE, False, False),
-        ("execution_buffer_breach_hours", "DOEMS EMS Plan72 Buffer Breach", "auto_plan_72h_execution_buffer_breach_hours", "h", False, False),
-        ("solar_horizon_status", "DOEMS EMS Plan72 Solar Horizon", None, None, False, True),
-        ("solar_horizon_incomplete_hours", "DOEMS EMS Plan72 Missing Solar Hours", "auto_plan_72h_solar_horizon_incomplete_hours", "h", False, False),
-        ("solar_charge", "DOEMS EMS Plan72 Solar Charge", "auto_plan_72h_solar_charge_kwh", UnitOfEnergy.KILO_WATT_HOUR, False, False),
-        ("grid_safety_charge", "DOEMS EMS Plan72 Safety Charge", "auto_plan_72h_grid_safety_charge_kwh", UnitOfEnergy.KILO_WATT_HOUR, False, False),
-        ("grid_trade_charge", "DOEMS EMS Plan72 Trade Charge", "auto_plan_72h_grid_trade_charge_kwh", UnitOfEnergy.KILO_WATT_HOUR, False, False),
-        ("home_discharge", "DOEMS EMS Plan72 Home Discharge", "auto_plan_72h_home_discharge_kwh", UnitOfEnergy.KILO_WATT_HOUR, False, False),
-        ("grid_trade_discharge", "DOEMS EMS Plan72 Grid Discharge", "auto_plan_72h_grid_trade_discharge_kwh", UnitOfEnergy.KILO_WATT_HOUR, False, False),
-    ]
-    return [
-        DOEMSEMSPlan72Sensor(
-            entry,
-            runtime,
-            suffix=suffix,
-            name=name,
-            value_key=value_key,
-            unit=unit,
-            include_plan=include_plan,
-            solar_horizon_status=solar_horizon_status,
-        )
-        for suffix, name, value_key, unit, include_plan, solar_horizon_status in specs
-    ]
+
+class DOEMSManualPlanLifecycleStatusSensor(SensorEntity):
+    """Expose R4 manual expiry/cleanup diagnostics."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+    _attr_name = "DOEMS Manual Plan Lifecycle"
+    _attr_unique_id = "doems_manual_plan_lifecycle"
+    _attr_suggested_object_id = "doems_manual_plan_lifecycle"
+    _attr_icon = "mdi:calendar-clock-outline"
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        lifecycle: DOEMSManualPlanLifecycle,
+    ) -> None:
+        self.lifecycle = lifecycle
+        self._remove_listener = None
+        self._attr_device_info = _device_info(entry)
+
+    @property
+    def native_value(self) -> str:
+        return str(self.lifecycle.snapshot().get("status") or "blocked")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        snapshot = self.lifecycle.snapshot()
+        return {
+            "blockers": list(snapshot.get("blockers") or []),
+            "last_evaluated_at": snapshot.get("last_evaluated_at"),
+            "last_changed": bool(snapshot.get("last_changed")),
+            "last_released_slots": list(snapshot.get("last_released_slots") or []),
+            "next_expiry_at": snapshot.get("next_expiry_at"),
+            "next_expiry_slot": snapshot.get("next_expiry_slot"),
+            "last_terminal_events": list(snapshot.get("last_terminal_events") or []),
+            "manual_only": True,
+            "scheduler_enabled": False,
+            "automatic_planner_enabled": False,
+            "physical_execution_enabled": False,
+        }
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._remove_listener = self.lifecycle.async_add_listener(self._handle_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._remove_listener is not None:
+            self._remove_listener()
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
 
 
-class DOEMSManualPlannerSensor(_DOEMSEMSRuntimeSensor):
-    """Live manual source view backed by the existing persistent plan store."""
+class _DOEMSManualSOCProjectionBase(SensorEntity):
+    """Push-updated R3 manual SOC projection base."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        projection: DOEMSManualSOCProjection,
+    ) -> None:
+        self.projection = projection
+        self._remove_listener = None
+        self._attr_device_info = _device_info(entry)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._remove_listener = self.projection.async_add_listener(self._handle_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._remove_listener is not None:
+            self._remove_listener()
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
+
+
+class DOEMSManualPlannerSensor(_DOEMSManualSOCProjectionBase):
+    """Canonical Manual Planner status and route."""
 
     _attr_name = "DOEMS Manual Planner"
     _attr_unique_id = "doems_manual_planner"
     _attr_suggested_object_id = "doems_manual_planner"
     _attr_icon = "mdi:calendar-edit"
-
-    def _plans(self) -> list[dict[str, Any]]:
-        return [
-            {"slot": slot, **self.runtime.plan_store.get_plan(slot)}
-            for slot in range(1, 4)
-            if str(self.runtime.plan_store.get_plan(slot).get("origin") or "manual") == "manual"
-        ]
+    _unrecorded_attributes = frozenset({"native_slots", "plan"})
 
     @property
     def native_value(self) -> str:
-        return "ready" if self.runtime.scheduler_result else "waiting"
+        return str(self.projection.snapshot().get("status") or "blocked")
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        plans = self._plans()
-        return {"source": "manual", "plans": plans, "plan_count": len(plans),
-                "physical_execution_enabled": False}
+        snapshot = self.projection.snapshot()
+        return {
+            "valid": bool(snapshot.get("valid")),
+            "blockers": list(snapshot.get("blockers") or []),
+            "planner_type": "manual",
+            "resolution_minutes": 15,
+            "horizon_hours": 72,
+            "native_slot_count": snapshot.get("native_slot_count", 0),
+            "clock_hour_bucket_count": snapshot.get(
+                "clock_hour_bucket_count", 0
+            ),
+            "manual_commitment_count": snapshot.get(
+                "manual_commitment_count", 0
+            ),
+            "manual_commitment_slots": list(
+                snapshot.get("manual_commitment_slots") or []
+            ),
+            "start": snapshot.get("start"),
+            "end": snapshot.get("end"),
+            "start_soc_percent": snapshot.get("start_soc_percent"),
+            "end_soc_percent": snapshot.get("end_soc_percent"),
+            "projected_min_soc_percent": snapshot.get(
+                "projected_min_soc_percent"
+            ),
+            "projected_max_soc_percent": snapshot.get(
+                "projected_max_soc_percent"
+            ),
+            "capacity_kwh": snapshot.get("capacity_kwh"),
+            "min_soc_percent": snapshot.get("min_soc_percent"),
+            "max_soc_percent": snapshot.get("max_soc_percent"),
+            "charge_efficiency_percent": snapshot.get(
+                "charge_efficiency_percent"
+            ),
+            "discharge_efficiency_percent": snapshot.get(
+                "discharge_efficiency_percent"
+            ),
+            "max_projection_power_w": snapshot.get(
+                "max_projection_power_w"
+            ),
+            "planner_enabled": True,
+            "scheduler_enabled": False,
+            "execution_enabled": False,
+            "physical_execution_enabled": False,
+            "native_slots": list(snapshot.get("native_slots") or []),
+            "plan": list(snapshot.get("hourly_plan") or []),
+        }
 
 
-class DOEMSAutomaticPlannerSensor(_DOEMSEMSRuntimeSensor):
-    """Live automatic source view of the existing 72-hour planner result."""
+class DOEMSManualSOCProjectionTimelineSensor(_DOEMSManualSOCProjectionBase):
+    """Compact 288-point SOC timeline for the Manual Planner."""
+
+    _attr_name = "DOEMS Manual SOC Projection Timeline"
+    _attr_unique_id = "doems_manual_soc_projection_timeline"
+    _attr_suggested_object_id = "doems_manual_soc_projection_timeline"
+    _attr_icon = "mdi:chart-timeline-variant"
+    _unrecorded_attributes = frozenset({"points"})
+
+    @property
+    def native_value(self) -> int:
+        snapshot = self.projection.snapshot()
+        return int(snapshot.get("native_slot_count") or 0)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        snapshot = self.projection.snapshot()
+        points = []
+        for row in snapshot.get("native_slots") or []:
+            try:
+                timestamp_ms = int(
+                    dt_util.parse_datetime(
+                        str(row.get("start"))
+                    ).timestamp()
+                    * 1000
+                )
+                soc = float(row.get("end_soc_percent"))
+            except (AttributeError, TypeError, ValueError):
+                continue
+            points.append([timestamp_ms, round(soc, 4)])
+        return {
+            "status": snapshot.get("status"),
+            "valid": bool(snapshot.get("valid")),
+            "blockers": list(snapshot.get("blockers") or []),
+            "planner_type": "manual",
+            "resolution_minutes": 15,
+            "horizon_hours": 72,
+            "slot_count": snapshot.get("native_slot_count", 0),
+            "point_count": len(points),
+            "point_format": "[unix_ms,end_soc_percent]",
+            "manual_commitment_count": snapshot.get(
+                "manual_commitment_count", 0
+            ),
+            "manual_commitment_slots": list(
+                snapshot.get("manual_commitment_slots") or []
+            ),
+            "physical_execution_enabled": False,
+            "points": points,
+        }
+
+
+def _planner_attributes(
+    snapshot: dict[str, Any],
+    *,
+    planner_type: str,
+) -> dict[str, Any]:
+    """Return the common public planner contract."""
+    keys = (
+        "status",
+        "valid",
+        "blockers",
+        "decision",
+        "reason",
+        "next_candidate",
+        "candidate_count",
+        "candidate_types",
+        "start",
+        "end",
+        "native_slot_count",
+        "clock_hour_bucket_count",
+        "start_soc_percent",
+        "end_soc_percent",
+        "projected_min_soc_percent",
+        "projected_max_soc_percent",
+        "technical_min_soc_percent",
+        "software_reserve_percent",
+        "planner_floor_soc_percent",
+        "planner_floor_kwh",
+        "dynamic_reserve_start_soc_percent",
+        "dynamic_reserve_min_soc_percent",
+        "dynamic_reserve_max_soc_percent",
+        "dynamic_need_until_usable_solar_kwh",
+        "next_usable_solar",
+        "solar_horizon_complete",
+        "solar_horizon_incomplete_slots",
+        "capacity_kwh",
+        "capacity_source",
+        "charge_efficiency_percent",
+        "discharge_efficiency_percent",
+        "roundtrip_efficiency_percent",
+        "max_charge_power_w",
+        "max_discharge_power_w",
+        "minimum_trade_margin_eur_per_kwh",
+        "safety_charge_needed",
+        "safety_schedule_sufficient",
+        "safety_charge_kwh",
+        "trade_charge_kwh",
+        "trade_discharge_kwh",
+        "manual_commitment_count",
+        "manual_commitment_slots",
+        "usable_solar_rule",
+        "dynamic_reserve_rule",
+        "peak_sale_enabled",
+        "planner_enabled",
+        "plan_store_writes_enabled",
+        "scheduler_enabled",
+        "safety_prestart_enabled",
+        "execution_enabled",
+        "physical_execution_enabled",
+        "mode",
+        "runtime_version",
+        "planner_policy_version",
+        "planner_refresh_policy",
+        "planner_generation",
+        "planner_published_generation",
+        "planner_compute_count",
+        "planner_stale_discard_count",
+        "planner_same_signature_skip_count",
+        "planner_last_request_signature",
+        "planner_last_input_signature",
+        "planner_last_cycle_id",
+        "planner_last_refresh_reason",
+        "planner_last_refreshed_at",
+        "planner_worker_active",
+        "planner_last_error",
+        "planner_cancel_count",
+        "planner_budget_exceeded_count",
+        "planner_last_compute_seconds",
+        "planner_compute_budget_seconds",
+        "planner_automatic_compute_count",
+        "planner_combined_compute_count",
+        "planner_automatic_last_compute_seconds",
+        "planner_automatic_diagnostics",
+        "planner_combined_diagnostics",
+        "planner_combined_last_compute_seconds",
+        "planner_automatic_published_generation",
+        "planner_manual_revision",
+        "planner_active_stage",
+        "planner_combined_pending",
+    )
+    attrs = {key: snapshot.get(key) for key in keys}
+    attrs["planner_type"] = planner_type
+    attrs["candidates"] = list(snapshot.get("candidates") or [])
+    attrs["native_slots"] = list(snapshot.get("native_slots") or [])
+    attrs["plan"] = list(snapshot.get("hourly_plan") or [])
+    return attrs
+
+
+class _DOEMSPlannerBase(SensorEntity):
+    """Push-updated cache-only base for Automatic and Combined Planners."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        manager: DOEMSPlannerManager,
+        planner_type: str,
+    ) -> None:
+        self.manager = manager
+        self.planner_type = planner_type
+        self._remove_listener = None
+        self._attr_device_info = _device_info(entry)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._remove_listener = self.manager.async_add_listener(
+            self._handle_update
+        )
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._remove_listener is not None:
+            self._remove_listener()
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
+
+    def _snapshot(self) -> dict[str, Any]:
+        return self.manager.snapshot(self.planner_type)
+
+
+class DOEMSAutomaticPlannerSensor(_DOEMSPlannerBase):
+    """Automatic Planner route and decision diagnostics."""
 
     _attr_name = "DOEMS Automatic Planner"
     _attr_unique_id = "doems_automatic_planner"
     _attr_suggested_object_id = "doems_automatic_planner"
     _attr_icon = "mdi:transmission-tower-export"
+    _unrecorded_attributes = frozenset(
+        {"candidates", "native_slots", "plan"}
+    )
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        manager: DOEMSPlannerManager,
+    ) -> None:
+        super().__init__(entry, manager, "automatic")
 
     @property
     def native_value(self) -> str:
-        plan = (self.runtime.planner_result or {}).get("plan72") or {}
-        return str(plan.get("auto_plan_72h_status") or "waiting")
+        snapshot = self._snapshot()
+        if not snapshot.get("valid"):
+            return str(snapshot.get("status") or "blocked")
+        return str(snapshot.get("decision") or "geen_actie")
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        plan = (self.runtime.planner_result or {}).get("plan72") or {}
-        return {"source": "automatic", **_plan72_summary_attrs(plan),
-                "physical_execution_enabled": False}
+        return _planner_attributes(
+            self._snapshot(), planner_type="automatic"
+        )
 
 
-class DOEMSCombinedPlannerSensor(_DOEMSEMSRuntimeSensor):
-    """Live combined selection from the existing scheduler, not a second controller."""
+class DOEMSAutomaticSOCProjectionTimelineSensor(_DOEMSPlannerBase):
+    """Compact 288-point SOC timeline for the Automatic Planner."""
+
+    _attr_name = "DOEMS Automatic SOC Projection Timeline"
+    _attr_unique_id = "doems_automatic_soc_projection_timeline"
+    _attr_suggested_object_id = (
+        "doems_automatic_soc_projection_timeline"
+    )
+    _attr_icon = "mdi:chart-line"
+    _unrecorded_attributes = frozenset({"points"})
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        manager: DOEMSPlannerManager,
+    ) -> None:
+        super().__init__(entry, manager, "automatic")
+
+    @property
+    def native_value(self) -> int:
+        return int(self._snapshot().get("native_slot_count") or 0)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        snapshot = self._snapshot()
+        points = list(snapshot.get("timeline_points") or [])
+        return {
+            "status": snapshot.get("status"),
+            "valid": bool(snapshot.get("valid")),
+            "blockers": list(snapshot.get("blockers") or []),
+            "planner_type": "automatic",
+            "resolution_minutes": 15,
+            "horizon_hours": 72,
+            "slot_count": snapshot.get("native_slot_count", 0),
+            "point_count": len(points),
+            "point_format": "[unix_ms,end_soc_percent]",
+            "planner_floor_soc_percent": snapshot.get(
+                "planner_floor_soc_percent"
+            ),
+            "physical_execution_enabled": False,
+            "points": points,
+        }
+
+
+class DOEMSCombinedPlannerSensor(_DOEMSPlannerBase):
+    """Combined Planner route with Manual Planner priority applied."""
 
     _attr_name = "DOEMS Combined Planner"
     _attr_unique_id = "doems_combined_planner"
     _attr_suggested_object_id = "doems_combined_planner"
     _attr_icon = "mdi:timeline-clock-outline"
+    _unrecorded_attributes = frozenset(
+        {"candidates", "native_slots", "plan"}
+    )
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        manager: DOEMSPlannerManager,
+    ) -> None:
+        super().__init__(entry, manager, "combined")
 
     @property
     def native_value(self) -> str:
-        return str((self.runtime.scheduler_result or {}).get("scheduler_status") or "waiting")
+        snapshot = self._snapshot()
+        if not snapshot.get("valid"):
+            return str(snapshot.get("status") or "blocked")
+        return str(snapshot.get("decision") or "geen_actie")
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        scheduler = self.runtime.scheduler_result or {}
-        slot = scheduler.get("scheduler_selected_slot")
-        details = scheduler.get("scheduler_slots") or {}
-        selected = details.get(slot) or details.get(str(slot)) or {}
-        return {"source": "manual_and_automatic", "selected_slot": slot,
-                "selected_origin": selected.get("origin") if isinstance(selected, dict) else None,
-                "selected_action": scheduler.get("scheduler_selected_action"),
-                "ready": bool(scheduler.get("scheduler_ready")),
-                "physical_execution_enabled": False}
+        return _planner_attributes(
+            self._snapshot(), planner_type="combined"
+        )
 
 
-class DOEMSSchedulerStatusSensor(_DOEMSEMSRuntimeSensor):
-    """Central definitive DOEMS Scheduler status."""
+class DOEMSCombinedSOCProjectionTimelineSensor(_DOEMSPlannerBase):
+    """Compact 288-point SOC timeline for the Combined Planner."""
 
-    _attr_name = "DOEMS Scheduler"
-    _attr_unique_id = "doems_scheduler"
-    _attr_suggested_object_id = "doems_scheduler"
-    _attr_icon = "mdi:calendar-clock"
+    _attr_name = "DOEMS Combined SOC Projection Timeline"
+    _attr_unique_id = "doems_combined_soc_projection_timeline"
+    _attr_suggested_object_id = (
+        "doems_combined_soc_projection_timeline"
+    )
+    _attr_icon = "mdi:chart-timeline-variant"
+    _unrecorded_attributes = frozenset({"points"})
+
+    def __init__(
+        self,
+        entry: ConfigEntry,
+        manager: DOEMSPlannerManager,
+    ) -> None:
+        super().__init__(entry, manager, "combined")
 
     @property
-    def native_value(self) -> str:
-        return str((self.runtime.scheduler_result or {}).get("scheduler_status") or "idle")
+    def native_value(self) -> int:
+        return int(self._snapshot().get("native_slot_count") or 0)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        scheduler = self.runtime.scheduler_result or {}
+        snapshot = self._snapshot()
+        points = list(snapshot.get("timeline_points") or [])
         return {
-            "selected_slot": scheduler.get("scheduler_selected_slot"),
-            "selected_action": scheduler.get("scheduler_selected_action"),
-            "selected_execution_mode": scheduler.get("scheduler_selected_execution_mode"),
-            "selected_start_time": scheduler.get("scheduler_selected_start_time"),
-            "next_future_slot": scheduler.get("scheduler_next_future_slot"),
-            "next_future_start": scheduler.get("scheduler_next_future_start"),
-            "ready": bool(scheduler.get("scheduler_ready")),
-            "physical_control": False,
-            "mode": "validation",
-        }
-
-
-class DOEMSEMSR8ExecutionStatusSensor(_DOEMSEMSRuntimeSensor):
-    """R8 integration status: never imply a physical controller is active."""
-
-    _attr_name = "DOEMS EMS R8 Execution Status"
-    _attr_unique_id = "doems_ems_r8_execution_status"
-    _attr_suggested_object_id = "doems_ems_r8_execution_status"
-    _attr_icon = "mdi:shield-lock-outline"
-
-    @property
-    def native_value(self) -> str:
-        return "not_connected"
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        scheduler = self.runtime.scheduler_result or {}
-        return {
-            "selected_slot": scheduler.get("scheduler_selected_slot"),
-            "scheduler_ready": bool(scheduler.get("scheduler_ready")),
-            "controller_attached": False,
+            "status": snapshot.get("status"),
+            "valid": bool(snapshot.get("valid")),
+            "blockers": list(snapshot.get("blockers") or []),
+            "planner_type": "combined",
+            "resolution_minutes": 15,
+            "horizon_hours": 72,
+            "slot_count": snapshot.get("native_slot_count", 0),
+            "point_count": len(points),
+            "point_format": "[unix_ms,end_soc_percent]",
+            "manual_commitment_count": snapshot.get(
+                "manual_commitment_count", 0
+            ),
+            "manual_commitment_slots": list(
+                snapshot.get("manual_commitment_slots") or []
+            ),
+            "planner_floor_soc_percent": snapshot.get(
+                "planner_floor_soc_percent"
+            ),
             "physical_execution_enabled": False,
-            "execution_authority": False,
-            "reason": "R8 controller is not attached to the active EMS runtime",
+            "points": points,
         }
 
 
-class DOEMSEMSR8SafetyStatusSensor(_DOEMSEMSRuntimeSensor):
-    """Read-only R8 safety boundary indicator, not an authorization grant."""
 
-    _attr_name = "DOEMS EMS R8 Safety Status"
-    _attr_unique_id = "doems_ems_r8_safety_status"
-    _attr_suggested_object_id = "doems_ems_r8_safety_status"
+
+class DOEMSR7SchedulerStatusSensor(SensorEntity):
+    """Non-actuating Scheduler/Safety/Prestart status sensor."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+    _attr_name = "DOEMS Scheduler Status"
+    _attr_unique_id = "doems_scheduler_status"
+    _attr_suggested_object_id = "doems_scheduler_status"
     _attr_icon = "mdi:shield-check-outline"
 
-    @property
-    def native_value(self) -> str:
-        return "blocked"
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        return {
-            "blockers": ["r8_controller_not_connected", "physical_execution_not_authorized"],
-            "physical_execution_enabled": False,
-            "execution_authority": False,
-            "validation_mode": "shadow_only",
-        }
-
-
-class DOEMSPlanStatusSensor(_DOEMSEMSRuntimeSensor):
-    """Status of one definitive persistent DOEMS plan slot."""
-
-    def __init__(self, entry: ConfigEntry, runtime: DOEMSEMSRuntime, slot: int) -> None:
-        super().__init__(entry, runtime)
-        self.slot = slot
-        self._attr_name = f"DOEMS Plan {slot} Status"
-        self._attr_unique_id = f"doems_plan_{slot}_status"
-        self._attr_suggested_object_id = f"doems_plan_{slot}_status"
-        self._attr_icon = "mdi:clipboard-text-clock-outline"
-
-    def _detail(self) -> dict[str, Any]:
-        scheduler = self.runtime.scheduler_result or {}
-        slots = scheduler.get("scheduler_slots") or {}
-        detail = slots.get(self.slot) or slots.get(str(self.slot))
-        if isinstance(detail, dict):
-            return dict(detail)
-        plan = self.runtime.plan_store.get_plan(self.slot)
-        return {
-            **plan,
-            "slot": self.slot,
-            "status": self.runtime.plan_store.plan_status(self.slot),
-            "selected": False,
-            "physical_control": False,
-        }
+    def __init__(self, entry: ConfigEntry, scheduler: DOEMSR7Scheduler) -> None:
+        self.scheduler = scheduler
+        self._remove_listener = None
+        self._attr_device_info = _device_info(entry)
 
     @property
     def native_value(self) -> str:
-        return str(self._detail().get("status") or "leeg")
+        return str(self.scheduler.last_result.get("status") or "startup")
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        detail = self._detail()
-        return {
-            "slot": self.slot,
-            "action": detail.get("action"),
-            "execution_mode": detail.get("execution_mode"),
-            "start_time": detail.get("start_time"),
-            "start_window_end": detail.get("start_window_end"),
-            "power_w": detail.get("power_w"),
-            "target_soc": detail.get("target_soc"),
-            "max_runtime_h": detail.get("max_runtime_h"),
-            "max_start_delay_min": detail.get("max_start_delay_min"),
-            "planned_energy_kwh": detail.get("planned_energy_kwh"),
-            "planned_end_time": detail.get("planned_end_time"),
-            "lifecycle_status": detail.get("lifecycle_status"),
-            "lifecycle_reason": detail.get("lifecycle_reason"),
-            "origin": detail.get("origin"),
-            "purpose": detail.get("purpose"),
-            "planner_identity": detail.get("planner_identity"),
-            "planner_signature": detail.get("planner_signature"),
-            "selected": bool(detail.get("selected")),
-            "physical_control": False,
-            "mode": "validation",
-        }
+        return dict(self.scheduler.last_result)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._remove_listener = self.scheduler.async_add_listener(self._handle_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._remove_listener is not None:
+            self._remove_listener()
+            self._remove_listener = None
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
+
+
+class DOEMSCombinedExecutionStatusSensor(SensorEntity):
+    """Live observable R9 Combined execution decision for HA validation."""
+
+    _attr_should_poll = False
+    _attr_has_entity_name = False
+    _attr_name = "DOEMS Combined Execution Status"
+    _attr_unique_id = "doems_combined_execution_status"
+    _attr_suggested_object_id = "doems_combined_execution_status"
+    _attr_icon = "mdi:transmission-tower"
+
+    def __init__(self, entry: ConfigEntry, runtime: DOEMSCombinedExecutionShadowRuntime) -> None:
+        self.runtime = runtime
+        self._remove_listener = None
+        self._attr_device_info = _device_info(entry)
+
+    @property
+    def native_value(self) -> str:
+        result = self.runtime.last_result
+        return str(result.get("bridge") or result.get("status") or "startup")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return dict(self.runtime.last_result)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._remove_listener = self.runtime.async_add_listener(self._handle_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._remove_listener is not None:
+            self._remove_listener()
+            self._remove_listener = None
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()

@@ -4,7 +4,9 @@ DOEMS is a Home Assistant Energy Management System integration built component b
 
 ## Current stage
 
-`0.1.0-alpha.18` adds **Step 13 G5 Frozen Live Parity** to the standalone DOEMS EMS chain. One real live DOEMS planner state can be frozen and compared through the pinned Alpha76 decision baseline and the production DOEMS adapter path. The current decision policy is labeled `alpha76_baseline_v1`; future policy changes remain possible only as explicit versioned changes after separate validation. Step 12.7 Live Shadow Acceptance remains open asynchronously. DOEMS remains non-actuating and `anker_ems` remains the physical battery authority.
+`0.2.0-alpha.9.5` is the R9 recovery prerelease. Manual and Automatic feed the Combined planner; the Combined bridge has one shared Anker execution controller. Physical authority remains disabled by default. Installation does not enable battery control. Dynamic power caps are deferred.
+
+Software regression and mocked service tests are distinct from Home Assistant installation and live battery verification. See `docs/recovery_audit.md` for scope and evidence. Existing release tags are preserved.
 
 The current integration provides:
 
@@ -17,12 +19,7 @@ The current integration provides:
 - optional gas market/all-in publication with explicit source semantics: either the official EnergyZero market action (`MARKET_WITH_VAT`) or a validated generic Home Assistant EUR/m³ market-price sensor;
 - optional `sensor.doems_prices_gas_vs_electricity`, normalizing gas all-in to EUR/kWh with a fixed 9.77 kWh/m³ higher-heating-value basis and exposing the current electricity/gas price ratio;
 - the existing approved Dummy OS `brand/icon.png`, reused byte-for-byte from the other working integrations;
-- definitive DOEMS Plan Store and Scheduler with manual plan lifecycle services;
-- Step 11 Prestart diagnostics and automatic Safety Guard handoff copied from the working EMS source;
-- Step 12 read-only control path, execution handoff, final revalidation, mode-switch preview and fail-safe Automatic Execution Gate;
-- Step 12.5/12.6 non-actuating Execution Controller Shadow with runtime safety, safe-return preview, persistent audit and restart recovery;
-- Step 13 G5 frozen-live capture, deterministic fingerprint and persistent pass/mismatch evidence for the `alpha76_baseline_v1` decision policy;
-- no physical DOEMS execution authority; `anker_ems` remains authoritative.
+- no EMS physical execution authority.
 
 ## Installation and upgrade
 
@@ -40,7 +37,7 @@ Energy Forecast retains the native DOEMS time contract: 15-minute resolution, 72
 
 Solar uses a provider-neutral installation contract with stable inverter-group and array IDs. Open-Meteo is the current primary provider. The P3.1 runtime publishes a generic 1..N array forecast while preserving the fixed 15-minute / 72-hour / 288-slot contract.
 
-The Alpha41 Solar reference freeze remains available for migration validation. Local shading/obstruction learning is a later observer-only Solar expansion and is not part of Alpha7.
+The retired Alpha41 Solar reference freeze is removed idempotently during setup. Local shading and obstruction learning remain outside this recovery.
 
 ## Prices P4
 
@@ -79,7 +76,7 @@ When gas is enabled, `sensor.doems_prices_gas_vs_electricity` exposes the gas al
 
 All public DOEMS object IDs start with `doems_`. Active integration code lives under `custom_components/doems`, domain `doems`, and component-owned storage uses `doems.*` namespaces.
 
-Forecast modules are data/configuration layers. The EMS planning/execution-shadow and G5 parity chain through Step 13 remains non-actuating: `physical_execution_authority` is false, the automatic arm is fail-safe OFF after setup/reload, restart recovery performs no battery mode, direction or power writes, and G5 only freezes and compares an existing runtime snapshot. The only existing Home Assistant data-action call remains the read-only `energyzero.get_gas_prices` request when that gas source is enabled.
+Forecast modules are data/configuration layers. `physical_execution_authority` remains false. Alpha7.6 retains the single read-only Home Assistant data-action call (`energyzero.get_gas_prices`) and no battery, inverter or other physical equipment service calls.
 
 ## License
 

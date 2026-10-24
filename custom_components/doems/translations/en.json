@@ -21,14 +21,19 @@
           "energy_forecast_enabled": "Enable Energy Forecast",
           "solar_foundation_enabled": "Enable Solar Foundation",
           "prices_enabled": "Enable Prices Forecast",
-          "ems_enabled": "Enable EMS configuration"
+          "battery_observation_enabled": "Enable Battery Observation",
+          "planner_software_reserve_percent": "Planner software reserve",
+          "planner_max_charge_power_w": "Planner maximum charge power",
+          "planner_max_discharge_power_w": "Planner maximum discharge power",
+          "planner_minimum_trade_margin_eur_per_kwh": "Planner minimum trade margin"
         }
       },
       "energy_forecast": {
         "title": "Energy Forecast",
-        "description": "Choose only the Home Power input route. The active profile is controlled through DOEMS Presence entities.",
+        "description": "Choose the Home Power input route and the initial learning profile.",
         "data": {
-          "energy_source_mode": "Home Power source mode"
+          "energy_source_mode": "Home Power source mode",
+          "energy_start_profile": "Initial learning profile"
         }
       },
       "energy_direct": {
@@ -114,27 +119,6 @@
           "gas_prices_enabled": "Also publish optional gas prices"
         }
       },
-      "ems": {
-        "title": "EMS battery settings",
-        "description": "Configure the static EMS settings and battery observation/control entities. The physical Step 15A trial stays fail-safe off until DOEMS Automatic Execution is explicitly enabled.",
-        "data": {
-          "battery_capacity_kwh": "Battery capacity",
-          "technical_min_soc_percent": "Technical minimum SOC",
-          "max_soc_percent": "Maximum SOC",
-          "max_charge_power_w": "Maximum charge power",
-          "max_discharge_power_w": "Maximum discharge power",
-          "software_reserve_percent": "Software reserve",
-          "charge_efficiency_percent": "Charge efficiency",
-          "discharge_efficiency_percent": "Discharge efficiency",
-          "minimum_trade_margin_eur_per_kwh": "Minimum trade margin",
-          "startup_delay_seconds": "Startup delay",
-          "soc_entity": "Battery SOC sensor (read-only)",
-          "operating_mode_entity": "Operating-mode select",
-          "action_direction_entity": "Charge/discharge direction select",
-          "power_setpoint_entity": "Power-setpoint number",
-          "device_status_entity": "Battery device-status sensor"
-        }
-      },
       "prices_gas": {
         "title": "Optional gas prices",
         "description": "Choose explicit gas market-price semantics. EnergyZero action mode requests MARKET_WITH_VAT directly; generic sensor mode requires a true EUR/m3 market-price sensor. Only the field for the selected source mode is used.",
@@ -146,6 +130,17 @@
           "gas_tax_incl_vat": "Gas tax component incl. VAT",
           "gas_fixed_supply_per_day": "Fixed gas supply cost per day",
           "gas_grid_per_day": "Gas grid cost per day"
+        }
+      },
+      "battery_observation": {
+        "title": "Battery observation",
+        "description": "Select read-only battery sources for SOC projection and validation. Charge and discharge power sources already selected for Energy Forecast are reused and are not requested again. This step does not control the battery.",
+        "data": {
+          "battery_soc_entity": "Battery SOC",
+          "battery_capacity_entity": "Battery capacity",
+          "battery_charge_power_entity": "Battery charge power",
+          "battery_discharge_power_entity": "Battery discharge power",
+          "battery_status_entity": "Battery device status"
         }
       }
     },
@@ -159,14 +154,10 @@
       "total_actual_reused_as_array": "For a multi-array system, the total actual source cannot also be assigned to one array.",
       "energyzero_config_entry_required": "Select a valid EnergyZero config entry for the EnergyZero market action.",
       "unsupported_gas_price_unit": "The generic gas market sensor must use EUR/m3 (or €/m³).",
-      "ems_invalid_number": "Enter a valid number.",
-      "ems_below_minimum": "The value is below the allowed minimum.",
-      "ems_above_maximum": "The value is above the allowed maximum.",
-      "ems_invalid_step": "The value does not match the allowed step.",
-      "ems_soc_range_invalid": "Maximum SOC must be higher than technical minimum SOC.",
-      "unsupported_soc_unit": "The SOC sensor must use %.",
-      "invalid_soc_value": "The SOC sensor must expose a numeric value from 0 to 100.",
-      "control_path_incomplete": "Configure all three control-path entities together, or leave all three empty."
+      "unsupported_percentage_unit": "The SOC source must use %.",
+      "invalid_percentage_value": "The SOC source must publish a value between 0 and 100.",
+      "unsupported_capacity_unit": "The capacity source must use Wh or kWh.",
+      "invalid_capacity_value": "The capacity source must publish a positive value."
     },
     "abort": {
       "solar_foundation_invalid": "The Solar Foundation topology did not pass structural validation."
