@@ -1,8 +1,5 @@
 name: Publish R9 preview prerelease
 on:
-  push:
-    branches:
-      - release/r9-threadsafe-alpha9.3
   workflow_dispatch:
 permissions:
   contents: write
@@ -14,7 +11,7 @@ jobs:
       - name: Validate Python and manifest
         run: |
           python -m compileall -q custom_components/doems
-          python -c "import json; d=json.load(open('custom_components/doems/manifest.json')); assert d['version']=='0.2.0-alpha.9.4'"
+          python -c "import json, pathlib, re; v=json.loads(pathlib.Path('custom_components/doems/manifest.json').read_text())['version']; c=pathlib.Path('custom_components/doems/const.py').read_text(); assert v=='0.2.0-alpha.9.4' and re.search(r'^VERSION\\s*=\\s*\"'+re.escape(v)+r'\"', c, re.M), 'Version identity mismatch'"
       - name: Publish immutable preview prerelease
         env:
           GH_TOKEN: ${{ github.token }}
