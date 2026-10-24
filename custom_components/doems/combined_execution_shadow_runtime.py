@@ -175,7 +175,7 @@ class DOEMSCombinedExecutionShadowRuntime:
             "blockers": blockers,
             "observed_at": dt_util.utcnow().isoformat(),
             "physical_execution_enabled": bool(self.controller.session),
-            "execution_authorized": self._authority,
+            "execution_authorized": self._combined_authorized(),
             "reconciliation_required": self.controller.reconciliation_required,
             "last_stop_blockers": list(self._last_stop_blockers),
             "combined_handoff": deepcopy(self._combined_last_result),
