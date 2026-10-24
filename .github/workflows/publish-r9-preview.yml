@@ -11,7 +11,7 @@ jobs:
       - name: Validate Python and manifest
         run: |
           python -m compileall -q custom_components/doems
-          python -c "import json, pathlib, re; v=json.loads(pathlib.Path('custom_components/doems/manifest.json').read_text())['version']; c=pathlib.Path('custom_components/doems/const.py').read_text(); assert v=='0.2.0-alpha.9.4' and re.search(r'^VERSION\s*=\s*"'+re.escape(v)+r'"', c, re.M), 'Version identity mismatch'"
+          python -c 'import json, pathlib; v=json.loads(pathlib.Path("custom_components/doems/manifest.json").read_text())["version"]; c=pathlib.Path("custom_components/doems/const.py").read_text(); assert v=="0.2.0-alpha.9.4" and ("VERSION = " + chr(34) + v + chr(34)) in c, "Version identity mismatch"'
       - name: Publish immutable preview prerelease
         env:
           GH_TOKEN: ${{ github.token }}
