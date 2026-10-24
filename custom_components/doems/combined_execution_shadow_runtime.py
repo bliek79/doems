@@ -140,7 +140,8 @@ class DOEMSCombinedExecutionShadowRuntime:
             self.last_result = {
                 "status": "idle", "selected_slot": None,
                 "scheduler_status": decision.get("status"),
-                "physical_execution_enabled": False,
+                "physical_execution_enabled": bool(self.controller.session),
+                "combined_handoff": deepcopy(self._combined_last_result),
             }
             return
         plan = self.store.get_plan(slot)
