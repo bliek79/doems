@@ -37,10 +37,11 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: verified-release-${{ matrix.python }}
-          path: |
-            dist/doems.zip
-            dist/SHA256SUMS.txt
-            test-results.xml
+          path: dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.python }}
+          path: test-results.xml
   publish:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
