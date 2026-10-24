@@ -1,8 +1,4 @@
-"""R9 three-slot execution observer.
-
-Read the canonical R7-selected Plan Store slot, not the 288-slot Combined
-forecast. No physical battery authority is granted by this observer.
-"""
+"""Observe R7 and reconcile the canonical 288-slot Combined execution path."""
 from __future__ import annotations
 
 import asyncio
