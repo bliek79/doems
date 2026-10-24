@@ -28,7 +28,7 @@ class DOEMSCombinedExecutionShadowRuntime:
         self._combined_bridge = None
         self._combined_last_result: dict[str, Any] = {"bridge": "startup", "physical_execution_enabled": False}
         self.adapter = AnkerExecutionAdapter(hass, entities or {}, authority=self._authority)
-        self.controller = ExecutionController(self.adapter, authorized=lambda: self._authority, revalidate=self._identity_current)
+        self.controller = ExecutionController(self.adapter, authorized=lambda: self._authority, revalidate=self._combined_identity_current)
         if planner is not None:
             self._combined_bridge = CombinedAnkerBridge(
                 planner, self.adapter, battery=battery, authority=False,
@@ -53,6 +53,9 @@ class DOEMSCombinedExecutionShadowRuntime:
             if listener in self._listeners:
                 self._listeners.remove(listener)
         return remove
+
+    def _combined_identity_current(self, identity: tuple) -> bool:
+        return bool(self._combined_bridge is not None and self._combined_bridge._still_current(identity))
 
     def _identity_current(self, identity: tuple) -> bool:
         """Verify that R7 still selects exactly the same pending slot revision."""
@@ -127,8 +130,7 @@ class DOEMSCombinedExecutionShadowRuntime:
                     "bridge": "blocked", "reason": "combined_handoff_error",
                     "error_type": type(exc).__name__, "physical_execution_enabled": False,
                 }
-        if self._authority:
-            await self._execute_or_monitor()
+        # R7 remains observational; only Combined may supply physical commands.
         decision = dict(self.scheduler.last_result)
         slot = decision.get("selected_slot")
         if type(slot) is not int or slot not in (1, 2, 3):
@@ -284,6 +286,6 @@ class DOEMSCombinedExecutionShadowRuntime:
         self._unsubs.clear()
         if self._task is not None:
             await self._task
-        if self._authority and (self.controller.session is not None or self.controller.reconciliation_required):
+        if self.controller.session is not None or self.controller.reconciliation_required:
             await self.controller.stop()
         self._listeners.clear()
