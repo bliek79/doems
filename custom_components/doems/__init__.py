@@ -154,8 +154,7 @@ async def async_setup_entry(
         hass,
         r7_scheduler,
         manual_plan_store,
-        planner=planner,
-        battery=battery_input,
+        planner=planner, battery=battery_input,
         entities={
             "operating_mode": entry.options.get(
                 CONF_ANKER_OPERATING_MODE_ENTITY
