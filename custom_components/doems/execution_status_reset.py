@@ -12,10 +12,11 @@ def check_execution_status_reset(
     power_state: str | None,
 ) -> str | None:
     """Return a blocker, or None. This NEVER changes physical controls."""
-    if execution.get("active") or execution.get("auto_mode_switch_active"):
-        return "Er is nog een EMS-uitvoering of mode-switch actief"
-    if physical_test.get("active"):
-        return "Er is nog een fysieke test actief"
+    if (execution.get("active") is not False
+            or execution.get("auto_mode_switch_active") is not False):
+        return "EMS-uitvoering of mode-switch is actief of niet betrouwbaar bevestigd"
+    if physical_test.get("active") is not False:
+        return "Fysieke test is actief of niet betrouwbaar bevestigd"
     if execution.get("status") != "emergency_stopped":
         return "Er is geen afgeronde noodstop om te bevestigen"
     if automatic_armed:
