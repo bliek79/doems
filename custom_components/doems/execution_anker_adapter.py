@@ -14,6 +14,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import dt as dt_util
 
 from .execution_control_path import EXTERNAL_MODE, SELF_MODE, observe_control_path
+from .charge_power_limit import choose_charge_power
 
 
 class AnkerExecutionAdapter:
@@ -23,6 +24,7 @@ class AnkerExecutionAdapter:
         self.authority = authority
         self._lock = asyncio.Lock()
         self._last_commanded_setpoint: int | None = None
+        self.last_charge_decision = None
 
     def _require_authority(self) -> None:
         if not self.authority:
@@ -89,6 +91,34 @@ class AnkerExecutionAdapter:
     def _power_zero(self) -> bool:
         return self._power_matches(0)
 
+    def _live_charge_power_decision(self, planned_w: int):
+        """Alpha82: read the live Number bounds and fail closed."""
+        entity_id = self.entities.get("power_setpoint")
+        state = self.hass.states.get(entity_id) if entity_id else None
+        if state is None or state.state in ("unknown", "unavailable", "none"):
+            raise HomeAssistantError("Actuele Anker-vermogensentiteit ontbreekt")
+        try:
+            return choose_charge_power(
+                planned_w, state.attributes, configured_max_w=3500,
+            )
+        except (ValueError, TypeError, OverflowError) as err:
+            raise HomeAssistantError(f"Geen geldig Anker-laadvermogen: {err}") from err
+
+    async def _write_charge_power(self, planned_w: int) -> int:
+        """Alpha82: retry a rejected write once, only on a strictly lower cap."""
+        decision = self._live_charge_power_decision(planned_w)
+        attempted = decision.applied_w
+        try:
+            await self._call("number", "set_value", "power_setpoint", {"value": attempted})
+        except Exception:
+            refreshed = self._live_charge_power_decision(planned_w)
+            if refreshed.applied_w >= attempted:
+                raise
+            decision = refreshed
+            await self._call("number", "set_value", "power_setpoint", {"value": decision.applied_w})
+        self.last_charge_decision = decision
+        return decision.applied_w
+
     async def start(self, *, action: str, power_w: int, revalidate: Callable[[], bool]) -> bool:
         """Two-stage mode switch, zero guard, 60s stable controls, final gate."""
         self._require_authority()
@@ -125,9 +155,14 @@ class AnkerExecutionAdapter:
                                  ("charge" if action == "laden" else "discharge"))
                 if not revalidate():
                     raise HomeAssistantError("Final revalidation failed before nonzero setpoint")
-                await self._call("number", "set_value", "power_setpoint", {"value": power_w})
-                self._last_commanded_setpoint = power_w
-                await self._wait(lambda: self._power_matches(power_w))
+                applied_w = power_w
+                if action == "laden":
+                    applied_w = await self._write_charge_power(power_w)
+                else:
+                    self.last_charge_decision = None
+                    await self._call("number", "set_value", "power_setpoint", {"value": power_w})
+                self._last_commanded_setpoint = applied_w
+                await self._wait(lambda: self._power_matches(applied_w))
                 return True
             except BaseException:
                 # Always attempt safe return on failures, including cancellation.
