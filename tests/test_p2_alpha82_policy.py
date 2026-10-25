@@ -89,4 +89,6 @@ class ResetPolicyTests(unittest.TestCase):
         self.assertIsNotNone(self.can_reset())
 
 
-\nif __name__ == "__main__":\n    unittest.main()\n
+
+if __name__ == "__main__":
+    unittest.main()
