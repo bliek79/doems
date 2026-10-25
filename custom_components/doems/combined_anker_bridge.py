@@ -132,7 +132,9 @@ class CombinedAnkerBridge:
                 action="laden" if decision["action"] == "charge" else "ontladen",
                 power_w=power, target_soc=target, max_runtime_h=0.25, now=now,
             )
-            return {**decision, "bridge": "running", "physical_execution_enabled": True}
+            return {**decision, "bridge": "running", "physical_execution_enabled": True,
+                    "planned_power_w": power,
+                    "applied_power_w": self.controller.session["power_w"]}
 
     async def async_shutdown(self) -> None:
         async with self._lock:
