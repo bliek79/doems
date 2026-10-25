@@ -275,7 +275,7 @@ async def test_p2_emergency_acknowledgement_preserves_audit():
                                        last_result="emergency_stopped",
                                        automatic_run_history=[{"result": "emergency_stopped"}])
     adapter._state = lambda key: "self_consumption" if key == "operating_mode" else "0"
-    await controller.async_reset_emergency_status()
+    await controller.async_reset_emergency_status(automatic_armed=False, physical_test={"active": False})
     assert controller.emergency_status["status"] == "idle"
     assert controller.emergency_status["emergency_acknowledged_reason"] == "old_failure"
     assert controller.emergency_status["last_result"] == "emergency_stopped"
