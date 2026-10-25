@@ -50,7 +50,14 @@ class ExecutionController:
                 except BaseException:
                     pass
                 raise
-            self.session = dict(identity=identity, action=action, power_w=power_w,
+            applied_w = getattr(self.adapter, "_last_commanded_setpoint", None)
+            if action == "laden" and applied_w is not None:
+                if type(applied_w) is not int or not 100 <= applied_w <= power_w:
+                    raise HomeAssistantError("Invalid applied charge power")
+            else:
+                applied_w = power_w
+            self.session = dict(identity=identity, action=action, power_w=applied_w,
+                                planned_power_w=power_w,
                                 target_soc=target_soc, max_runtime_h=max_runtime_h,
                                 started_at=now.astimezone(timezone.utc).isoformat())
             self.reconciliation_required = False
