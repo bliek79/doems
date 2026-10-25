@@ -275,12 +275,24 @@ async def test_p2_emergency_acknowledgement_preserves_audit():
                                        last_result="emergency_stopped",
                                        automatic_run_history=[{"result": "emergency_stopped"}])
     adapter._state = lambda key: "self_consumption" if key == "operating_mode" else "0"
+    controller.emergency_status.update(active=False, auto_mode_switch_active=False)
     await controller.async_reset_emergency_status(automatic_armed=False, physical_test={"active": False})
     assert controller.emergency_status["status"] == "idle"
     assert controller.emergency_status["emergency_acknowledged_reason"] == "old_failure"
     assert controller.emergency_status["last_result"] == "emergency_stopped"
     assert controller.emergency_status["automatic_run_history"] == [{"result": "emergency_stopped"}]
     assert adapter.stops == 0
+
+
+@run_async
+async def test_p2_emergency_acknowledgement_denied_without_verified_activity_flags():
+    controller, adapter = build()
+    controller.emergency_status["status"] = "emergency_stopped"
+    adapter._state = lambda key: "self_consumption" if key == "operating_mode" else "0"
+    with pytest.raises(HomeAssistantError):
+        await controller.async_reset_emergency_status(
+            automatic_armed=False, physical_test={"active": False})
+    assert controller.emergency_status["status"] == "emergency_stopped"
 
 
 @run_async
