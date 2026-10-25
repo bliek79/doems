@@ -72,6 +72,29 @@ class ResetPolicyTests(unittest.TestCase):
         self.assertIsNone(self.can_reset())
         self.assertIsNone(self.can_reset(power_state="unavailable"))
 
+    def test_missing_or_ambiguous_activity_flags_block_reset(self):
+        for field in ("active", "auto_mode_switch_active"):
+            for value in (None, "false", 0):
+                with self.subTest(field=field, value=value):
+                    execution = dict(self.execution)
+                    execution[field] = value
+                    self.assertIsNotNone(reset.check_execution_status_reset(
+                        execution, self.test, automatic_armed=False,
+                        operating_mode="self_consumption", power_state="0"))
+            execution = dict(self.execution)
+            execution.pop(field)
+            self.assertIsNotNone(reset.check_execution_status_reset(
+                execution, self.test, automatic_armed=False,
+                operating_mode="self_consumption", power_state="0"))
+        for value in (None, "false", 0):
+            with self.subTest(physical_test=value):
+                self.assertIsNotNone(reset.check_execution_status_reset(
+                    self.execution, {"active": value}, automatic_armed=False,
+                    operating_mode="self_consumption", power_state="0"))
+        self.assertIsNotNone(reset.check_execution_status_reset(
+            self.execution, {}, automatic_armed=False,
+            operating_mode="self_consumption", power_state="0"))
+
     def test_no_restart_or_arm_can_be_hidden(self):
         for kwargs in ({"automatic_armed": True}, {"operating_mode": "third_party_control"}, {"operating_mode": None}, {"power_state": "350"}, {"power_state": "invalid"}):
             with self.subTest(kwargs=kwargs):
