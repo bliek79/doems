@@ -33,7 +33,8 @@ def chain(monkeypatch):
     entities = {'operating_mode': 'select.test_mode', 'action_direction': 'select.test_direction', 'power_setpoint': 'number.test_power'}
     states = {}
     def set_state(key, value):
-        states[entities[key]] = SimpleNamespace(state=str(value), last_changed=clock.now)
+        states[entities[key]] = SimpleNamespace(state=str(value), last_changed=clock.now,
+            attributes={'min': 0, 'max': 3500, 'step': 1} if key == 'power_setpoint' else {})
     for key, value in [('operating_mode', 'self_consumption'), ('action_direction', 'charge'), ('power_setpoint', 0)]:
         set_state(key, value)
         states[entities[key]].last_changed -= timedelta(seconds=120)
