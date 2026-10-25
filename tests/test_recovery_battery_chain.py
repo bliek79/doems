@@ -14,6 +14,18 @@ def chain(monkeypatch):
     package = ModuleType('recovery_battery_test')
     package.__path__ = [str(Path(__file__).resolve().parents[1] / 'custom_components/doems')]
     monkeypatch.setitem(sys.modules, package.__name__, package)
+    # Isolated CI does not install HA; provide the same utcnow API used by adapter.
+    import types
+    if 'homeassistant.util' not in sys.modules:
+        util = ModuleType('homeassistant.util')
+        dt = ModuleType('homeassistant.util.dt')
+        dt.utcnow = lambda: datetime.now(timezone.utc)
+        util.dt = dt
+        monkeypatch.setitem(sys.modules, 'homeassistant.util', util)
+        monkeypatch.setitem(sys.modules, 'homeassistant.util.dt', dt)
+        ha = sys.modules.get('homeassistant')
+        if ha is not None:
+            monkeypatch.setattr(ha, 'util', util, raising=False)
     modules = {}
     for name in ('execution_watchdog', 'execution_control_path', 'execution_anker_adapter', 'execution_controller', 'combined_execution_shadow', 'combined_anker_bridge'):
         fullname = f'{package.__name__}.{name}'
@@ -33,8 +45,11 @@ def chain(monkeypatch):
     entities = {'operating_mode': 'select.test_mode', 'action_direction': 'select.test_direction', 'power_setpoint': 'number.test_power'}
     states = {}
     def set_state(key, value):
+        previous = states.get(entities[key])
+        attrs = (previous.attributes if previous is not None else
+                 ({'min': 0, 'max': 3500, 'step': 1} if key == 'power_setpoint' else {}))
         states[entities[key]] = SimpleNamespace(state=str(value), last_changed=clock.now,
-            attributes={'min': 0, 'max': 3500, 'step': 1} if key == 'power_setpoint' else {})
+            attributes=attrs)
     for key, value in [('operating_mode', 'self_consumption'), ('action_direction', 'charge'), ('power_setpoint', 0)]:
         set_state(key, value)
         states[entities[key]].last_changed -= timedelta(seconds=120)
