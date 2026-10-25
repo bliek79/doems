@@ -99,14 +99,18 @@ class ExecutionController:
             await self.stop()
         return result
 
-    async def async_reset_emergency_status(self, *, automatic_armed=False, physical_test=None):
-        """Non-actuating Alpha82 emergency acknowledgement; retain historical audit."""
+    async def async_reset_emergency_status(self, *, automatic_armed=True, physical_test=None):
+        """Non-actuating Alpha82 emergency acknowledgement; retain historical audit.
+
+        Missing arming or physical-test evidence blocks reset by default.
+        The caller must supply verified live safety state, not user assertions.
+        """
         async with self._lock:
             if self.session is not None or self.reconciliation_required:
                 raise HomeAssistantError("Noodstopreset geblokkeerd: uitvoering of reconciliatie actief")
             blocker = check_execution_status_reset(
-                {**self.emergency_status, "active": False, "auto_mode_switch_active": False},
-                physical_test if physical_test is not None else {"active": False},
+                self.emergency_status,
+                physical_test if physical_test is not None else {"active": True},
                 automatic_armed=automatic_armed,
                 operating_mode=self.adapter._state("operating_mode"),
                 power_state=self.adapter._state("power_setpoint"),
