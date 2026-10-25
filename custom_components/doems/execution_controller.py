@@ -37,6 +37,12 @@ class ExecutionController:
                     raise HomeAssistantError("Start acknowledgement not confirmed")
                 if not self._permitted(identity):
                     raise HomeAssistantError("Authority or selected plan changed during start")
+                applied_w = getattr(self.adapter, "_last_commanded_setpoint", None)
+                if action == "laden" and hasattr(self.adapter, "_last_commanded_setpoint"):
+                    if type(applied_w) is not int or not 100 <= applied_w <= power_w:
+                        raise HomeAssistantError("Invalid applied charge power")
+                else:
+                    applied_w = power_w
             except BaseException:
                 # A failed or cancelled start may already have reached the device.
                 # Keep the reconciliation fence raised until a separate verified stop.
@@ -53,12 +59,6 @@ class ExecutionController:
                     pass
                 self.emergency_status.update(status='emergency_stopped', reason='execution_start_failed', last_result='emergency_stopped')
                 raise
-            applied_w = getattr(self.adapter, "_last_commanded_setpoint", None)
-            if action == "laden" and applied_w is not None:
-                if type(applied_w) is not int or not 100 <= applied_w <= power_w:
-                    raise HomeAssistantError("Invalid applied charge power")
-            else:
-                applied_w = power_w
             self.session = dict(identity=identity, action=action, power_w=applied_w,
                                 planned_power_w=power_w,
                                 target_soc=target_soc, max_runtime_h=max_runtime_h,
