@@ -4,6 +4,7 @@ import asyncio
 from datetime import datetime, timezone
 from homeassistant.exceptions import HomeAssistantError
 from .execution_watchdog import evaluate_session
+from .execution_status_reset import check_execution_status_reset
 
 
 class ExecutionController:
@@ -14,6 +15,7 @@ class ExecutionController:
         self.session = None
         self.reconciliation_required = False
         self._lock = asyncio.Lock()
+        self.emergency_status = {'active': False, 'status': 'idle', 'reason': None, 'stop_at': None, 'last_result': None, 'automatic_run_history': []}
 
     def _permitted(self, identity):
         return bool(self.authorized() and self.revalidate(identity))
@@ -49,6 +51,7 @@ class ExecutionController:
                         pass
                 except BaseException:
                     pass
+                self.emergency_status.update(status='emergency_stopped', reason='execution_start_failed', last_result='emergency_stopped')
                 raise
             applied_w = getattr(self.adapter, "_last_commanded_setpoint", None)
             if action == "laden" and applied_w is not None:
@@ -95,6 +98,29 @@ class ExecutionController:
         if result["decision"] == "stop":
             await self.stop()
         return result
+
+    async def async_reset_emergency_status(self, *, automatic_armed=False, physical_test=None):
+        """Non-actuating Alpha82 emergency acknowledgement; retain historical audit."""
+        async with self._lock:
+            if self.session is not None or self.reconciliation_required:
+                raise HomeAssistantError("Noodstopreset geblokkeerd: uitvoering of reconciliatie actief")
+            blocker = check_execution_status_reset(
+                {**self.emergency_status, "active": False, "auto_mode_switch_active": False},
+                physical_test if physical_test is not None else {"active": False},
+                automatic_armed=automatic_armed,
+                operating_mode=self.adapter._state("operating_mode"),
+                power_state=self.adapter._state("power_setpoint"),
+            )
+            if blocker is not None:
+                raise HomeAssistantError(f"Noodstopreset geblokkeerd: {blocker}")
+            self.emergency_status.update(
+                emergency_acknowledged_at=datetime.now(timezone.utc).isoformat(),
+                emergency_acknowledged_reason=self.emergency_status.get("reason"),
+                emergency_acknowledged_stop_at=self.emergency_status.get("stop_at"),
+                active=False, status="idle",
+                reason="Noodstop bevestigd; geen EMS-uitvoering actief",
+                stop_at=None,
+            )
 
     def require_restart_reconciliation(self):
         self.session = None
