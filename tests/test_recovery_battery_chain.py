@@ -163,3 +163,39 @@ def test_stop_failure_keeps_reconciliation_fence(chain):
         assert chain.controller.reconciliation_required
         assert chain.controller.session is not None
     asyncio.run(run())
+
+
+def test_alpha82_live_charge_limit_is_applied_and_recorded(chain):
+    async def run():
+        chain.states['number.test_power'].attributes['max'] = 2408
+        result = await chain.bridge.async_reconcile(chain.clock.now)
+        assert result['bridge'] == 'running'
+        assert result['planned_power_w'] == 1000
+        assert result['applied_power_w'] == 1000
+        assert chain.controller.session['planned_power_w'] == 1000
+        assert chain.controller.session['power_w'] == 1000
+        await chain.bridge.async_shutdown()
+    asyncio.run(run())
+
+
+def test_alpha82_charge_reduces_planned_power_to_live_max(chain):
+    async def run():
+        chain.states['number.test_power'].attributes['max'] = 750
+        result = await chain.bridge.async_reconcile(chain.clock.now)
+        assert result['bridge'] == 'running'
+        assert result['planned_power_w'] == 1000
+        assert result['applied_power_w'] == 750
+        assert chain.controller.session['power_w'] == 750
+        assert chain.adapter._power_matches(750)
+        await chain.bridge.async_shutdown()
+    asyncio.run(run())
+
+
+def test_alpha82_missing_live_max_fails_closed(chain):
+    async def run():
+        chain.states['number.test_power'].attributes.pop('max')
+        with pytest.raises(Exception):
+            await chain.bridge.async_reconcile(chain.clock.now)
+        assert not any(c[0] == 'number' and c[2]['value'] > 0 for c in chain.calls)
+        assert chain.adapter._state('operating_mode') == 'self_consumption'
+    asyncio.run(run())
