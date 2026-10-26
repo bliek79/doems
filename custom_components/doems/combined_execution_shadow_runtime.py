@@ -13,6 +13,7 @@ from homeassistant.util import dt as dt_util
 from .combined_anker_bridge import CombinedAnkerBridge
 from .execution_controller import ExecutionController
 from .execution_anker_adapter import AnkerExecutionAdapter
+from .alpha84_handoff_contract import project_combined_slot, HandoffContractError
 
 
 class DOEMSCombinedExecutionShadowRuntime:
@@ -217,6 +218,20 @@ class DOEMSCombinedExecutionShadowRuntime:
         # Shadow mode must report planning readiness independently of
         # physical authority. Never imply that the battery is being controlled.
         planning_ready = not blockers
+        # Prepare the immutable Alpha84 executor input contract while keeping
+        # all original Alpha84 execution authorization flags false.
+        alpha84_handoff = None
+        if planning_ready:
+            snapshot = self.scheduler.battery.snapshot() if self.scheduler.battery else {}
+            try:
+                alpha84_handoff = project_combined_slot(
+                    decision, plan,
+                    sources_fresh=self.scheduler._sources_fresh(dt_util.utcnow(), snapshot),
+                    safety_safe=snapshot.get("status") == "ready",
+                )
+            except (HandoffContractError, TypeError, ValueError) as err:
+                blockers.append("alpha84_handoff_invalid")
+                alpha84_handoff = {"handoff_phase": "blocked", "reason": str(err)}
         if not self._master_enabled:
             blockers.append("master_execution_disabled")
         if not self._authority:
@@ -239,6 +254,7 @@ class DOEMSCombinedExecutionShadowRuntime:
             "reconciliation_required": self.controller.reconciliation_required,
             "last_stop_blockers": list(self._last_stop_blockers),
             "combined_handoff": deepcopy(self._combined_last_result),
+            "alpha84_handoff": deepcopy(alpha84_handoff),
             "legacy_fence_evidence": self._legacy_fence_diagnostics(),
         }
 
