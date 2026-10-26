@@ -31,6 +31,7 @@ class DOEMSCombinedExecutionShadowRuntime:
             self._combined_bridge = CombinedAnkerBridge(
                 planner, self.adapter, battery=battery,
                 authority=False, exclusive=False, controller=self.controller,
+                master_enabled=lambda: self._master_enabled,
             )
         self._active_plan = None
         self._active_slot = None
