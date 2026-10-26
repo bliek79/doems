@@ -59,13 +59,22 @@ class DOEMSCombinedExecutionShadowRuntime:
     async def async_set_master_enabled(self, enabled: bool) -> None:
         """Master gate: switching off also fences in-flight execution."""
         if enabled:
+            if self._shutdown:
+                raise ValueError("Cannot enable a stopped execution runtime")
             if self.controller.session is not None or self.controller.reconciliation_required:
                 raise ValueError("Cannot enable while execution or reconciliation is active")
             self._master_enabled = True
         else:
+            # Revoke permission before any asynchronous stop attempt.
             self._master_enabled = False
-            if self.controller.session is not None or self.controller.reconciliation_required:
-                await self.controller.stop()
+            try:
+                if self.controller.session is not None or self.controller.reconciliation_required:
+                    await self.controller.stop()
+            finally:
+                for listener in tuple(self._listeners):
+                    listener()
+                self.refresh()
+            return
         for listener in tuple(self._listeners):
             listener()
         self.refresh()
