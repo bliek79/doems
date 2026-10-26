@@ -108,8 +108,14 @@ class ExecutionController:
         async with self._lock:
             if self.session is not None or self.reconciliation_required:
                 raise HomeAssistantError("Noodstopreset geblokkeerd: uitvoering of reconciliatie actief")
+            # The controller lock plus the session/reconciliation gates above
+            # prove there is no in-flight DOEMS mode switch. Legacy EMS is
+            # verified separately through its own live entity evidence.
+            execution = dict(self.emergency_status)
+            execution["active"] = False
+            execution["auto_mode_switch_active"] = False
             blocker = check_execution_status_reset(
-                self.emergency_status,
+                execution,
                 physical_test if physical_test is not None else {"active": True},
                 automatic_armed=automatic_armed,
                 operating_mode=self.adapter._state("operating_mode"),
