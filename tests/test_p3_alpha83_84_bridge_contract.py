@@ -27,7 +27,10 @@ def test_slot_writer_checks_manual_revision_and_does_not_actuate():
     assert '"physical_execution_enabled": False' in source
 
 
-def test_p3_gap_partial_safety_charge_is_not_yet_silently_capped():
+def test_p3_feasible_safety_charge_contract():
     source = (BASE / "automatic_slot_bridge_model.py").read_text()
-    assert 'return None, "automatic_power_above_configured_limit"' in source
-    assert "never silently cap unachievable power" in source
+    assert 'purpose == "veiligheidsladen"' in source
+    assert 'duration_h - 2.0 / 60.0' in source
+    assert '"requested_energy_kwh"' in source
+    assert '"energy_shortfall_kwh"' in source
+    assert "first_limited_index" not in source
