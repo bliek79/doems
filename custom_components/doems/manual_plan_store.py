@@ -493,7 +493,13 @@ class DOEMSManualPlanStore:
                 continue
             start = _aware_utc(plan.get("start_time"))
             deadline = _automatic_expiry(plan)
-            if start is not None and clock >= start and (deadline is None or clock <= deadline):
+            if (
+                (start is not None and clock >= start and (deadline is None or clock <= deadline))
+                or (plan.get("lifecycle_status") == "pending" and start is not None and clock < start)
+                or plan.get("lifecycle_status") == "actief"
+            ):
+                # Preserve committed pending/active automatic slots. Their
+                # identities must not be written into a different free slot.
                 frozen[slot] = plan
                 occupied.add(slot)
                 if plan.get("planner_identity"):
