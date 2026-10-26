@@ -34,6 +34,33 @@ def inspect_alpha84_controller(
     final_validator = getattr(original_controller, "evaluate_final_revalidation", None)
     if not callable(final_validator):
         raise HandoffContractError("Original Alpha84 final safety validator unavailable")
+    # A DOEMS plan must not replace the original Alpha84 live Safety Guard
+    # and pre-start verdicts. Original evidence must explicitly exist.
+    for key in (
+        "auto_prestart_safe",
+        "auto_safety_handoff_safe",
+        "auto_prestart_current_identity_match",
+        "auto_prestart_current_signature_match",
+        "forecast_ready",
+        "control_path_configured",
+    ):
+        if live_evidence.get(key) is not True:
+            raise HandoffContractError(f"Original Alpha84 safety source not safe: {key}")
+    if live_evidence.get("execution_active") is not False:
+        raise HandoffContractError("Original execution not confirmed idle")
+    if live_evidence.get("physical_test_active") is not False:
+        raise HandoffContractError("Original physical test not confirmed idle")
+    # Alpha84 must already recognize the SAME plan and identity. The DOEMS
+    # adapter may not manufacture a safe selection from unrelated old state.
+    selected = envelope["scheduler_selected_slot"]
+    if live_evidence.get("scheduler_ready") is not True or live_evidence.get("scheduler_selected_slot") != selected:
+        raise HandoffContractError("Original scheduler has not accepted the selected slot")
+    existing = (live_evidence.get("scheduler_slots") or {})
+    old_slot = existing.get(selected) or existing.get(str(selected)) or {}
+    new_slot = envelope["scheduler_slots"][selected]
+    for field in ("action", "power_w", "target_soc", "max_runtime_h", "planner_identity"):
+        if old_slot.get(field) != new_slot.get(field):
+            raise HandoffContractError(f"Original scheduler selection differs: {field}")
     data = dict(live_evidence)
     # Transfer only the selected plan input.  Do NOT synthesize any successful
     # prestart, safety, controller, mode or writer-authority state.
