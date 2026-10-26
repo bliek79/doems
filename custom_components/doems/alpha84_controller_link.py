@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from .alpha84_handoff_contract import project_combined_slot, HandoffContractError
+from .alpha84_original_prestart import inspect_original_prestart
 
 
 def inspect_alpha84_controller(
@@ -34,6 +35,9 @@ def inspect_alpha84_controller(
     final_validator = getattr(original_controller, "evaluate_final_revalidation", None)
     if not callable(final_validator):
         raise HandoffContractError("Original Alpha84 final safety validator unavailable")
+    original_prestart = inspect_original_prestart(
+        getattr(original_controller, "_coordinator", None), envelope, live_evidence
+    )
     # Run the original read-only Safety Guard against the projected DOEMS
     # selection and ORIGINAL live telemetry; never reuse its prior verdict.
     coordinator = getattr(original_controller, "_coordinator", None)
@@ -96,6 +100,7 @@ def inspect_alpha84_controller(
         "source": "original_alpha84_execution_controller",
         "validation": result,
         "original_safety_guard": guard_result,
+        "original_prestart": original_prestart,
         "handoff_phase": "original_validator_observation_only",
         "physical_execution_enabled": False,
         "execution_permitted": False,
