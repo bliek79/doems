@@ -285,9 +285,10 @@ async def test_p2_emergency_acknowledgement_preserves_audit():
 
 
 @run_async
-async def test_p2_emergency_acknowledgement_denied_without_verified_activity_flags():
+async def test_p2_emergency_acknowledgement_denied_during_reconciliation():
     controller, adapter = build()
     controller.emergency_status["status"] = "emergency_stopped"
+    controller.reconciliation_required = True
     adapter._state = lambda key: "self_consumption" if key == "operating_mode" else "0"
     with pytest.raises(HomeAssistantError):
         await controller.async_reset_emergency_status(
