@@ -14,6 +14,7 @@ from .combined_anker_bridge import CombinedAnkerBridge
 from .execution_controller import ExecutionController
 from .execution_anker_adapter import AnkerExecutionAdapter
 from .alpha84_handoff_contract import project_combined_slot, HandoffContractError
+from .alpha84_controller_link import inspect_alpha84_controller
 
 
 class DOEMSCombinedExecutionShadowRuntime:
@@ -218,6 +219,13 @@ class DOEMSCombinedExecutionShadowRuntime:
         # Shadow mode must report planning readiness independently of
         # physical authority. Never imply that the battery is being controlled.
         planning_ready = not blockers
+        # No original controller is registered in DOEMS yet. This field makes
+        # that missing dependency explicit instead of claiming executable parity.
+        alpha84_original_controller_link = {
+            "status": "blocked",
+            "reason": "original_alpha84_controller_not_registered",
+            "physical_execution_enabled": False,
+        }
         # Prepare the immutable Alpha84 executor input contract while keeping
         # all original Alpha84 execution authorization flags false.
         alpha84_handoff = None
@@ -255,6 +263,7 @@ class DOEMSCombinedExecutionShadowRuntime:
             "last_stop_blockers": list(self._last_stop_blockers),
             "combined_handoff": deepcopy(self._combined_last_result),
             "alpha84_handoff": deepcopy(alpha84_handoff),
+            "alpha84_original_controller_link": deepcopy(alpha84_original_controller_link),
             "legacy_fence_evidence": self._legacy_fence_diagnostics(),
         }
 
