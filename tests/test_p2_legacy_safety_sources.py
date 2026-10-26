@@ -114,3 +114,66 @@ def test_unavailable_legacy_diagnostics_block(safety, role, value):
     safety.states[f"sensor.legacy_{suffix}"].state = value
     with pytest.raises(ValueError):
         safety.read(safety.hass)
+
+
+def _closed_legacy_fence(safety):
+    safety.entities["authority"] = SimpleNamespace(
+        entity_id="sensor.legacy_authority", domain="sensor",
+        unique_id="abc_legacy_authority", platform="anker_ems", disabled_by=None,
+    )
+    safety.states["sensor.legacy_authority"] = SimpleNamespace(
+        state="closed",
+        attributes={"write_fence": "closed", "physical_authority": False,
+                    "inflight_calls": 0, "authority_generation": 1},
+    )
+
+
+def test_closed_legacy_fence_with_quiescent_execution_is_verified(safety):
+    _closed_legacy_fence(safety)
+    # The imported function is read-only and does not enable the new writer.
+    import sys
+    module = sys.modules.get("p2_test_legacy_safety")
+    if module is None:
+        import importlib.util
+        path = Path(__file__).resolve().parents[1] / "custom_components/doems/legacy_ems_safety.py"
+        spec = importlib.util.spec_from_file_location("p2_fence_test", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    assert module.read_legacy_authority_fence(safety.hass) == {
+        "legacy_fence_closed": True, "legacy_inflight_calls": 0,
+        "legacy_authority_generation": 1, "legacy_operations_inactive": True,
+    }
+
+
+@pytest.mark.parametrize("key,value", [
+    ("write_fence", "open"),
+    ("physical_authority", True),
+    ("physical_authority", None),
+    ("inflight_calls", 1),
+    ("inflight_calls", None),
+    ("inflight_calls", False),
+    ("authority_generation", 0),
+    ("authority_generation", None),
+])
+def test_unverified_fence_evidence_blocks(safety, key, value):
+    _closed_legacy_fence(safety)
+    import importlib.util
+    path = Path(__file__).resolve().parents[1] / "custom_components/doems/legacy_ems_safety.py"
+    spec = importlib.util.spec_from_file_location("p2_fence_negative", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    safety.states["sensor.legacy_authority"].attributes[key] = value
+    with pytest.raises(ValueError):
+        module.read_legacy_authority_fence(safety.hass)
+
+
+def test_legacy_fence_is_insufficient_when_arm_active(safety):
+    _closed_legacy_fence(safety)
+    import importlib.util
+    path = Path(__file__).resolve().parents[1] / "custom_components/doems/legacy_ems_safety.py"
+    spec = importlib.util.spec_from_file_location("p2_fence_armed", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    safety.states["switch.legacy_arm"].state = "on"
+    with pytest.raises(ValueError):
+        module.read_legacy_authority_fence(safety.hass)
