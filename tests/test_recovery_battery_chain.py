@@ -86,7 +86,8 @@ def chain(monkeypatch):
     bridge = modules['combined_anker_bridge'].CombinedAnkerBridge(
         SimpleNamespace(snapshot=lambda kind: snapshot if kind == 'combined' else pytest.fail('non Combined source')),
         adapter, battery=SimpleNamespace(snapshot=lambda: battery), authority=True,
-        exclusive=True, controller=controller)
+        exclusive=True, controller=controller,
+        master_enabled=lambda: True)
     bridge_ref['bridge'] = bridge
     return SimpleNamespace(bridge=bridge, controller=controller, adapter=adapter,
         clock=clock, snapshot=snapshot, battery=battery, calls=calls, states=states,
