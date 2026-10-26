@@ -170,7 +170,7 @@ def test_stale_revision_blocks():
     slot["planner_signature"] = "revision-new"
     evidence = verified_evidence()
     evidence["scheduler_slots"][1]["planner_signature"] = "revision-old"
-    with pytest.raises(HandoffContractError, match="planner_signature"):
+    with pytest.raises(HandoffContractError, match="candidate revision stale"):
         inspect_alpha84_controller(Alpha84Validator(), decision, slot,
                                    sources_fresh=True, safety_safe=True, live_evidence=evidence)
 
