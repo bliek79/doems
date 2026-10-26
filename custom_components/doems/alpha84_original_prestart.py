@@ -30,8 +30,13 @@ def inspect_original_prestart(
         raise HandoffContractError("Original Alpha84 candidate revision stale")
     # Import the class from the ORIGINAL installed integration rather than
     # copying a validator or producing a positive verdict in DOEMS.
+    if coordinator is None:
+        raise HandoffContractError("Original Alpha84 coordinator unavailable")
     module_name = coordinator.__class__.__module__.rsplit(".", 1)[0] + ".prestart_validator"
-    validator_cls = getattr(import_module(module_name), "AnkerEmsPreStartValidator", None)
+    try:
+        validator_cls = getattr(import_module(module_name), "AnkerEmsPreStartValidator", None)
+    except (ImportError, AttributeError) as err:
+        raise HandoffContractError("Original Alpha84 pre-start module unavailable") from err
     if validator_cls is None:
         raise HandoffContractError("Original Alpha84 Pre-start Validator unavailable")
     data = dict(live)
