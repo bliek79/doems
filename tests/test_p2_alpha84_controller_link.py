@@ -54,7 +54,7 @@ def verified_evidence():
             "planner_signature": slot.get("planner_signature"),
         }},
         "execution_active": False, "physical_test_active": False,
-        "auto_bridge_candidates": [{"planner_identity": slot["planner_identity"], "planner_signature": slot.get("planner_signature")}],
+        "auto_bridge_candidates": [{"planner_identity": slot["planner_identity"], "planner_signature": slot.get("planner_signature"), "action": slot["action"], "power_w": slot["power_w"], "target_soc": float(slot["target_soc"])}],
     }
     for key in (
         "auto_prestart_safe", "auto_safety_handoff_safe",
@@ -195,3 +195,23 @@ def test_stale_original_prestart_candidate_revision_blocks():
             Alpha84Validator(), decision, slot,
             sources_fresh=True, safety_safe=True, live_evidence=evidence,
         )
+
+
+def test_duplicate_candidate_lineage_is_blocked():
+    decision, slot = args()
+    evidence = verified_evidence()
+    evidence["auto_bridge_candidates"].append(dict(evidence["auto_bridge_candidates"][0]))
+    with pytest.raises(HandoffContractError, match="one authoritative"):
+        inspect_alpha84_controller(Alpha84Validator(), decision, slot,
+                                   sources_fresh=True, safety_safe=True,
+                                   live_evidence=evidence)
+
+
+def test_changed_candidate_power_is_blocked():
+    decision, slot = args()
+    evidence = verified_evidence()
+    evidence["auto_bridge_candidates"][0]["power_w"] = 700
+    with pytest.raises(HandoffContractError, match="candidate mismatch: power_w"):
+        inspect_alpha84_controller(Alpha84Validator(), decision, slot,
+                                   sources_fresh=True, safety_safe=True,
+                                   live_evidence=evidence)
