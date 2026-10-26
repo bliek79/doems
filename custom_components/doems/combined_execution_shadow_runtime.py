@@ -13,6 +13,7 @@ from homeassistant.util import dt as dt_util
 from .combined_anker_bridge import CombinedAnkerBridge
 from .execution_controller import ExecutionController
 from .execution_anker_adapter import AnkerExecutionAdapter
+from .legacy_ems_safety import read_legacy_authority_fence
 
 
 class DOEMSCombinedExecutionShadowRuntime:
@@ -163,6 +164,21 @@ class DOEMSCombinedExecutionShadowRuntime:
                     # A faulty UI listener must not terminate the observer drain.
                     continue
 
+    def _legacy_fence_diagnostics(self) -> dict[str, Any]:
+        """Read-only legacy evidence, never physical authorization."""
+        try:
+            return {
+                "status": "closed_and_quiescent",
+                **read_legacy_authority_fence(self.hass),
+            }
+        except (ValueError, LookupError) as err:
+            return {
+                "status": "unverified",
+                "reason": str(err),
+                "legacy_fence_closed": False,
+                "legacy_operations_inactive": False,
+            }
+
     async def _evaluate(self) -> None:
         if self._combined_bridge is not None:
             try:
@@ -183,6 +199,7 @@ class DOEMSCombinedExecutionShadowRuntime:
                 "scheduler_status": decision.get("status"),
                 "physical_execution_enabled": bool(self.controller.session),
                 "combined_handoff": deepcopy(self._combined_last_result),
+                "legacy_fence_evidence": self._legacy_fence_diagnostics(),
             }
             return
         plan = self.store.get_plan(slot)
@@ -222,6 +239,7 @@ class DOEMSCombinedExecutionShadowRuntime:
             "reconciliation_required": self.controller.reconciliation_required,
             "last_stop_blockers": list(self._last_stop_blockers),
             "combined_handoff": deepcopy(self._combined_last_result),
+            "legacy_fence_evidence": self._legacy_fence_diagnostics(),
         }
 
     def _identity(self, slot, plan):
