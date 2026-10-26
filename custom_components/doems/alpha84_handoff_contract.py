@@ -59,6 +59,7 @@ def project_combined_slot(
         "max_runtime_h": float(runtime),
         "origin": "automatic_72h_planner" if slot["origin"] == "automatic" else "manual",
         "planner_identity": identity,
+        "planner_signature": slot.get("planner_signature"),
         "start_time": slot.get("start_time"),
         "planned_energy_kwh": slot.get("planned_energy_kwh"),
         "planned_end_time": slot.get("planned_end_time"),
