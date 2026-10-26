@@ -29,6 +29,7 @@ from .const import (
 )
 from .automatic_combined_planner import DOEMSPlannerManager
 from .combined_execution_shadow_runtime import DOEMSCombinedExecutionShadowRuntime
+from .legacy_ems_safety import read_legacy_safety
 from .automatic_slot_bridge import DOEMSAutoSlotBridge
 from .r7_runtime import DOEMSR7Scheduler
 from .battery_contract import DOEMSBatteryInputContract
@@ -234,37 +235,18 @@ async def async_setup_entry(
                 "uitvoering of reconciliatie actief"
             )
 
-        if (
-            controller.emergency_status.get("active")
-            is not False
-            or controller.emergency_status.get(
-                "auto_mode_switch_active"
-            )
-            is not False
-        ):
+        # The old EMS is a separate controller. Read its live registered
+        # arm, execution, physical-test and mode-switch states. An absent,
+        # ambiguous or unavailable source must never permit acknowledgement.
+        try:
+            safety = read_legacy_safety(hass)
+        except ValueError as err:
             raise HomeAssistantError(
-                "Noodstopreset geblokkeerd: "
-                "EMS-uitvoering of mode-switch "
-                "niet betrouwbaar inactief bevestigd"
-            )
+                f"Noodstopreset geblokkeerd: {err}"
+            ) from err
 
-        # Do not infer safe state from shadow-only mode.
-        # Do not accept service-call data as safety evidence.
-        # The verified live automatic-arming and physical-test
-        # sources must be connected before calling:
-        #
-        # await controller.async_reset_emergency_status(
-        #     automatic_armed=False,
-        #     physical_test={"active": False},
-        # )
-        #
-        # Until then, always reject the reset.
-
-        raise HomeAssistantError(
-            "Noodstopreset geblokkeerd: "
-            "betrouwbare actuele status van automatische "
-            "uitvoering en fysieke test ontbreekt"
-        )
+        await controller.async_reset_emergency_status(**safety)
+        execution.refresh()
 
     hass.services.async_register(
         DOMAIN,
