@@ -19,12 +19,34 @@ def args():
     )
 
 
+def verified_evidence():
+    _, slot = args()
+    evidence = {
+        "scheduler_ready": True, "scheduler_selected_slot": 1,
+        "scheduler_slots": {1: {
+            "action": slot["action"], "power_w": slot["power_w"],
+            "target_soc": float(slot["target_soc"]),
+            "max_runtime_h": float(slot["max_runtime_h"]),
+            "planner_identity": slot["planner_identity"],
+        }},
+        "execution_active": False, "physical_test_active": False,
+    }
+    for key in (
+        "auto_prestart_safe", "auto_safety_handoff_safe",
+        "auto_prestart_current_identity_match",
+        "auto_prestart_current_signature_match",
+        "forecast_ready", "control_path_configured",
+    ):
+        evidence[key] = True
+    return evidence
+
+
 def test_original_controller_is_invoked_for_observation_only():
     controller = Alpha84Validator()
     decision, slot = args()
     result = inspect_alpha84_controller(
         controller, decision, slot, sources_fresh=True, safety_safe=True,
-        live_evidence={"auto_prestart_safe": False, "control_path_configured": False},
+        live_evidence=verified_evidence(),
     )
     assert len(controller.inputs) == 1
     assert controller.inputs[0]["scheduler_slots"][1]["power_w"] == 500
@@ -32,6 +54,52 @@ def test_original_controller_is_invoked_for_observation_only():
     assert result["execution_permitted"] is False
     assert result["physical_execution_enabled"] is False
     assert result["validation"]["auto_final_revalidation_safe"] is False
+
+
+@pytest.mark.parametrize("field", [
+    "auto_prestart_safe", "auto_safety_handoff_safe",
+    "auto_prestart_current_identity_match",
+    "auto_prestart_current_signature_match",
+    "forecast_ready", "control_path_configured",
+])
+def test_missing_or_false_alpha84_gate_blocks_without_invoking_validator(field):
+    decision, slot = args()
+    evidence = verified_evidence()
+    evidence[field] = False
+    controller = Alpha84Validator()
+    with pytest.raises(HandoffContractError):
+        inspect_alpha84_controller(
+            controller, decision, slot, sources_fresh=True, safety_safe=True,
+            live_evidence=evidence,
+        )
+    assert controller.inputs == []
+
+
+@pytest.mark.parametrize("field", ["action", "power_w", "target_soc", "max_runtime_h", "planner_identity"])
+def test_alpha84_original_plan_mismatch_blocks(field):
+    decision, slot = args()
+    evidence = verified_evidence()
+    evidence["scheduler_slots"][1][field] = "mismatch"
+    with pytest.raises(HandoffContractError, match="selection differs"):
+        inspect_alpha84_controller(
+            Alpha84Validator(), decision, slot,
+            sources_fresh=True, safety_safe=True, live_evidence=evidence,
+        )
+
+
+@pytest.mark.parametrize("field,value", [
+    ("execution_active", True), ("physical_test_active", True),
+    ("scheduler_ready", False), ("scheduler_selected_slot", 2),
+])
+def test_original_controller_conflict_blocks(field, value):
+    decision, slot = args()
+    evidence = verified_evidence()
+    evidence[field] = value
+    with pytest.raises(HandoffContractError):
+        inspect_alpha84_controller(
+            Alpha84Validator(), decision, slot,
+            sources_fresh=True, safety_safe=True, live_evidence=evidence,
+        )
 
 
 def test_missing_original_controller_blocks():
