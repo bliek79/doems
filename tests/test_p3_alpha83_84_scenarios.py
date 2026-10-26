@@ -65,7 +65,7 @@ def test_manual_quarter_fence_keeps_manual_priority():
 def test_not_safety_trade_charge_is_never_silently_capped():
     b = bundle({})
     for i in range(4):
-        b["native_slots"][i]["charge_from_grid_trade_kwh"] = 0.6
+        b["native_slots"][i]["charge_from_grid_trade_kwh"] = 0.65
     result = model.build_automatic_slot_proposals(b, now=NOW)
     assert result["valid"]
     assert not result["proposals"]
