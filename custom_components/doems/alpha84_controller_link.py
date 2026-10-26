@@ -34,6 +34,21 @@ def inspect_alpha84_controller(
     final_validator = getattr(original_controller, "evaluate_final_revalidation", None)
     if not callable(final_validator):
         raise HandoffContractError("Original Alpha84 final safety validator unavailable")
+    # Run the original read-only Safety Guard against the projected DOEMS
+    # selection and ORIGINAL live telemetry; never reuse its prior verdict.
+    coordinator = getattr(original_controller, "_coordinator", None)
+    guard = getattr(coordinator, "safety_guard", None)
+    evaluate = getattr(guard, "evaluate", None)
+    if not callable(evaluate):
+        raise HandoffContractError("Original Alpha84 Safety Guard unavailable")
+    observed = dict(live_evidence)
+    observed["scheduler_selected_slot"] = envelope["scheduler_selected_slot"]
+    observed["scheduler_slots"] = envelope["scheduler_slots"]
+    observed["scheduler_ready"] = envelope["scheduler_ready"]
+    guard_result = evaluate(observed)
+    if not isinstance(guard_result, dict) or guard_result.get("safety_safe") is not True:
+        reasons = guard_result.get("safety_reasons") if isinstance(guard_result, dict) else None
+        raise HandoffContractError(f"Original Alpha84 Safety Guard blocked: {reasons}")
     # A DOEMS plan must not replace the original Alpha84 live Safety Guard
     # and pre-start verdicts. Original evidence must explicitly exist.
     for key in (
@@ -76,6 +91,7 @@ def inspect_alpha84_controller(
     return {
         "source": "original_alpha84_execution_controller",
         "validation": result,
+        "original_safety_guard": guard_result,
         "handoff_phase": "original_validator_observation_only",
         "physical_execution_enabled": False,
         "execution_permitted": False,
