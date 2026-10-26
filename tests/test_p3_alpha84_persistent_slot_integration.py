@@ -102,7 +102,7 @@ async def test_alpha84_active_first_pending_second_free_third_gets_later_valid_p
     # Simulate one running, one pending, one free (the Alpha84 regression).
     store._plans[1]["lifecycle_status"] = "actief"
     store._plans[2]["lifecycle_status"] = "pending"
-    later = await store.async_sync_automatic_plans(proposals, now=NOW)
+    later = await store.async_sync_automatic_plans(proposals, now=BASE + timedelta(minutes=1))
     assert later["written_slots"] == [3]
     third = store.get_plan(3)
     assert third["planner_identity"] == proposals[2]["planner_identity"]
@@ -125,6 +125,6 @@ async def test_alpha84_manual_third_slot_is_not_overwritten(components):
     store._plans[3]["action"] = "laden"
     store._plans[3]["origin"] = "manual"
     store._plans[3]["lifecycle_status"] = "pending"
-    result = await store.async_sync_automatic_plans(proposals, now=NOW)
+    result = await store.async_sync_automatic_plans(proposals, now=BASE + timedelta(minutes=1))
     assert result["written_slots"] == []
     assert store.get_plan(3)["origin"] == "manual"
