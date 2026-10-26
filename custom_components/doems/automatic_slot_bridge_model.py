@@ -74,10 +74,25 @@ def _segment_to_proposal(
     action, purpose = str(first["_action"]), str(first["_purpose"])
     limit = max_charge_power_w if action == "laden" else max_discharge_power_w
     average_power = energy * 1000.0 / duration_h
-    if average_power > limit + EPS:
+    requested_energy = energy
+    # Alpha83: only safety charging may be bounded to the original price
+    # window; reserve two minutes for the battery mode-switch. Do not claim
+    # that a shortfall was charged. Alpha84: later individually valid windows
+    # remain eligible (no blanket block after a bounded charge).
+    if action == "laden" and purpose == "veiligheidsladen":
+        available_h = duration_h - 2.0 / 60.0
+        if available_h <= 0 or limit < MIN_POWER_W:
+            return None, "automatic_safety_window_unfeasible"
+        feasible_energy = math.floor((limit * available_h / 1000.0 + EPS) * 1000.0) / 1000.0
+        if feasible_energy < requested_energy - EPS:
+            if feasible_energy <= EPS:
+                return None, "automatic_safety_window_unfeasible"
+            energy = feasible_energy
+        average_power = energy * 1000.0 / available_h
+    elif average_power > limit + EPS:
         return None, "automatic_power_above_configured_limit"
-    # Preserve the old Anker action bridge's upward 10 W rounding, but never
-    # silently cap unachievable power. R6 does not execute the proposal.
+    # Preserve 10 W steps without allowing an excessive limit to be rounded
+    # upward. R6 is planning-only and never executes an actuation.
     power = max(MIN_POWER_W, math.ceil((average_power - EPS) / 10.0) * 10.0)
     if power > limit + EPS or power > 3500.0:
         return None, "automatic_power_out_of_slot_range"
@@ -104,7 +119,9 @@ def _segment_to_proposal(
         "execution_mode": "gepland",
         "start_time": start.isoformat(),
         "planned_end_time": end.isoformat(),
+        "requested_energy_kwh": round(requested_energy, 6),
         "planned_energy_kwh": round(energy, 6),
+        "energy_shortfall_kwh": round(max(0.0, requested_energy - energy), 6),
         "power_w": power,
         "target_soc": round(target_soc, 3),
         "max_runtime_h": round(duration_h, 4),
