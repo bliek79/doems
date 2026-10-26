@@ -8,7 +8,7 @@ from custom_components.doems.alpha84_handoff_contract import HandoffContractErro
 class Alpha84Validator:
     def __init__(self):
         self.inputs = []
-        self._coordinator = SimpleNamespace(safety_guard=SimpleNamespace(evaluate=lambda data: {"safety_safe": True, "safety_reasons": []}))
+        self._coordinator = SimpleNamespace(safety_guard=SimpleNamespace(evaluate=lambda data: {"safety_safe": True, "safety_reasons": []}, evaluate_automatic_handoff=lambda data: {"auto_safety_handoff_safe": True, "auto_safety_handoff_reasons": []}))
     def evaluate_final_revalidation(self, data):
         self.inputs.append(data)
         return {"auto_final_revalidation_safe": False, "auto_final_revalidation_reasons": ["prestart_safe"]}
@@ -118,8 +118,8 @@ def test_missing_live_evidence_blocks():
 
 def test_original_safety_guard_blocks_before_final_validation():
     controller = Alpha84Validator()
-    controller._coordinator.safety_guard.evaluate = lambda data: {
-        "safety_safe": False, "safety_reasons": ["minimum_soc_reached"]
+    controller._coordinator.safety_guard.evaluate_automatic_handoff = lambda data: {
+        "auto_safety_handoff_safe": False, "auto_safety_handoff_reasons": ["minimum_soc_reached"]
     }
     decision, slot = args()
     with pytest.raises(HandoffContractError, match="minimum_soc_reached"):
