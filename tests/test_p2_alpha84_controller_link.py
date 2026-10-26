@@ -173,3 +173,25 @@ def test_stale_revision_blocks():
     with pytest.raises(HandoffContractError, match="planner_signature"):
         inspect_alpha84_controller(Alpha84Validator(), decision, slot,
                                    sources_fresh=True, safety_safe=True, live_evidence=evidence)
+
+
+def test_missing_original_prestart_candidate_blocks():
+    decision, slot = args()
+    evidence = verified_evidence()
+    evidence["auto_bridge_candidates"] = []
+    with pytest.raises(HandoffContractError, match="candidate"):
+        inspect_alpha84_controller(
+            Alpha84Validator(), decision, slot,
+            sources_fresh=True, safety_safe=True, live_evidence=evidence,
+        )
+
+
+def test_stale_original_prestart_candidate_revision_blocks():
+    decision, slot = args()
+    evidence = verified_evidence()
+    evidence["auto_bridge_candidates"][0]["planner_signature"] = "outdated"
+    with pytest.raises(HandoffContractError, match="revision stale"):
+        inspect_alpha84_controller(
+            Alpha84Validator(), decision, slot,
+            sources_fresh=True, safety_safe=True, live_evidence=evidence,
+        )
