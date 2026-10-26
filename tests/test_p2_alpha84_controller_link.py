@@ -30,6 +30,7 @@ def verified_evidence():
             "target_soc": float(slot["target_soc"]),
             "max_runtime_h": float(slot["max_runtime_h"]),
             "planner_identity": slot["planner_identity"],
+            "planner_signature": slot.get("planner_signature"),
         }},
         "execution_active": False, "physical_test_active": False,
     }
@@ -128,3 +129,24 @@ def test_original_safety_guard_blocks_before_final_validation():
             safety_safe=True, live_evidence=verified_evidence(),
         )
     assert controller.inputs == []
+
+
+def test_matching_revision_passed_to_original_validator():
+    decision, slot = args()
+    slot["planner_signature"] = "revision-42"
+    evidence = verified_evidence()
+    evidence["scheduler_slots"][1]["planner_signature"] = "revision-42"
+    controller = Alpha84Validator()
+    inspect_alpha84_controller(controller, decision, slot, sources_fresh=True,
+                               safety_safe=True, live_evidence=evidence)
+    assert controller.inputs[0]["scheduler_slots"][1]["planner_signature"] == "revision-42"
+
+
+def test_stale_revision_blocks():
+    decision, slot = args()
+    slot["planner_signature"] = "revision-new"
+    evidence = verified_evidence()
+    evidence["scheduler_slots"][1]["planner_signature"] = "revision-old"
+    with pytest.raises(HandoffContractError, match="planner_signature"):
+        inspect_alpha84_controller(Alpha84Validator(), decision, slot,
+                                   sources_fresh=True, safety_safe=True, live_evidence=evidence)
