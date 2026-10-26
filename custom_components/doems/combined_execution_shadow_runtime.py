@@ -15,11 +15,13 @@ from .execution_controller import ExecutionController
 from .execution_anker_adapter import AnkerExecutionAdapter
 from .alpha84_handoff_contract import project_combined_slot, HandoffContractError
 from .alpha84_controller_link import inspect_alpha84_controller
+from .alpha84_original_registration import OriginalAlpha84Registration, OriginalControllerUnavailable
 
 
 class DOEMSCombinedExecutionShadowRuntime:
     def __init__(self, hass: Any, scheduler: Any, store: Any, *, entities=None, authority=False, planner=None, battery=None) -> None:
         self.hass = hass
+        self.original_alpha84 = OriginalAlpha84Registration(hass)
         self.scheduler = scheduler
         self.store = store
         self._authority = bool(authority)
@@ -127,6 +129,11 @@ class DOEMSCombinedExecutionShadowRuntime:
         )
 
     async def async_setup(self) -> None:
+        # Reuse only the original Anker instance; never create a second writer.
+        try:
+            self.original_alpha84.register()
+        except OriginalControllerUnavailable:
+            pass  # No physical authorization is granted on either outcome.
         self._unsubs.append(self.scheduler.async_add_listener(self.refresh))
         self._unsubs.append(self.store.add_listener(self.refresh))
         self._unsubs.append(async_track_time_interval(self.hass, self._tick, timedelta(seconds=5)))
@@ -221,11 +228,22 @@ class DOEMSCombinedExecutionShadowRuntime:
         planning_ready = not blockers
         # No original controller is registered in DOEMS yet. This field makes
         # that missing dependency explicit instead of claiming executable parity.
-        alpha84_original_controller_link = {
-            "status": "blocked",
-            "reason": "original_alpha84_controller_not_registered",
-            "physical_execution_enabled": False,
-        }
+        try:
+            original = self.original_alpha84.verified_controller()
+            alpha84_original_controller_link = {
+                "status": "registered_read_only",
+                "entry_id": self.original_alpha84.entry_id,
+                "original_validator_available": callable(
+                    getattr(original, "evaluate_final_revalidation", None)
+                ),
+                "physical_execution_enabled": False,
+            }
+        except OriginalControllerUnavailable as err:
+            alpha84_original_controller_link = {
+                "status": "blocked",
+                "reason": str(err),
+                "physical_execution_enabled": False,
+            }
         # Prepare the immutable Alpha84 executor input contract while keeping
         # all original Alpha84 execution authorization flags false.
         alpha84_handoff = None
