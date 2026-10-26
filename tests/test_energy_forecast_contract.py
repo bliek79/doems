@@ -48,7 +48,14 @@ def test_public_entity_object_ids_are_doems_prefixed() -> None:
 
 def test_no_physical_control_surface() -> None:
     active_text="\n".join(path.read_text(encoding="utf-8") for path in INTEGRATION.rglob("*.py"))
-    assert active_text.count(".services.async_call(") == 2
+    # The approved emergency button only invokes DOEMS' fail-closed acknowledgement
+    # service. It must not be counted as an additional physical actuator.
+    button_text = (INTEGRATION / "button.py").read_text(encoding="utf-8")
+    assert button_text.count(".services.async_call(") == 1
+    assert 'DOMAIN, "reset_emergency_status", {}, blocking=True' in button_text
+    assert "number.set_value" not in button_text
+    assert "select.select_option" not in button_text
+    assert active_text.count(".services.async_call(") - button_text.count(".services.async_call(") == 2
     prices=(INTEGRATION / "prices.py").read_text(encoding="utf-8")
     assert '"energyzero"' in prices and '"get_gas_prices"' in prices
     for forbidden in ('"anker_solix"', '"switch"', '"number"', '"select.select_option"'):
