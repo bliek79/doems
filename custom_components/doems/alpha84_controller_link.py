@@ -38,16 +38,20 @@ def inspect_alpha84_controller(
     # selection and ORIGINAL live telemetry; never reuse its prior verdict.
     coordinator = getattr(original_controller, "_coordinator", None)
     guard = getattr(coordinator, "safety_guard", None)
-    evaluate = getattr(guard, "evaluate", None)
+    pre_mode = live_evidence.get("operating_mode") != "third_party_control"
+    method = "evaluate_automatic_handoff" if pre_mode else "evaluate"
+    evaluate = getattr(guard, method, None)
     if not callable(evaluate):
-        raise HandoffContractError("Original Alpha84 Safety Guard unavailable")
+        raise HandoffContractError(f"Original Alpha84 Safety Guard phase unavailable: {method}")
     observed = dict(live_evidence)
     observed["scheduler_selected_slot"] = envelope["scheduler_selected_slot"]
     observed["scheduler_slots"] = envelope["scheduler_slots"]
     observed["scheduler_ready"] = envelope["scheduler_ready"]
     guard_result = evaluate(observed)
-    if not isinstance(guard_result, dict) or guard_result.get("safety_safe") is not True:
-        reasons = guard_result.get("safety_reasons") if isinstance(guard_result, dict) else None
+    verdict_key = "auto_safety_handoff_safe" if pre_mode else "safety_safe"
+    if not isinstance(guard_result, dict) or guard_result.get(verdict_key) is not True:
+        reasons_key = "auto_safety_handoff_reasons" if pre_mode else "safety_reasons"
+        reasons = guard_result.get(reasons_key) if isinstance(guard_result, dict) else None
         raise HandoffContractError(f"Original Alpha84 Safety Guard blocked: {reasons}")
     # A DOEMS plan must not replace the original Alpha84 live Safety Guard
     # and pre-start verdicts. Original evidence must explicitly exist.
