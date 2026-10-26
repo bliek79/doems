@@ -226,8 +226,13 @@ def build_automatic_slot_proposals(
                 proposals.append(proposal)
             elif reason:
                 rejected.append(f"window_{segment[0]['_start'].isoformat()}:{reason}")
+                # Alpha83/84: keep earlier valid actions, but never publish
+                # later candidates across a genuinely invalid chronological
+                # predecessor. A merely limited feasible charge is valid.
+                break
         except (ValueError, TypeError) as err:
             rejected.append(f"window_{segment[0]['_start'].isoformat()}:{err}")
+            break
 
     proposals.sort(key=lambda item: (item["start_time"], item["planner_identity"]))
     return {
