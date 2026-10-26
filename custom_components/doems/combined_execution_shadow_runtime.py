@@ -60,6 +60,18 @@ class DOEMSCombinedExecutionShadowRuntime:
     async def async_set_master_enabled(self, enabled: bool) -> None:
         """Master gate: switching off also fences in-flight execution."""
         if enabled:
+            # Never present the master switch as armed while the proven
+            # legacy-to-DOEMS single-writer authority handoff is absent.
+            # Physical authority and exclusive ownership must be established
+            # and validated independently; the UI switch cannot grant them.
+            if not (
+                self._authority
+                and self.adapter.authority
+                and self._combined_bridge is not None
+                and self._combined_bridge.authority
+                and self._combined_bridge.exclusive
+            ):
+                raise ValueError("Physical execution unavailable: verified exclusive authority handoff required")
             if self._shutdown:
                 raise ValueError("Cannot enable a stopped execution runtime")
             if self.controller.session is not None or self.controller.reconciliation_required:
