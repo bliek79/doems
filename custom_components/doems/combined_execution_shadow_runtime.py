@@ -226,37 +226,39 @@ class DOEMSCombinedExecutionShadowRuntime:
         # Shadow mode must report planning readiness independently of
         # physical authority. Never imply that the battery is being controlled.
         planning_ready = not blockers
-        # No original controller is registered in DOEMS yet. This field makes
-        # that missing dependency explicit instead of claiming executable parity.
-        try:
-            original = self.original_alpha84.verified_controller()
-            alpha84_original_controller_link = {
-                "status": "registered_read_only",
-                "entry_id": self.original_alpha84.entry_id,
-                "original_validator_available": callable(
-                    getattr(original, "evaluate_final_revalidation", None)
-                ),
-                "physical_execution_enabled": False,
-            }
-        except OriginalControllerUnavailable as err:
-            alpha84_original_controller_link = {
-                "status": "blocked",
-                "reason": str(err),
-                "physical_execution_enabled": False,
-            }
-        # Prepare the immutable Alpha84 executor input contract while keeping
-        # all original Alpha84 execution authorization flags false.
+        # Read only the already-loaded original controller and its genuine
+        # coordinator evidence. Never create a second battery writer.
+        alpha84_original_controller_link = {"status": "blocked", "physical_execution_enabled": False}
         alpha84_handoff = None
         if planning_ready:
             snapshot = self.scheduler.battery.snapshot() if self.scheduler.battery else {}
             try:
-                alpha84_handoff = project_combined_slot(
-                    decision, plan,
+                original = self.original_alpha84.verified_controller()
+                # Alpha84's own live coordinator is authoritative for every
+                # prestart/safety check. Never synthesize a positive safety flag.
+                legacy = self.original_alpha84.coordinator
+                await legacy.async_refresh()
+                live_evidence = legacy.data
+                if not isinstance(live_evidence, dict) or not live_evidence:
+                    raise HandoffContractError("Original Alpha84 live evidence missing")
+                inspected = inspect_alpha84_controller(
+                    original, decision, plan,
                     sources_fresh=self.scheduler._sources_fresh(dt_util.utcnow(), snapshot),
                     safety_safe=snapshot.get("status") == "ready",
+                    live_evidence=live_evidence,
                 )
-            except (HandoffContractError, TypeError, ValueError) as err:
-                blockers.append("alpha84_handoff_invalid")
+                alpha84_handoff = inspected
+                alpha84_original_controller_link = {
+                    "status": "original_validator_observed",
+                    "entry_id": self.original_alpha84.entry_id,
+                    "physical_execution_enabled": False,
+                }
+            except (OriginalControllerUnavailable, HandoffContractError, TypeError, ValueError) as err:
+                blockers.append("alpha84_original_safety_unverified")
+                alpha84_original_controller_link = {
+                    "status": "blocked", "reason": str(err),
+                    "physical_execution_enabled": False,
+                }
                 alpha84_handoff = {"handoff_phase": "blocked", "reason": str(err)}
         if not self._master_enabled:
             blockers.append("master_execution_disabled")
