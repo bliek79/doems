@@ -84,3 +84,33 @@ def test_missing_state_blocks(safety):
     safety.states.pop("sensor.legacy_test")
     with pytest.raises(ValueError):
         safety.read(safety.hass)
+
+
+def test_duplicate_matching_registry_source_blocks(safety):
+    safety.entities["duplicate"] = SimpleNamespace(
+        entity_id="sensor.another_execution", domain="sensor",
+        unique_id="xyz_execution_status", platform="anker_ems", disabled_by=None,
+    )
+    with pytest.raises(ValueError):
+        safety.read(safety.hass)
+
+
+def test_disabled_sole_source_blocks(safety):
+    safety.entities["execution"].disabled_by = "user"
+    with pytest.raises(ValueError):
+        safety.read(safety.hass)
+
+
+def test_non_anker_entities_do_not_count_as_evidence(safety):
+    safety.entities["physical_test"].platform = "other"
+    with pytest.raises(ValueError):
+        safety.read(safety.hass)
+
+
+@pytest.mark.parametrize("role", ["execution", "physical_test", "preflight"])
+@pytest.mark.parametrize("value", ["unknown", "unavailable", ""])
+def test_unavailable_legacy_diagnostics_block(safety, role, value):
+    suffix = {"execution": "execution", "physical_test": "test", "preflight": "preflight"}[role]
+    safety.states[f"sensor.legacy_{suffix}"].state = value
+    with pytest.raises(ValueError):
+        safety.read(safety.hass)
