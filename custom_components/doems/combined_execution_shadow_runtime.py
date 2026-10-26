@@ -13,7 +13,6 @@ from homeassistant.util import dt as dt_util
 from .combined_anker_bridge import CombinedAnkerBridge
 from .execution_controller import ExecutionController
 from .execution_anker_adapter import AnkerExecutionAdapter
-from .legacy_ems_safety import read_legacy_authority_fence
 
 
 class DOEMSCombinedExecutionShadowRuntime:
@@ -167,6 +166,7 @@ class DOEMSCombinedExecutionShadowRuntime:
     def _legacy_fence_diagnostics(self) -> dict[str, Any]:
         """Read-only legacy evidence, never physical authorization."""
         try:
+            from .legacy_ems_safety import read_legacy_authority_fence
             return {
                 "status": "closed_and_quiescent",
                 **read_legacy_authority_fence(self.hass),
