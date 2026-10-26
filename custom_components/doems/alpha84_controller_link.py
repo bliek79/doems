@@ -9,6 +9,7 @@ from typing import Any, Mapping
 
 from .alpha84_handoff_contract import project_combined_slot, HandoffContractError
 from .alpha84_original_prestart import inspect_original_prestart
+from .alpha84_plan_lineage import audit_plan_lineage
 
 
 def inspect_alpha84_controller(
@@ -35,6 +36,7 @@ def inspect_alpha84_controller(
     final_validator = getattr(original_controller, "evaluate_final_revalidation", None)
     if not callable(final_validator):
         raise HandoffContractError("Original Alpha84 final safety validator unavailable")
+    lineage = audit_plan_lineage(slot, envelope, live_evidence)
     original_prestart = inspect_original_prestart(
         getattr(original_controller, "_coordinator", None), envelope, live_evidence
     )
@@ -101,6 +103,7 @@ def inspect_alpha84_controller(
         "validation": result,
         "original_safety_guard": guard_result,
         "original_prestart": original_prestart,
+        "plan_lineage": lineage,
         "handoff_phase": "original_validator_observation_only",
         "physical_execution_enabled": False,
         "execution_permitted": False,
