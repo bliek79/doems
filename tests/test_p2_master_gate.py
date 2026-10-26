@@ -18,5 +18,6 @@ def test_master_switch_registered_and_default_off():
 
 def test_switch_off_fences_existing_session():
     runtime = (ROOT / "combined_execution_shadow_runtime.py").read_text()
-    assert "self._master_enabled = False\n            if self.controller.session" in runtime
+    assert "self._master_enabled = False" in runtime
+    assert "if self.controller.session is not None or self.controller.reconciliation_required:" in runtime
     assert "await self.controller.stop()" in runtime
