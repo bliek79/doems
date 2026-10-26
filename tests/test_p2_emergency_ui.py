@@ -36,11 +36,20 @@ def test_approved_emergency_sensor_is_registered_and_non_actuating():
     assert '"reset_safety_sources_verified": False' in code
 
 
-def test_service_stays_fail_closed_without_verified_safety_sources():
+def test_service_uses_verified_legacy_sources():
     code = source("__init__.py")
     ast.parse(code)
-    assert 'SERVICE_RESET_EMERGENCY_STATUS = "reset_emergency_status"' in code
-    assert '"betrouwbare actuele status van automatische "' in code
-    assert "await controller.async_reset_emergency_status(" in code
-    # The intended controller call is only documented until verified sources exist.
-    assert '# await controller.async_reset_emergency_status(' in code
+    assert "safety = read_legacy_safety(hass)" in code
+    assert "await controller.async_reset_emergency_status(**safety)" in code
+
+
+def test_legacy_source_reader_is_strict_and_read_only():
+    code = source("legacy_ems_safety.py")
+    ast.parse(code)
+    for suffix in ("automatic_execution_arm", "execution_status",
+                   "physical_test_status", "automatic_execution_preflight"):
+        assert suffix in code
+    assert 'attributes.get("active") is not False' in code
+    assert 'attributes.get("mode_switch_live_active") is not False' in code
+    assert 'arm.state != "off"' in code
+    assert "services.async_call" not in code
