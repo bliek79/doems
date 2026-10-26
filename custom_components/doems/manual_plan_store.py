@@ -32,7 +32,8 @@ STORAGE_VERSION = 1
 TERMINAL_EVENT_LIMIT = 12
 AUTO_ORIGIN = "automatic_72h_planner"
 AUTO_METADATA_FIELDS = (
-    "purpose", "planned_end_time", "planned_energy_kwh",
+    "purpose", "planned_end_time", "requested_energy_kwh",
+    "planned_energy_kwh", "energy_shortfall_kwh",
     "planner_identity", "planner_signature", "price_sources", "all_prices_known",
 )
 
