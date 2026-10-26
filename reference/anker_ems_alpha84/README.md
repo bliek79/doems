@@ -50,3 +50,26 @@ single-writer handoff; no implicit fallback authorization.
 Do not change DOEMS forecasts or Manual/Automatic/Combined planning
 algorithms. Do not merge or publish until the parity matrix and hardware
 validation gates are satisfied.
+
+
+## Step 2 progress — original controller boundary (2026-10-26)
+
+The pure Combined-plan projection is connected to the active **observational**
+DOEMS runtime and is published as an attribute of its existing execution
+status sensor. A separate `alpha84_controller_link.inspect_alpha84_controller`
+adapter is now tested against the **original Alpha84
+`evaluate_final_revalidation` method signature**. It does not duplicate
+or replace that validator and it never starts execution.
+
+**Critical outstanding dependency:** the live original Alpha84 controller
+instance is **not registered** in the DOEMS runtime. The current runtime
+explicitly reports `original_alpha84_controller_not_registered`; the
+interface tests use an isolated method-compatible test double, not a live
+Alpha84 instance. Full integration is therefore **NOT COMPLETE**.
+
+Next, install the original controller under a safely namespaced DOEMS
+compatibility coordinator (preserving state storage, callbacks, fence and
+startup-stop behavior), supply independently refreshed legacy safety
+evidence, and run original Alpha84 safety gates unchanged. Only after
+exclusive writer handoff and rollback pass hardware validation may
+physical authority be considered for enablement.
