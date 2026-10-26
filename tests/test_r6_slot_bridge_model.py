@@ -81,7 +81,13 @@ def test_r6_maps_three_15_min_windows_to_three_independent_proposals():
     ]
     assert [p["action"] for p in plans] == ["laden", "laden", "ontladen"]
     assert [p["max_runtime_h"] for p in plans] == [0.5, 0.5, 0.5]
-    assert [p["power_w"] for p in plans] == [200.0, 320.0, 280.0]
+    # Safety charging uses the Alpha83 two-minute mode-switch allowance:
+    # 0.100 kWh / (0.5 h - 2/60 h) = 214.286 W, rounded up to 220 W.
+    # Trading and discharging continue using their original power rules.
+    assert [p["power_w"] for p in plans] == [220.0, 320.0, 280.0]
+    assert plans[0]["requested_energy_kwh"] == 0.1
+    assert plans[0]["planned_energy_kwh"] == 0.1
+    assert plans[0]["energy_shortfall_kwh"] == 0
     assert all(p["origin"] == "automatic_72h_planner" for p in plans)
     assert all(p["max_start_delay_min"] == 10.0 for p in plans)
     assert all(p["execution_mode"] == "gepland" for p in plans)
