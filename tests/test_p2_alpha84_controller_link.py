@@ -1,5 +1,6 @@
 """Original Alpha84 final-validation interface is used, never substituted."""
 import pytest
+from types import SimpleNamespace
 from custom_components.doems.alpha84_controller_link import inspect_alpha84_controller
 from custom_components.doems.alpha84_handoff_contract import HandoffContractError
 
@@ -7,6 +8,7 @@ from custom_components.doems.alpha84_handoff_contract import HandoffContractErro
 class Alpha84Validator:
     def __init__(self):
         self.inputs = []
+        self._coordinator = SimpleNamespace(safety_guard=SimpleNamespace(evaluate=lambda data: {"safety_safe": True, "safety_reasons": []}))
     def evaluate_final_revalidation(self, data):
         self.inputs.append(data)
         return {"auto_final_revalidation_safe": False, "auto_final_revalidation_reasons": ["prestart_safe"]}
@@ -112,3 +114,17 @@ def test_missing_live_evidence_blocks():
     decision, slot = args()
     with pytest.raises(HandoffContractError, match="evidence"):
         inspect_alpha84_controller(Alpha84Validator(), decision, slot, sources_fresh=True, safety_safe=True, live_evidence={})
+
+
+def test_original_safety_guard_blocks_before_final_validation():
+    controller = Alpha84Validator()
+    controller._coordinator.safety_guard.evaluate = lambda data: {
+        "safety_safe": False, "safety_reasons": ["minimum_soc_reached"]
+    }
+    decision, slot = args()
+    with pytest.raises(HandoffContractError, match="minimum_soc_reached"):
+        inspect_alpha84_controller(
+            controller, decision, slot, sources_fresh=True,
+            safety_safe=True, live_evidence=verified_evidence(),
+        )
+    assert controller.inputs == []
