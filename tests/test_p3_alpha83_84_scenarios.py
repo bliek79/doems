@@ -70,3 +70,31 @@ def test_not_safety_trade_charge_is_never_silently_capped():
     assert result["valid"]
     assert not result["proposals"]
     assert any("automatic_power_above_configured_limit" in r for r in result["rejected"])
+
+
+def test_invalid_first_window_blocks_later_chronological_proposal():
+    b = bundle({**{i: 0.65 for i in range(4)}, **{i: 0.15 for i in range(8, 12)}})
+    for i in range(4):
+        b["native_slots"][i]["charge_from_grid_trade_kwh"] = b["native_slots"][i].pop("charge_from_grid_safety_kwh")
+    result = model.build_automatic_slot_proposals(b, now=NOW)
+    assert result["valid"]
+    assert not result["proposals"]
+    assert result["rejected"]
+
+
+def test_invalid_later_window_retains_earlier_valid_proposal():
+    b = bundle({**{i: 0.15 for i in range(4)}, **{i: 0.65 for i in range(8, 12)}})
+    for i in range(8, 12):
+        b["native_slots"][i]["charge_from_grid_trade_kwh"] = b["native_slots"][i].pop("charge_from_grid_safety_kwh")
+    result = model.build_automatic_slot_proposals(b, now=NOW)
+    assert result["valid"]
+    assert len(result["proposals"]) == 1
+    assert result["proposals"][0]["energy_shortfall_kwh"] == 0
+
+
+def test_three_separate_valid_windows_can_supply_three_proposals():
+    windows = {**{i: 0.6 for i in range(4)}, **{i: 0.15 for i in range(8, 12)}, **{i: 0.15 for i in range(16, 20)}}
+    result = model.build_automatic_slot_proposals(bundle(windows), now=NOW)
+    assert result["valid"]
+    assert len(result["proposals"]) == 3
+    assert result["proposals"][0]["energy_shortfall_kwh"] == 0.08
