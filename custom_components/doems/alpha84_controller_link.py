@@ -77,7 +77,7 @@ def inspect_alpha84_controller(
     existing = (live_evidence.get("scheduler_slots") or {})
     old_slot = existing.get(selected) or existing.get(str(selected)) or {}
     new_slot = envelope["scheduler_slots"][selected]
-    for field in ("action", "power_w", "target_soc", "max_runtime_h", "planner_identity"):
+    for field in ("action", "power_w", "target_soc", "max_runtime_h", "planner_identity", "planner_signature"):
         if old_slot.get(field) != new_slot.get(field):
             raise HandoffContractError(f"Original scheduler selection differs: {field}")
     data = dict(live_evidence)
