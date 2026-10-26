@@ -10,7 +10,8 @@ def test_adapter_uses_proven_two_stage_mode_switch():
     assert "observe_control_path(" in source
     assert "timeout=150" in source
     assert '("charge" if action == "laden" else "discharge")' in source
-    assert "await self._wait(lambda: self._power_matches(power_w))" in source
+    assert "await self._wait(lambda: self._power_matches(applied_w))" in source
+    assert "applied_w = await self._write_charge_power(power_w)" in source
 
 
 def test_proven_five_second_monitor_and_default_shadow():

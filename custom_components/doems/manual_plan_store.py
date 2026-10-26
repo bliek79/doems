@@ -32,7 +32,8 @@ STORAGE_VERSION = 1
 TERMINAL_EVENT_LIMIT = 12
 AUTO_ORIGIN = "automatic_72h_planner"
 AUTO_METADATA_FIELDS = (
-    "purpose", "planned_end_time", "planned_energy_kwh",
+    "purpose", "planned_end_time", "requested_energy_kwh",
+    "planned_energy_kwh", "energy_shortfall_kwh",
     "planner_identity", "planner_signature", "price_sources", "all_prices_known",
 )
 
@@ -492,7 +493,13 @@ class DOEMSManualPlanStore:
                 continue
             start = _aware_utc(plan.get("start_time"))
             deadline = _automatic_expiry(plan)
-            if start is not None and clock >= start and (deadline is None or clock <= deadline):
+            if (
+                (start is not None and clock >= start and (deadline is None or clock <= deadline))
+                or (plan.get("lifecycle_status") == "pending" and start is not None and clock < start)
+                or plan.get("lifecycle_status") == "actief"
+            ):
+                # Preserve committed pending/active automatic slots. Their
+                # identities must not be written into a different free slot.
                 frozen[slot] = plan
                 occupied.add(slot)
                 if plan.get("planner_identity"):

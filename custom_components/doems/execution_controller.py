@@ -4,6 +4,7 @@ import asyncio
 from datetime import datetime, timezone
 from homeassistant.exceptions import HomeAssistantError
 from .execution_watchdog import evaluate_session
+from .execution_status_reset import check_execution_status_reset
 
 
 class ExecutionController:
@@ -14,6 +15,7 @@ class ExecutionController:
         self.session = None
         self.reconciliation_required = False
         self._lock = asyncio.Lock()
+        self.emergency_status = {'active': False, 'status': 'idle', 'reason': None, 'stop_at': None, 'last_result': None, 'automatic_run_history': []}
 
     def _permitted(self, identity):
         return bool(self.authorized() and self.revalidate(identity))
@@ -35,6 +37,12 @@ class ExecutionController:
                     raise HomeAssistantError("Start acknowledgement not confirmed")
                 if not self._permitted(identity):
                     raise HomeAssistantError("Authority or selected plan changed during start")
+                applied_w = getattr(self.adapter, "_last_commanded_setpoint", None)
+                if action == "laden" and hasattr(self.adapter, "_last_commanded_setpoint"):
+                    if type(applied_w) is not int or not 100 <= applied_w <= power_w:
+                        raise HomeAssistantError("Invalid applied charge power")
+                else:
+                    applied_w = power_w
             except BaseException:
                 # A failed or cancelled start may already have reached the device.
                 # Keep the reconciliation fence raised until a separate verified stop.
@@ -49,8 +57,10 @@ class ExecutionController:
                         pass
                 except BaseException:
                     pass
+                self.emergency_status.update(status='emergency_stopped', reason='execution_start_failed', last_result='emergency_stopped')
                 raise
-            self.session = dict(identity=identity, action=action, power_w=power_w,
+            self.session = dict(identity=identity, action=action, power_w=applied_w,
+                                planned_power_w=power_w,
                                 target_soc=target_soc, max_runtime_h=max_runtime_h,
                                 started_at=now.astimezone(timezone.utc).isoformat())
             self.reconciliation_required = False
@@ -88,6 +98,39 @@ class ExecutionController:
         if result["decision"] == "stop":
             await self.stop()
         return result
+
+    async def async_reset_emergency_status(self, *, automatic_armed=True, physical_test=None):
+        """Non-actuating Alpha82 emergency acknowledgement; retain historical audit.
+
+        Missing arming or physical-test evidence blocks reset by default.
+        The caller must supply verified live safety state, not user assertions.
+        """
+        async with self._lock:
+            if self.session is not None or self.reconciliation_required:
+                raise HomeAssistantError("Noodstopreset geblokkeerd: uitvoering of reconciliatie actief")
+            # The controller lock plus the session/reconciliation gates above
+            # prove there is no in-flight DOEMS mode switch. Legacy EMS is
+            # verified separately through its own live entity evidence.
+            execution = dict(self.emergency_status)
+            execution["active"] = False
+            execution["auto_mode_switch_active"] = False
+            blocker = check_execution_status_reset(
+                execution,
+                physical_test if physical_test is not None else {"active": True},
+                automatic_armed=automatic_armed,
+                operating_mode=self.adapter._state("operating_mode"),
+                power_state=self.adapter._state("power_setpoint"),
+            )
+            if blocker is not None:
+                raise HomeAssistantError(f"Noodstopreset geblokkeerd: {blocker}")
+            self.emergency_status.update(
+                emergency_acknowledged_at=datetime.now(timezone.utc).isoformat(),
+                emergency_acknowledged_reason=self.emergency_status.get("reason"),
+                emergency_acknowledged_stop_at=self.emergency_status.get("stop_at"),
+                active=False, status="idle",
+                reason="Noodstop bevestigd; geen EMS-uitvoering actief",
+                stop_at=None,
+            )
 
     def require_restart_reconciliation(self):
         self.session = None

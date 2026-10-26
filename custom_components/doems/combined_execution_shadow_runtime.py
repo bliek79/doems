@@ -21,6 +21,8 @@ class DOEMSCombinedExecutionShadowRuntime:
         self.scheduler = scheduler
         self.store = store
         self._authority = bool(authority)
+        # Master permission is OFF on every startup; it never grants authority.
+        self._master_enabled = False
         self._combined_bridge = None
         self._combined_last_result: dict[str, Any] = {"bridge": "startup", "physical_execution_enabled": False}
         self.adapter = AnkerExecutionAdapter(hass, entities or {}, authority=self._authority)
@@ -29,6 +31,7 @@ class DOEMSCombinedExecutionShadowRuntime:
             self._combined_bridge = CombinedAnkerBridge(
                 planner, self.adapter, battery=battery,
                 authority=False, exclusive=False, controller=self.controller,
+                master_enabled=lambda: self._master_enabled,
             )
         self._active_plan = None
         self._active_slot = None
@@ -50,8 +53,35 @@ class DOEMSCombinedExecutionShadowRuntime:
                 self._listeners.remove(listener)
         return remove
 
+    @property
+    def master_enabled(self) -> bool:
+        return self._master_enabled
+
+    async def async_set_master_enabled(self, enabled: bool) -> None:
+        """Master gate: switching off also fences in-flight execution."""
+        if enabled:
+            if self._shutdown:
+                raise ValueError("Cannot enable a stopped execution runtime")
+            if self.controller.session is not None or self.controller.reconciliation_required:
+                raise ValueError("Cannot enable while execution or reconciliation is active")
+            self._master_enabled = True
+        else:
+            # Revoke permission before any asynchronous stop attempt.
+            self._master_enabled = False
+            try:
+                if self.controller.session is not None or self.controller.reconciliation_required:
+                    await self.controller.stop()
+            finally:
+                for listener in tuple(self._listeners):
+                    listener()
+                self.refresh()
+            return
+        for listener in tuple(self._listeners):
+            listener()
+        self.refresh()
+
     def _combined_authorized(self) -> bool:
-        return bool(self._combined_bridge is not None and self._combined_bridge._authorized())
+        return bool(self._master_enabled and self._combined_bridge is not None and self._combined_bridge._authorized())
 
     def _combined_identity_current(self, identity: tuple) -> bool:
         return bool(self._combined_bridge is not None and self._combined_bridge._still_current(identity))
@@ -71,6 +101,7 @@ class DOEMSCombinedExecutionShadowRuntime:
         )
         return (
             identity == actual
+            and self._master_enabled
             and self._authority
             and plan.get("lifecycle_status") in ("pending", "actief")
             and (plan.get("lifecycle_status") == "actief" or decision.get("selected_lifecycle") == "pending")
@@ -157,6 +188,8 @@ class DOEMSCombinedExecutionShadowRuntime:
         # Shadow mode must report planning readiness independently of
         # physical authority. Never imply that the battery is being controlled.
         planning_ready = not blockers
+        if not self._master_enabled:
+            blockers.append("master_execution_disabled")
         if not self._authority:
             blockers.append("physical_authority_disabled")
         self.last_result = {
@@ -282,6 +315,7 @@ class DOEMSCombinedExecutionShadowRuntime:
                     slot, "fout", "execution_start_failed", expected_plan=plan)
 
     async def async_shutdown(self) -> None:
+        self._master_enabled = False
         self._shutdown = True
         for unsub in self._unsubs:
             unsub()

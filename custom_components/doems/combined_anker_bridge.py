@@ -7,7 +7,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timezone
 from math import isfinite
-from typing import Any
+from typing import Any, Callable
 
 from .combined_execution_shadow import evaluate_combined_execution_shadow
 from .execution_controller import ExecutionController
@@ -16,7 +16,8 @@ from .execution_controller import ExecutionController
 class CombinedAnkerBridge:
     def __init__(self, planner: Any, adapter: Any, *, battery: Any = None,
                  authority: bool = False, exclusive: bool = False,
-                 controller: ExecutionController) -> None:
+                 controller: ExecutionController,
+                 master_enabled: Callable[[], bool] | None = None) -> None:
         self.planner = planner
         self.adapter = adapter
         self.battery = battery
@@ -26,9 +27,10 @@ class CombinedAnkerBridge:
         self._startup_checked = False
         self._completed_slots: set[tuple] = set()
         self.controller = controller
+        self._master_enabled = master_enabled or (lambda: False)
 
     def _authorized(self) -> bool:
-        return bool(self.authority and self.exclusive and self.adapter.authority)
+        return bool(self._master_enabled() and self.authority and self.exclusive and self.adapter.authority)
 
     def _decision(self, now: datetime) -> dict:
         return evaluate_combined_execution_shadow(
@@ -132,7 +134,9 @@ class CombinedAnkerBridge:
                 action="laden" if decision["action"] == "charge" else "ontladen",
                 power_w=power, target_soc=target, max_runtime_h=0.25, now=now,
             )
-            return {**decision, "bridge": "running", "physical_execution_enabled": True}
+            return {**decision, "bridge": "running", "physical_execution_enabled": True,
+                    "planned_power_w": power,
+                    "applied_power_w": self.controller.session["power_w"]}
 
     async def async_shutdown(self) -> None:
         async with self._lock:
