@@ -1,5 +1,7 @@
 """Original Alpha84 final-validation interface is used, never substituted."""
 import pytest
+import sys
+import types
 from types import SimpleNamespace
 from custom_components.doems.alpha84_controller_link import inspect_alpha84_controller
 from custom_components.doems.alpha84_handoff_contract import HandoffContractError
@@ -12,6 +14,25 @@ class Alpha84Validator:
     def evaluate_final_revalidation(self, data):
         self.inputs.append(data)
         return {"auto_final_revalidation_safe": False, "auto_final_revalidation_reasons": ["prestart_safe"]}
+
+
+@pytest.fixture(autouse=True)
+def original_prestart_module(monkeypatch):
+    from custom_components.doems import alpha84_original_prestart
+    class OriginalPrestart:
+        def evaluate(self, data):
+            candidate = (data.get("auto_bridge_candidates") or [None])[0]
+            detail = data["scheduler_slots"][data["scheduler_selected_slot"]]
+            same = bool(candidate and candidate.get("planner_identity") == detail.get("planner_identity"))
+            revision = bool(same and candidate.get("planner_signature") == detail.get("planner_signature"))
+            return {
+                "auto_prestart_safe": same and revision,
+                "auto_prestart_current_identity_match": same,
+                "auto_prestart_current_signature_match": revision,
+                "auto_prestart_reasons": [] if same and revision else ["mismatch"],
+            }
+    module = types.SimpleNamespace(AnkerEmsPreStartValidator=OriginalPrestart)
+    monkeypatch.setattr(alpha84_original_prestart, "import_module", lambda name: module)
 
 
 def args():
@@ -33,6 +54,7 @@ def verified_evidence():
             "planner_signature": slot.get("planner_signature"),
         }},
         "execution_active": False, "physical_test_active": False,
+        "auto_bridge_candidates": [{"planner_identity": slot["planner_identity"], "planner_signature": slot.get("planner_signature")}],
     }
     for key in (
         "auto_prestart_safe", "auto_safety_handoff_safe",
@@ -136,6 +158,7 @@ def test_matching_revision_passed_to_original_validator():
     slot["planner_signature"] = "revision-42"
     evidence = verified_evidence()
     evidence["scheduler_slots"][1]["planner_signature"] = "revision-42"
+    evidence["auto_bridge_candidates"][0]["planner_signature"] = "revision-42"
     controller = Alpha84Validator()
     inspect_alpha84_controller(controller, decision, slot, sources_fresh=True,
                                safety_safe=True, live_evidence=evidence)
