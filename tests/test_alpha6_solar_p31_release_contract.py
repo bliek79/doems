@@ -38,7 +38,14 @@ def test_alpha6_public_solar_runtime_contract_is_carried_forward() -> None:
 def test_safety_and_branding_scope_remain_explicit() -> None:
     active_text = "\n".join(path.read_text(encoding="utf-8") for path in INTEGRATION.rglob("*.py"))
     workflow = (ROOT / ".github/workflows/p2-energy-forecast-release.yml").read_text(encoding="utf-8")
-    assert active_text.count(".services.async_call(") == 2
+    # The approved emergency button only invokes DOEMS' fail-closed acknowledgement
+    # service. It must not be counted as an additional physical actuator.
+    button_text = (INTEGRATION / "button.py").read_text(encoding="utf-8")
+    assert button_text.count(".services.async_call(") == 1
+    assert 'DOMAIN, "reset_emergency_status", {}, blocking=True' in button_text
+    assert "number.set_value" not in button_text
+    assert "select.select_option" not in button_text
+    assert active_text.count(".services.async_call(") - button_text.count(".services.async_call(") == 2
     prices = (INTEGRATION / "prices.py").read_text(encoding="utf-8")
     assert '"energyzero"' in prices and '"get_gas_prices"' in prices
     assert '"physical_execution_authority": False' in active_text
