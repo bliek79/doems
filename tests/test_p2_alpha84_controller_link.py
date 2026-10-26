@@ -170,7 +170,7 @@ def test_stale_revision_blocks():
     slot["planner_signature"] = "revision-new"
     evidence = verified_evidence()
     evidence["scheduler_slots"][1]["planner_signature"] = "revision-old"
-    with pytest.raises(HandoffContractError, match="candidate revision stale"):
+    with pytest.raises(HandoffContractError, match="candidate mismatch: planner_signature"):
         inspect_alpha84_controller(Alpha84Validator(), decision, slot,
                                    sources_fresh=True, safety_safe=True, live_evidence=evidence)
 
@@ -190,7 +190,7 @@ def test_stale_original_prestart_candidate_revision_blocks():
     decision, slot = args()
     evidence = verified_evidence()
     evidence["auto_bridge_candidates"][0]["planner_signature"] = "outdated"
-    with pytest.raises(HandoffContractError, match="revision stale"):
+    with pytest.raises(HandoffContractError, match="candidate mismatch: planner_signature"):
         inspect_alpha84_controller(
             Alpha84Validator(), decision, slot,
             sources_fresh=True, safety_safe=True, live_evidence=evidence,
