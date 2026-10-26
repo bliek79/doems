@@ -35,3 +35,22 @@ adapter authorization, bridge authorization and bridge exclusivity are all
 present. In released Alpha9.6 all are intentionally not granted, so the
 control remains effectively OFF. This is a safety hardening step, *not*
 a completed handoff or new live execution capability.
+
+
+## Point 1 verification update (2026-10-26)
+
+- DOEMS now invokes the **original Alpha84 Safety Guard** against a projected
+  Combined-selected slot and current original-coordinator telemetry.
+- The original Alpha84 final validator is also invoked; it cannot be replaced
+  by a DOEMS-calculated approval.
+- A mismatching old scheduler plan, missing original safety evidence, or
+  negative guard decision blocks, with regression coverage.
+- **Not yet green for functional parity**: Alpha84's original
+  `SafetyGuard.evaluate` expects `third_party_control`, while the
+  automatic handoff path checks readiness *before* the mode switch.
+  Verify both phases through the original `evaluate_automatic_handoff`
+  and original pre-start checker instead of treating this post-mode guard as
+  sufficient proof. DOEMS' new plan identity also does not inherently
+  exist in Alpha84's scheduler. Any approval must be derived from real
+  matching live state, not fabricated flags.
+- No physical authority granted; no live battery tests performed.
