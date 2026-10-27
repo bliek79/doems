@@ -54,3 +54,27 @@ a completed handoff or new live execution capability.
   exist in Alpha84's scheduler. Any approval must be derived from real
   matching live state, not fabricated flags.
 - No physical authority granted; no live battery tests performed.
+
+
+## Point 1 — genuine R6 proposal contract regression (2026-10-27)
+
+- Verified DOEMS R6's actual producer `build_automatic_slot_proposals`
+  generates `origin=automatic_72h_planner`, a stable planner identity and
+  planner signature, and integer-watt **float** `power_w`. The compatibility
+  contract now accepts only finite integral numeric watts within 100-3500 W
+  and normalizes them to `int`; fractional/NaN/infinite/bool values remain
+  blocked.
+- `tests/test_p2_real_doems_r6_identity.py` exercises the genuine R6
+  producer on a 288-slot Combined timeline before the Alpha84 projection;
+  it also proves that an independent legacy planner **without** the DOEMS
+  candidate fails the lineage guard.
+- All four GitHub CI workflows passed for commit
+  `5beebc2a238c7200dd470952943ddca2b4b56083`.
+- **Point 1 acceptance remains OPEN**: there is still no authoritative
+  DOEMS R6 candidate publisher to the unchanged Alpha84 Pre-start Validator.
+  Reusing an unrelated candidate or the old scheduler safety flags cannot
+  constitute approval. A separately proven provenance/compatibility
+  handoff, original safety evidence and non-actuating HA integration
+  observation are required before closing the point.
+- No battery actuator, physical authority, deployment, main branch, or
+  release changes.
