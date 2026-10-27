@@ -481,6 +481,7 @@ class DOEMSManualPlanStore:
                 and lifecycle == "concept"
                 and plan.get("lifecycle_reason") in (
                     None, "manual_clear", "automatic_expired_released",
+                    "automatic_proposal_cleared",
                     MANUAL_RELEASE_REASON, MANUAL_CONCEPT_RELEASE_REASON,
                 )
             )
