@@ -6,6 +6,7 @@ or new execution algorithm. Alpha84 executor still owns all safety checks.
 from __future__ import annotations
 
 from typing import Any, Mapping
+from math import isfinite
 
 
 class HandoffContractError(ValueError):
@@ -42,8 +43,9 @@ def project_combined_slot(
     if not isinstance(identity, str) or not identity.strip():
         raise HandoffContractError("Plan identity missing")
     power = slot.get("power_w")
-    if type(power) is not int or not 100 <= power <= 3500:
+    if type(power) not in (int, float) or not isfinite(power) or not 100 <= power <= 3500 or not float(power).is_integer():
         raise HandoffContractError("Power invalid")
+    power = int(power)
     target = slot.get("target_soc")
     runtime = slot.get("max_runtime_h")
     if type(target) not in (int, float) or not 5 <= target <= 100:
