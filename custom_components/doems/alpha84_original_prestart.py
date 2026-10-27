@@ -1,7 +1,8 @@
 """Run the installed, original Alpha84 Pre-start Validator on DOEMS selection.
 
-Read-only inspection. Planner candidates MUST originate from the current
-original Anker coordinator snapshot; never inject a fake matching candidate.
+Read-only inspection. The candidate is either an actual legacy candidate or a
+verified, generation-bound DOEMS R6 publication. Neither source grants physical
+authority; the original validator runs unchanged on an ephemeral snapshot.
 """
 from __future__ import annotations
 
