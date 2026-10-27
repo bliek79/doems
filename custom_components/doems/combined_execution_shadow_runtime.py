@@ -217,6 +217,13 @@ class DOEMSCombinedExecutionShadowRuntime:
                 "combined_handoff": deepcopy(self._combined_last_result),
                 "legacy_fence_evidence": self._legacy_fence_diagnostics(),
                 "original_controller_registration": original_link,
+                "original_safety_observation": {
+                    "status": "not_required_no_selected_plan",
+                    "prestart": "not_evaluated",
+                    "safety_guard": "not_evaluated",
+                    "final_revalidation": "not_evaluated",
+                    "physical_execution_enabled": False,
+                },
             }
             return
         plan = self.store.get_plan(slot)
@@ -238,6 +245,13 @@ class DOEMSCombinedExecutionShadowRuntime:
         # coordinator evidence. Never create a second battery writer.
         alpha84_original_controller_link = {"status": "blocked", "physical_execution_enabled": False}
         alpha84_handoff = None
+        original_safety_observation = {
+            "status": "waiting_scheduler_safety" if not planning_ready else "pending_original_validation",
+            "prestart": "not_evaluated",
+            "safety_guard": "not_evaluated",
+            "final_revalidation": "not_evaluated",
+            "physical_execution_enabled": False,
+        }
         if planning_ready:
             snapshot = self.scheduler.battery.snapshot() if self.scheduler.battery else {}
             try:
@@ -265,6 +279,13 @@ class DOEMSCombinedExecutionShadowRuntime:
                     verified_doems_candidate=verified_candidate,
                 )
                 alpha84_handoff = inspected
+                original_safety_observation = {
+                    "status": "original_checks_observed",
+                    "prestart": (inspected.get("original_prestart") or {}).get("status", "not_reported"),
+                    "safety_guard": "observed" if isinstance(inspected.get("original_safety_guard"), dict) else "not_reported",
+                    "final_revalidation": "observed" if isinstance(inspected.get("validation"), dict) else "not_reported",
+                    "physical_execution_enabled": False,
+                }
                 alpha84_original_controller_link = {
                     "status": "original_validator_observed",
                     "entry_id": self.original_alpha84.entry_id,
@@ -277,6 +298,14 @@ class DOEMSCombinedExecutionShadowRuntime:
                     "physical_execution_enabled": False,
                 }
                 alpha84_handoff = {"handoff_phase": "blocked", "reason": str(err)}
+                original_safety_observation = {
+                    "status": "blocked",
+                    "reason": str(err),
+                    "prestart": "unverified",
+                    "safety_guard": "unverified",
+                    "final_revalidation": "unverified",
+                    "physical_execution_enabled": False,
+                }
         if not self._master_enabled:
             blockers.append("master_execution_disabled")
         if not self._authority:
@@ -300,6 +329,7 @@ class DOEMSCombinedExecutionShadowRuntime:
             "last_stop_blockers": list(self._last_stop_blockers),
             "combined_handoff": deepcopy(self._combined_last_result),
             "alpha84_handoff": deepcopy(alpha84_handoff),
+            "original_safety_observation": original_safety_observation,
             "alpha84_original_controller_link": deepcopy(alpha84_original_controller_link),
             "legacy_fence_evidence": self._legacy_fence_diagnostics(),
             "original_controller_registration": original_link,
