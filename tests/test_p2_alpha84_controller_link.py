@@ -38,7 +38,7 @@ def original_prestart_module(monkeypatch):
 def args():
     return (
         {"selected_slot": 1, "selected_lifecycle": "pending", "selected_action": "laden", "safety_status": "safe", "safety_blockers": []},
-        {"lifecycle_status": "pending", "origin": "automatic", "planner_identity": "alpha84-x", "planner_signature": "base-revision", "action": "laden", "power_w": 500, "target_soc": 85, "max_runtime_h": 1.0},
+        {"lifecycle_status": "pending", "origin": "automatic_72h_planner", "planner_identity": "alpha84-x", "planner_signature": "base-revision", "action": "laden", "power_w": 500, "target_soc": 85, "max_runtime_h": 1.0},
     )
 
 
