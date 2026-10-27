@@ -66,6 +66,9 @@ def components(monkeypatch):
         monkeypatch.setitem(sys.modules, name, module)
     model = importlib.import_module("custom_components.doems.automatic_slot_bridge_model")
     store_module = importlib.import_module("custom_components.doems.manual_plan_store")
+    # This module may already be cached by other tests. Inject the in-memory
+    # Store into the module's own reference, not only sys.modules.
+    monkeypatch.setattr(store_module, "Store", MemoryStore)
     return model, store_module
 
 
