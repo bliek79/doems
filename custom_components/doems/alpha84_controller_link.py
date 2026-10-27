@@ -20,6 +20,7 @@ def inspect_alpha84_controller(
     sources_fresh: bool,
     safety_safe: bool,
     live_evidence: Mapping[str, Any],
+    verified_doems_candidate: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Project Combined and run Alpha84's unchanged final validator, fail closed.
 
@@ -36,9 +37,13 @@ def inspect_alpha84_controller(
     final_validator = getattr(original_controller, "evaluate_final_revalidation", None)
     if not callable(final_validator):
         raise HandoffContractError("Original Alpha84 final safety validator unavailable")
-    lineage = audit_plan_lineage(slot, envelope, live_evidence)
+    lineage = audit_plan_lineage(
+        slot, envelope, live_evidence,
+        verified_doems_candidate=verified_doems_candidate,
+    )
     original_prestart = inspect_original_prestart(
-        getattr(original_controller, "_coordinator", None), envelope, live_evidence
+        getattr(original_controller, "_coordinator", None), envelope, live_evidence,
+        verified_doems_candidate=verified_doems_candidate,
     )
     # Run the original read-only Safety Guard against the projected DOEMS
     # selection and ORIGINAL live telemetry; never reuse its prior verdict.
@@ -53,6 +58,11 @@ def inspect_alpha84_controller(
     observed["scheduler_selected_slot"] = envelope["scheduler_selected_slot"]
     observed["scheduler_slots"] = envelope["scheduler_slots"]
     observed["scheduler_ready"] = envelope["scheduler_ready"]
+    observed["auto_prestart_safe"] = original_prestart.get("safe") is True
+    if original_prestart.get("safe"):
+        observed["auto_prestart_required"] = True
+        observed["auto_prestart_current_identity_match"] = original_prestart["verdict"].get("auto_prestart_current_identity_match")
+        observed["auto_prestart_current_signature_match"] = original_prestart["verdict"].get("auto_prestart_current_signature_match")
     guard_result = evaluate(observed)
     verdict_key = "auto_safety_handoff_safe" if pre_mode else "safety_safe"
     if not isinstance(guard_result, dict) or guard_result.get(verdict_key) is not True:
@@ -75,17 +85,19 @@ def inspect_alpha84_controller(
         raise HandoffContractError("Original execution not confirmed idle")
     if live_evidence.get("physical_test_active") is not False:
         raise HandoffContractError("Original physical test not confirmed idle")
-    # Alpha84 must already recognize the SAME plan and identity. The DOEMS
-    # adapter may not manufacture a safe selection from unrelated old state.
-    selected = envelope["scheduler_selected_slot"]
-    if live_evidence.get("scheduler_ready") is not True or live_evidence.get("scheduler_selected_slot") != selected:
-        raise HandoffContractError("Original scheduler has not accepted the selected slot")
-    existing = (live_evidence.get("scheduler_slots") or {})
-    old_slot = existing.get(selected) or existing.get(str(selected)) or {}
-    new_slot = envelope["scheduler_slots"][selected]
-    for field in ("action", "power_w", "target_soc", "max_runtime_h", "planner_identity", "planner_signature"):
-        if old_slot.get(field) != new_slot.get(field):
-            raise HandoffContractError(f"Original scheduler selection differs: {field}")
+    # Original scheduler identity is checked only for the legacy-candidate
+    # route. With a verified R6 witness, the original scheduler is not the
+    # owner of the new DOEMS plan, and must not be treated as its source.
+    if verified_doems_candidate is None:
+        selected = envelope["scheduler_selected_slot"]
+        if live_evidence.get("scheduler_ready") is not True or live_evidence.get("scheduler_selected_slot") != selected:
+            raise HandoffContractError("Original scheduler has not accepted the selected slot")
+        existing = (live_evidence.get("scheduler_slots") or {})
+        old_slot = existing.get(selected) or existing.get(str(selected)) or {}
+        new_slot = envelope["scheduler_slots"][selected]
+        for field in ("action", "power_w", "target_soc", "max_runtime_h", "planner_identity", "planner_signature"):
+            if old_slot.get(field) != new_slot.get(field):
+                raise HandoffContractError(f"Original scheduler selection differs: {field}")
     data = dict(live_evidence)
     # Transfer only the selected plan input.  Do NOT synthesize any successful
     # prestart, safety, controller, mode or writer-authority state.
@@ -95,6 +107,10 @@ def inspect_alpha84_controller(
     data["auto_execution_handoff_selected_slot"] = envelope["scheduler_selected_slot"]
     # Keep execution disabled even if the caller claims these flags true.
     data["auto_shadow_execution_permitted"] = False
+    data["auto_prestart_safe"] = original_prestart.get("safe") is True
+    if original_prestart.get("safe"):
+        data["auto_prestart_current_identity_match"] = original_prestart["verdict"].get("auto_prestart_current_identity_match")
+        data["auto_prestart_current_signature_match"] = original_prestart["verdict"].get("auto_prestart_current_signature_match")
     result = final_validator(data)
     if not isinstance(result, dict):
         raise HandoffContractError("Original validator returned invalid result")
