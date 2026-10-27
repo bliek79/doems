@@ -56,6 +56,7 @@ def project_combined_slot(
         raise HandoffContractError("Selection changed")
     detail = {
         "action": action,
+        "purpose": slot.get("purpose"),
         "power_w": power,
         "target_soc": float(target),
         "max_runtime_h": float(runtime),
