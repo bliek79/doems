@@ -224,6 +224,16 @@ class DOEMSAutoSlotBridge:
             result = await self.store.async_sync_automatic_plans(
                 list(proposal_result["proposals"]), now=reference
             )
+            # Store writes may await. Never publish a witness if the planner or
+            # manual owner changed while synchronization was in flight.
+            if (
+                self.planner.bundle_snapshot() is not bundle
+                or self.planner._generation != bundle.get("planner_published_generation")
+                or serial != self._manual_serial
+            ):
+                self.last_result = {"status": "stale_generation_after_sync"}
+                self._arm_expiry_timer()
+                return dict(self.last_result)
             self._manual_pending = False
             self._published_bundle = bundle
             self._published_serial = serial
