@@ -1,7 +1,31 @@
 """Non-actuating provenance tests for published, genuine R6 candidates."""
 from types import SimpleNamespace
 
-from custom_components.doems.automatic_slot_bridge import DOEMSAutoSlotBridge
+import ast
+from copy import deepcopy
+from pathlib import Path
+from typing import Any
+
+SOURCE = Path(__file__).resolve().parents[1] / "custom_components/doems/automatic_slot_bridge.py"
+
+
+def witness_bridge_type():
+    """Execute unchanged production method without importing Home Assistant."""
+    module = ast.parse(SOURCE.read_text())
+    cls = next(x for x in module.body if isinstance(x, ast.ClassDef)
+               and x.name == "DOEMSAutoSlotBridge")
+    method = next(x for x in cls.body if isinstance(x, ast.FunctionDef)
+                  and x.name == "verified_published_candidate")
+    isolated = ast.Module(body=[ast.ClassDef(
+        name="DOEMSR6Witness", bases=[], keywords=[],
+        body=[method], decorator_list=[],
+    )], type_ignores=[])
+    ast.fix_missing_locations(isolated)
+    context = {"Any": Any, "deepcopy": deepcopy}
+    exec(compile(isolated, str(SOURCE), "exec"), context)
+    return context["DOEMSR6Witness"]
+
+DOEMSAutoSlotBridge = witness_bridge_type()
 
 
 def bridge_with_published_proposal():
