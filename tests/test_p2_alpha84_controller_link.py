@@ -231,6 +231,11 @@ def test_verified_r6_candidate_needs_no_matching_old_scheduler_plan():
         "target_soc": float(slot["target_soc"]),
     }
     controller = Alpha84Validator()
+    candidate["_doems_r6_proof"] = {
+        "source": "published_r6_bridge", "planner_generation": 12,
+        "bridge_ready": True, "planner_valid": True,
+        "invalid_candidate_count": 0,
+    }
     result = inspect_alpha84_controller(
         controller, decision, slot, sources_fresh=True, safety_safe=True,
         live_evidence=evidence, verified_doems_candidate=candidate,
@@ -255,4 +260,22 @@ def test_verified_r6_candidate_with_wrong_power_fails_before_prestart():
             Alpha84Validator(), decision, slot,
             sources_fresh=True, safety_safe=True, live_evidence=evidence,
             verified_doems_candidate=candidate,
+        )
+
+
+def test_unverified_r6_source_cannot_use_legacy_positive_72h_flags():
+    decision, slot = args()
+    evidence = verified_evidence()
+    candidate = {
+        "planner_identity": slot["planner_identity"],
+        "planner_signature": slot["planner_signature"],
+        "action": slot["action"], "power_w": slot["power_w"],
+        "target_soc": float(slot["target_soc"]),
+    }
+    # No proof from the actual published R6 generation.
+    with pytest.raises(HandoffContractError, match="R5/R6/R7 safety evidence"):
+        inspect_alpha84_controller(
+            Alpha84Validator(), decision, slot,
+            sources_fresh=True, safety_safe=True,
+            live_evidence=evidence, verified_doems_candidate=candidate,
         )
