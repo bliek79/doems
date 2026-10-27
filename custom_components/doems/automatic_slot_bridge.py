@@ -155,7 +155,25 @@ class DOEMSAutoSlotBridge:
                     "start_time", "planned_end_time"):
             if candidate.get(key) != plan.get(key):
                 return None
-        return deepcopy(candidate)
+        if (
+            bundle.get("status") != "ready"
+            or bundle.get("valid") is not True
+            or (bundle.get("automatic") or {}).get("valid") is not True
+            or (bundle.get("combined") or {}).get("valid") is not True
+            or (bundle.get("automatic") or {}).get("native_slot_count") != 288
+            or (bundle.get("combined") or {}).get("native_slot_count") != 288
+        ):
+            return None
+        witness = deepcopy(candidate)
+        witness["_doems_r6_proof"] = {
+            "source": "published_r6_bridge",
+            "planner_generation": bundle.get("planner_published_generation"),
+            "bridge_ready": True,
+            "planner_valid": True,
+            "invalid_candidate_count": len(self.last_result.get("rejected") or []),
+            "physical_execution_enabled": False,
+        }
+        return witness
 
     async def async_evaluate(self, *, now: datetime | None = None) -> dict[str, Any]:
         """Do not write proposals until both R5 stages are ready and current."""
