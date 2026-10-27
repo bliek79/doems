@@ -13,6 +13,7 @@ def audit_plan_lineage(
     doems_plan: Mapping[str, Any],
     projected: Mapping[str, Any],
     original_live: Mapping[str, Any],
+    *, verified_doems_candidate: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     slot = projected.get("scheduler_selected_slot")
     detail = (projected.get("scheduler_slots") or {}).get(slot)
@@ -28,7 +29,9 @@ def audit_plan_lineage(
             or doems_plan.get("power_w") != detail.get("power_w")
             or float(doems_plan.get("target_soc", -1)) != detail.get("target_soc")):
         raise HandoffContractError("DOEMS plan action changed during projection")
-    candidates = (original_live.get("auto_bridge_candidates") or []) + (original_live.get("auto_bridge_slot_preview") or [])
+    candidates = ([verified_doems_candidate] if verified_doems_candidate is not None else
+                  (original_live.get("auto_bridge_candidates") or []) +
+                  (original_live.get("auto_bridge_slot_preview") or []))
     matching = [c for c in candidates if isinstance(c, dict) and c.get("planner_identity") == identity]
     if len(matching) != 1:
         raise HandoffContractError("Expected one authoritative original candidate")
@@ -37,7 +40,8 @@ def audit_plan_lineage(
         if candidate.get(key) != detail.get(key):
             raise HandoffContractError(f"Original candidate mismatch: {key}")
     return {
-        "lineage": "matched_against_existing_original_candidate",
+        "lineage": ("matched_against_verified_r6_candidate" if verified_doems_candidate is not None
+                    else "matched_against_existing_original_candidate"),
         "planner_identity": identity,
         "planner_signature": revision,
         "physical_execution_enabled": False,
