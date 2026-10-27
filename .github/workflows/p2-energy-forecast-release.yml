@@ -2,7 +2,7 @@ name: DOEMS validation and immutable release
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, p2-alpha84-execution-safety-parity]
   workflow_dispatch:
 permissions:
   contents: read
@@ -43,7 +43,7 @@ jobs:
           name: test-results-${{ matrix.python }}
           path: test-results.xml
   publish:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/p2-alpha84-execution-safety-parity')
     needs: validate
     runs-on: ubuntu-latest
     permissions:
