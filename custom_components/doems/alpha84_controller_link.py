@@ -71,15 +71,27 @@ def inspect_alpha84_controller(
         raise HandoffContractError(f"Original Alpha84 Safety Guard blocked: {reasons}")
     # A DOEMS plan must not replace the original Alpha84 live Safety Guard
     # and pre-start verdicts. Original evidence must explicitly exist.
-    for key in (
-        "auto_prestart_safe",
-        "auto_safety_handoff_safe",
-        "auto_prestart_current_identity_match",
-        "auto_prestart_current_signature_match",
-        "forecast_ready",
-        "control_path_configured",
-    ):
-        if live_evidence.get(key) is not True:
+    derived_safety = {
+        "auto_prestart_safe": original_prestart.get("safe"),
+        "auto_safety_handoff_safe": guard_result.get(verdict_key),
+        "auto_prestart_current_identity_match": (
+            original_prestart.get("verdict") or {}
+        ).get("auto_prestart_current_identity_match"),
+        "auto_prestart_current_signature_match": (
+            original_prestart.get("verdict") or {}
+        ).get("auto_prestart_current_signature_match"),
+        # These two inputs must remain backed by live sources.
+        "forecast_ready": live_evidence.get("forecast_ready"),
+        "control_path_configured": live_evidence.get("control_path_configured"),
+    }
+    for key, checked in derived_safety.items():
+        if verified_doems_candidate is None and key in (
+            "auto_prestart_safe", "auto_safety_handoff_safe",
+            "auto_prestart_current_identity_match",
+            "auto_prestart_current_signature_match",
+        ):
+            checked = checked is True and live_evidence.get(key) is True
+        if checked is not True:
             raise HandoffContractError(f"Original Alpha84 safety source not safe: {key}")
     if live_evidence.get("execution_active") is not False:
         raise HandoffContractError("Original execution not confirmed idle")
@@ -108,6 +120,7 @@ def inspect_alpha84_controller(
     # Keep execution disabled even if the caller claims these flags true.
     data["auto_shadow_execution_permitted"] = False
     data["auto_prestart_safe"] = original_prestart.get("safe") is True
+    data["auto_safety_handoff_safe"] = guard_result.get(verdict_key) is True
     if original_prestart.get("safe"):
         data["auto_prestart_current_identity_match"] = original_prestart["verdict"].get("auto_prestart_current_identity_match")
         data["auto_prestart_current_signature_match"] = original_prestart["verdict"].get("auto_prestart_current_signature_match")
