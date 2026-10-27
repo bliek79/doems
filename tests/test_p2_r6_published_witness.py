@@ -18,7 +18,7 @@ def witness_bridge_type():
                   and x.name == "verified_published_candidate")
     isolated = ast.Module(body=[ast.ClassDef(
         name="DOEMSR6Witness", bases=[], keywords=[],
-        body=[method], decorator_list=[],
+        body=[method], decorator_list=[], type_params=[],
     )], type_ignores=[])
     ast.fix_missing_locations(isolated)
     context = {"Any": Any, "deepcopy": deepcopy}
