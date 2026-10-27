@@ -215,3 +215,44 @@ def test_changed_candidate_power_is_blocked():
         inspect_alpha84_controller(Alpha84Validator(), decision, slot,
                                    sources_fresh=True, safety_safe=True,
                                    live_evidence=evidence)
+
+
+def test_verified_r6_candidate_needs_no_matching_old_scheduler_plan():
+    decision, slot = args()
+    evidence = verified_evidence()
+    evidence["scheduler_ready"] = False
+    evidence["scheduler_selected_slot"] = None
+    evidence["scheduler_slots"] = {}
+    evidence["auto_bridge_candidates"] = []
+    candidate = {
+        "planner_identity": slot["planner_identity"],
+        "planner_signature": slot["planner_signature"],
+        "action": slot["action"], "power_w": slot["power_w"],
+        "target_soc": float(slot["target_soc"]),
+    }
+    controller = Alpha84Validator()
+    result = inspect_alpha84_controller(
+        controller, decision, slot, sources_fresh=True, safety_safe=True,
+        live_evidence=evidence, verified_doems_candidate=candidate,
+    )
+    assert result["plan_lineage"]["lineage"] == "matched_against_verified_r6_candidate"
+    assert result["original_prestart"]["safe"] is True
+    assert result["physical_execution_enabled"] is False
+    assert result["execution_permitted"] is False
+
+
+def test_verified_r6_candidate_with_wrong_power_fails_before_prestart():
+    decision, slot = args()
+    evidence = verified_evidence()
+    candidate = {
+        "planner_identity": slot["planner_identity"],
+        "planner_signature": slot["planner_signature"],
+        "action": slot["action"], "power_w": 750,
+        "target_soc": float(slot["target_soc"]),
+    }
+    with pytest.raises(HandoffContractError, match="candidate mismatch: power_w"):
+        inspect_alpha84_controller(
+            Alpha84Validator(), decision, slot,
+            sources_fresh=True, safety_safe=True, live_evidence=evidence,
+            verified_doems_candidate=candidate,
+        )
