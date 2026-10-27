@@ -12,7 +12,9 @@ def bridge_with_published_proposal():
         "start_time": "2026-10-27T12:00:00+00:00",
         "planned_end_time": "2026-10-27T12:15:00+00:00",
     }
-    bundle = {"planner_published_generation": 12}
+    bundle = {"planner_published_generation": 12, "status": "ready", "valid": True,
+              "automatic": {"valid": True, "native_slot_count": 288},
+              "combined": {"valid": True, "native_slot_count": 288}}
     planner = SimpleNamespace(bundle_snapshot=lambda: bundle, _generation=12)
     bridge = object.__new__(DOEMSAutoSlotBridge)
     bridge.planner = planner
@@ -29,7 +31,8 @@ def bridge_with_published_proposal():
 def test_exact_published_r6_identity_is_read_only_witness():
     bridge, planner, proposal = bridge_with_published_proposal()
     witness = bridge.verified_published_candidate(dict(proposal))
-    assert witness == proposal
+    assert {k: witness[k] for k in proposal} == proposal
+    assert witness["_doems_r6_proof"]["planner_valid"] is True
     assert witness is not proposal
     witness["power_w"] = 999
     assert bridge.verified_published_candidate(dict(proposal))["power_w"] == 500.0
