@@ -7,7 +7,7 @@ from custom_components.doems.alpha84_handoff_contract import (
 
 def good():
     return ({"selected_slot": 2, "selected_lifecycle": "pending", "selected_action": "laden", "safety_status": "safe", "safety_blockers": []},
-            {"lifecycle_status": "pending", "origin": "automatic", "planner_identity": "plan-2",
+            {"lifecycle_status": "pending", "origin": "automatic_72h_planner", "planner_identity": "plan-2",
              "action": "laden", "power_w": 500, "target_soc": 80,
              "max_runtime_h": 2.0, "start_time": "2026-10-26T12:00:00+00:00"})
 
