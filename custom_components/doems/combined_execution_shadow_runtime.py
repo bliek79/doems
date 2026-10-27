@@ -241,11 +241,20 @@ class DOEMSCombinedExecutionShadowRuntime:
                 live_evidence = legacy.data
                 if not isinstance(live_evidence, dict) or not live_evidence:
                     raise HandoffContractError("Original Alpha84 live evidence missing")
+                verified_candidate = None
+                if plan.get("origin") == "automatic_72h_planner":
+                    candidate_reader = getattr(self.scheduler.bridge, "verified_published_candidate", None)
+                    if not callable(candidate_reader):
+                        raise HandoffContractError("Original R6 provenance reader unavailable")
+                    verified_candidate = candidate_reader(plan)
+                    if verified_candidate is None:
+                        raise HandoffContractError("Current published R6 candidate unavailable or stale")
                 inspected = inspect_alpha84_controller(
                     original, decision, plan,
                     sources_fresh=self.scheduler._sources_fresh(dt_util.utcnow(), snapshot),
                     safety_safe=snapshot.get("status") == "ready",
                     live_evidence=live_evidence,
+                    verified_doems_candidate=verified_candidate,
                 )
                 alpha84_handoff = inspected
                 alpha84_original_controller_link = {
