@@ -44,12 +44,31 @@ def inspect_original_prestart(
     if validator_cls is None:
         raise HandoffContractError("Original Alpha84 Pre-start Validator unavailable")
     data = dict(live)
+    source_evidence = {}
     if verified_doems_candidate is not None:
-        # The original validator reads this provisional, read-only snapshot;
-        # the legacy planner and its stored candidates remain untouched.
+        proof = verified_doems_candidate.get("_doems_r6_proof")
+        if (not isinstance(proof, dict)
+                or proof.get("source") != "published_r6_bridge"
+                or type(proof.get("planner_generation")) is not int
+                or proof["planner_generation"] < 0
+                or proof.get("planner_valid") is not True
+                or proof.get("bridge_ready") is not True
+                or type(proof.get("invalid_candidate_count")) is not int
+                or proof["invalid_candidate_count"] != 0
+                or not doems_sources_fresh or not doems_safety_safe):
+            raise HandoffContractError("Verified DOEMS R5/R6/R7 safety evidence incomplete")
+        # The original validator evaluates the validated DOEMS 72h source,
+        # not the unrelated legacy planner's boolean flags.
+        source_evidence = {
+            "auto_plan_72h_valid": proof["planner_valid"],
+            "auto_bridge_valid": proof["bridge_ready"],
+            "auto_bridge_invalid_candidate_count": proof["invalid_candidate_count"],
+            "auto_plan_72h_execution_buffer_safe": bool(doems_safety_safe),
+            "forecast_ready": bool(doems_sources_fresh),
+        }
+        data.update(source_evidence)
         data["auto_bridge_candidates"] = [dict(verified_doems_candidate)]
         data["auto_bridge_slot_preview"] = []
-        # Do not claim original safety or planner permission in these fields.
     data.update({
         "scheduler_ready": projected["scheduler_ready"],
         "scheduler_selected_slot": selected,
@@ -63,4 +82,5 @@ def inspect_original_prestart(
         raise HandoffContractError("Original Alpha84 pre-start plan identity stale")
     return {"status": "original_prestart_safe_observe", "safe": True,
             "identity": identity, "revision": revision, "verdict": result,
-            "physical_execution_enabled": False}
+            "physical_execution_enabled": False,
+            "source_evidence": source_evidence}
