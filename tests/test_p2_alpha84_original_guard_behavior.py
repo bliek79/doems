@@ -25,7 +25,7 @@ def original_guard():
 def plan(power=500, action="laden"):
     decision = {"selected_slot": 1, "selected_lifecycle": "pending",
                 "selected_action": action, "safety_status": "safe", "safety_blockers": []}
-    slot = {"lifecycle_status": "pending", "origin": "automatic",
+    slot = {"lifecycle_status": "pending", "origin": "automatic_72h_planner",
             "planner_identity": "same-plan", "planner_signature": "same-revision",
             "action": action, "power_w": power, "target_soc": 85,
             "max_runtime_h": 1.0}
