@@ -12,7 +12,8 @@ from .alpha84_handoff_contract import HandoffContractError
 
 
 def inspect_original_prestart(
-    coordinator: Any, projected: Mapping[str, Any], live: Mapping[str, Any]
+    coordinator: Any, projected: Mapping[str, Any], live: Mapping[str, Any],
+    *, verified_doems_candidate: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     selected = projected["scheduler_selected_slot"]
     detail = projected["scheduler_slots"][selected]
@@ -22,10 +23,13 @@ def inspect_original_prestart(
         return {"status": "not_applicable_manual", "safe": False}
     if not isinstance(identity, str) or not identity or not isinstance(revision, str) or not revision:
         raise HandoffContractError("DOEMS automatic plan identity/revision absent")
-    candidates = list(live.get("auto_bridge_candidates") or []) + list(live.get("auto_bridge_slot_preview") or [])
+    candidates = ([dict(verified_doems_candidate)] if verified_doems_candidate is not None
+                  else list(live.get("auto_bridge_candidates") or []) + list(live.get("auto_bridge_slot_preview") or []))
     matches = [c for c in candidates if isinstance(c, dict) and c.get("planner_identity") == identity]
     if not matches:
         raise HandoffContractError("Original Alpha84 candidate for DOEMS plan missing")
+    if len(matches) != 1:
+        raise HandoffContractError("Ambiguous Alpha84 pre-start candidate identity")
     if any(c.get("planner_signature") != revision for c in matches):
         raise HandoffContractError("Original Alpha84 candidate revision stale")
     # Import the class from the ORIGINAL installed integration rather than
@@ -40,6 +44,12 @@ def inspect_original_prestart(
     if validator_cls is None:
         raise HandoffContractError("Original Alpha84 Pre-start Validator unavailable")
     data = dict(live)
+    if verified_doems_candidate is not None:
+        # The original validator reads this provisional, read-only snapshot;
+        # the legacy planner and its stored candidates remain untouched.
+        data["auto_bridge_candidates"] = [dict(verified_doems_candidate)]
+        data["auto_bridge_slot_preview"] = []
+        # Do not claim original safety or planner permission in these fields.
     data.update({
         "scheduler_ready": projected["scheduler_ready"],
         "scheduler_selected_slot": selected,
