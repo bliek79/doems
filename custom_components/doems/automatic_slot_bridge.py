@@ -5,6 +5,7 @@ No scheduler, prestart gate, execution service or physical battery authority.
 from __future__ import annotations
 
 import asyncio
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
@@ -41,6 +42,9 @@ class DOEMSAutoSlotBridge:
         self._manual_pending = False
         self._manual_required_revision = 0
         self._shutdown = False
+        self._published_bundle = None
+        self._published_serial = None
+        self._published_proposals: tuple[dict[str, Any], ...] = ()
         self.last_result: dict[str, Any] = {"status": "startup"}
 
     async def async_setup(self) -> None:
@@ -53,6 +57,8 @@ class DOEMSAutoSlotBridge:
         await self.async_evaluate()
 
     async def async_shutdown(self) -> None:
+        self._published_bundle = None
+        self._published_proposals = ()
         self._shutdown = True
         self._cancel_timer()
         for unsub in self._unsubs:
@@ -81,6 +87,8 @@ class DOEMSAutoSlotBridge:
     @callback
     def _manual_changed(self) -> None:
         self._manual_serial += 1
+        self._published_bundle = None
+        self._published_proposals = ()
         # A user edit immediately invalidates the previously published
         # Combined for R6 writes, even before the R5 replan task is scheduled.
         self._manual_pending = True
@@ -124,6 +132,31 @@ class DOEMSAutoSlotBridge:
             self.hass, self._handle_expiry, deadline.astimezone(timezone.utc)
         )
 
+    def verified_published_candidate(self, plan: dict[str, Any]) -> dict[str, Any] | None:
+        """Read-only R6 witness; never infer candidates from legacy planner."""
+        bundle = self.planner.bundle_snapshot()
+        if (self._shutdown or self._manual_pending
+                or self.last_result.get("status") != "ready"
+                or bundle is not self._published_bundle
+                or self._published_serial != self._manual_serial
+                or bundle.get("planner_published_generation") != self.planner._generation):
+            return None
+        identity = plan.get("planner_identity")
+        revision = plan.get("planner_signature")
+        matches = [
+            item for item in self._published_proposals
+            if identity and revision and
+            item.get("planner_identity") == identity
+        ]
+        if len(matches) != 1:
+            return None
+        candidate = matches[0]
+        for key in ("planner_signature", "action", "power_w", "target_soc",
+                    "start_time", "planned_end_time"):
+            if candidate.get(key) != plan.get(key):
+                return None
+        return deepcopy(candidate)
+
     async def async_evaluate(self, *, now: datetime | None = None) -> dict[str, Any]:
         """Do not write proposals until both R5 stages are ready and current."""
         async with self._lock:
@@ -133,6 +166,9 @@ class DOEMSAutoSlotBridge:
             if reference.tzinfo is None:
                 raise ValueError("now must be timezone-aware")
 
+            # Revoke old proof before any awaited refresh or store mutation.
+            self._published_bundle = None
+            self._published_proposals = ()
             # Expiry is independent of provider outages / planner validity.
             expired = await self.store.async_release_expired_automatic_plans(
                 now=reference
@@ -189,6 +225,9 @@ class DOEMSAutoSlotBridge:
                 list(proposal_result["proposals"]), now=reference
             )
             self._manual_pending = False
+            self._published_bundle = bundle
+            self._published_serial = serial
+            self._published_proposals = tuple(deepcopy(proposal_result["proposals"]))
             self.last_result = {
                 "status": "ready",
                 "source_native_slots": 288,
