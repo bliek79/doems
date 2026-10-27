@@ -75,3 +75,16 @@ def test_independent_original_planner_does_not_automatically_recognize_real_doem
         audit_plan_lineage(slot, projected, {
             "auto_bridge_candidates": [], "auto_bridge_slot_preview": []
         })
+
+
+@pytest.mark.parametrize("invalid_power", [float("nan"), float("inf"), 500.5, True])
+def test_non_integral_or_nonfinite_power_never_crosses_alpha84_boundary(invalid_power):
+    proposal = actual_doems_proposal()
+    plan = {**proposal, "lifecycle_status": "pending", "power_w": invalid_power}
+    selection = {
+        "selected_slot": 1, "selected_lifecycle": "pending",
+        "selected_action": proposal["action"], "safety_status": "safe",
+        "safety_blockers": [],
+    }
+    with pytest.raises(HandoffContractError, match="Power invalid"):
+        project_combined_slot(selection, plan, sources_fresh=True, safety_safe=True)
