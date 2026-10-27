@@ -199,6 +199,13 @@ class DOEMSCombinedExecutionShadowRuntime:
                     "physical_execution_enabled": bool(self.controller.session),
                     "reconciliation_required": self.controller.reconciliation_required,
                 }
+        # Retry read-only binding: the original integration may load after DOEMS.
+        # Never construct a controller or grant physical authority.
+        original_link = {"status": "blocked", "physical_execution_enabled": False}
+        try:
+            original_link = self.original_alpha84.register()
+        except OriginalControllerUnavailable as err:
+            original_link["reason"] = str(err)
         # R7 remains observational; only Combined may supply physical commands.
         decision = dict(self.scheduler.last_result)
         slot = decision.get("selected_slot")
@@ -209,6 +216,7 @@ class DOEMSCombinedExecutionShadowRuntime:
                 "physical_execution_enabled": bool(self.controller.session),
                 "combined_handoff": deepcopy(self._combined_last_result),
                 "legacy_fence_evidence": self._legacy_fence_diagnostics(),
+                "original_controller_registration": original_link,
             }
             return
         plan = self.store.get_plan(slot)
@@ -294,6 +302,7 @@ class DOEMSCombinedExecutionShadowRuntime:
             "alpha84_handoff": deepcopy(alpha84_handoff),
             "alpha84_original_controller_link": deepcopy(alpha84_original_controller_link),
             "legacy_fence_evidence": self._legacy_fence_diagnostics(),
+            "original_controller_registration": original_link,
         }
 
     def _identity(self, slot, plan):
