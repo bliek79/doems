@@ -30,3 +30,15 @@ def test_original_registration_retried_and_exposed_when_scheduler_idle():
     assert 'original_link["reason"] = str(err)' in evaluation
     assert evaluation.count('"original_controller_registration": original_link') == 2
     assert "authority=False, exclusive=False" in content
+
+
+def test_original_safety_observation_is_read_only_and_fail_closed():
+    content = SRC.read_text()
+    assert '"original_safety_observation": original_safety_observation' in content
+    assert '"status": "not_required_no_selected_plan"' in content
+    assert '"status": "waiting_scheduler_safety" if not planning_ready' in content
+    assert '"status": "blocked"' in content
+    assert '"prestart": "unverified"' in content
+    assert '"physical_execution_enabled": False' in content
+    assert "inspected = inspect_alpha84_controller(" in content
+    assert "authority=False, exclusive=False" in content
