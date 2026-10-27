@@ -36,9 +36,9 @@ def project_combined_slot(
     action = slot.get("action")
     if action not in ("laden", "ontladen") or selection.get("selected_action") != action:
         raise HandoffContractError("Action changed or unsupported")
-    if slot.get("origin") not in ("manual", "automatic"):
+    if slot.get("origin") not in ("manual", "automatic_72h_planner"):
         raise HandoffContractError("Unknown plan origin")
-    identity = slot.get("planner_identity") if slot.get("origin") == "automatic" else slot.get("lifecycle_updated_at")
+    identity = slot.get("planner_identity") if slot.get("origin") == "automatic_72h_planner" else slot.get("lifecycle_updated_at")
     if not isinstance(identity, str) or not identity.strip():
         raise HandoffContractError("Plan identity missing")
     power = slot.get("power_w")
@@ -57,7 +57,7 @@ def project_combined_slot(
         "power_w": power,
         "target_soc": float(target),
         "max_runtime_h": float(runtime),
-        "origin": "automatic_72h_planner" if slot["origin"] == "automatic" else "manual",
+        "origin": "automatic_72h_planner" if slot["origin"] == "automatic_72h_planner" else "manual",
         "planner_identity": identity,
         "planner_signature": slot.get("planner_signature"),
         "start_time": slot.get("start_time"),
