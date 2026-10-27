@@ -14,6 +14,8 @@ from .alpha84_handoff_contract import HandoffContractError
 def inspect_original_prestart(
     coordinator: Any, projected: Mapping[str, Any], live: Mapping[str, Any],
     *, verified_doems_candidate: Mapping[str, Any] | None = None,
+    doems_sources_fresh: bool = False,
+    doems_safety_safe: bool = False,
 ) -> dict[str, Any]:
     selected = projected["scheduler_selected_slot"]
     detail = projected["scheduler_slots"][selected]
