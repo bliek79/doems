@@ -49,6 +49,38 @@ class DOEMSCombinedExecutionShadowRuntime:
         self._restart_reconciled = False
         self._last_stop_blockers = []
 
+    def original_anker_planner_publication(self) -> dict[str, Any]:
+        """Provide current R6-published plans to the original coordinator.
+
+        Only a read-only provider: never arms or calls an actuator. The
+        original coordinator owns writing to its own Plan Store and revalidates.
+        """
+        bridge = getattr(self.scheduler, "bridge", None)
+        planner = getattr(self.scheduler, "planner", None)
+        if bridge is None or planner is None:
+            raise ValueError("DOEMS planner/bridge unavailable")
+        bundle = planner.bundle_snapshot()
+        generation = bundle.get("planner_published_generation")
+        if (type(generation) is not int or generation != planner._generation
+                or bridge.last_result.get("status") != "ready"):
+            raise ValueError("Current published DOEMS generation unavailable")
+        proposals = {}
+        for slot in (1, 2, 3):
+            plan = self.store.get_plan(slot)
+            if (plan.get("origin") != "automatic_72h_planner"
+                    or plan.get("action") not in ("laden", "ontladen")
+                    or plan.get("lifecycle_status") not in ("concept", "pending")):
+                continue
+            candidate = bridge.verified_published_candidate(plan)
+            if candidate is None:
+                raise ValueError(f"DOEMS slot {slot} has no current R6 proof")
+            candidate["origin"] = "automatic_72h_planner"
+            candidate["execution_mode"] = "gepland"
+            candidate["max_start_delay_min"] = plan.get("max_start_delay_min")
+            candidate["max_runtime_h"] = plan.get("max_runtime_h")
+            proposals[slot] = candidate
+        return {"generation": generation, "proposals": proposals}
+
     def async_add_listener(self, listener: Callable[[], None]) -> Callable[[], None]:
         self._listeners.append(listener)
 
