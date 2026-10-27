@@ -21,3 +21,12 @@ def test_combined_projection_does_not_override_existing_nonactuating_flags():
     assert "authority=False, exclusive=False" in content
     assert "self._master_enabled = False" in content
     assert "self._authority = bool(authority)" in content
+
+
+def test_original_registration_retried_and_exposed_when_scheduler_idle():
+    content = SRC.read_text()
+    evaluation = content.split("    async def _evaluate(self) -> None:", 1)[1]
+    assert "original_link = self.original_alpha84.register()" in evaluation
+    assert 'original_link["reason"] = str(err)' in evaluation
+    assert evaluation.count('"original_controller_registration": original_link') == 2
+    assert "authority=False, exclusive=False" in content
