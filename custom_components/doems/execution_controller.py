@@ -93,7 +93,10 @@ class ExecutionController:
             soc_percent=soc_percent, sources_fresh=sources_fresh,
             controller_exclusive=controller_exclusive and self.authorized(),
             command_acknowledged=command_acknowledged,
-            plan_identity_matches=plan_identity_matches and self.revalidate(session["identity"]),
+            # Runtime identity is checked against the active store plan by
+            # the caller. Do not reuse the prestart R7 pending-selection
+            # gate after the slot transitions to lifecycle "actief".
+            plan_identity_matches=plan_identity_matches,
             safety_clear=safety_clear)
         if result["decision"] == "stop":
             await self.stop()
