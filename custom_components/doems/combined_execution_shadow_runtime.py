@@ -69,6 +69,9 @@ class DOEMSCombinedExecutionShadowRuntime:
         self._exclusive_claimed = False
         self._authority = False
         self.adapter.authority = False
+        if self._combined_bridge is not None:
+            self._combined_bridge.authority = False
+            self._combined_bridge.exclusive = False
         if (self._shutdown or self._master_enabled
                 or self.controller.session is not None
                 or self.controller.reconciliation_required):
@@ -80,9 +83,13 @@ class DOEMSCombinedExecutionShadowRuntime:
             return False
         # One existing DOEMS R8 controller owns all starts; R9's separate
         # planner bridge is kept permanently non-actuating.
+        # R8 and the Combined bridge must share the same single-writer claim.
         self._exclusive_claimed = True
         self._authority = True
         self.adapter.authority = True
+        if self._combined_bridge is not None:
+            self._combined_bridge.authority = True
+            self._combined_bridge.exclusive = True
         return True
 
     async def async_set_master_enabled(self, enabled: bool) -> None:
@@ -111,6 +118,9 @@ class DOEMSCombinedExecutionShadowRuntime:
         else:
             # Revoke permission before any asynchronous stop attempt.
             self._master_enabled = False
+            if self._combined_bridge is not None:
+                self._combined_bridge.authority = False
+                self._combined_bridge.exclusive = False
             try:
                 if self.controller.session is not None or self.controller.reconciliation_required:
                     await self.controller.stop()
