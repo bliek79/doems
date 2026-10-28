@@ -488,11 +488,26 @@ class DOEMSCombinedExecutionShadowRuntime:
                     now=now, soc_percent=soc,
                     sources_fresh=self.scheduler._sources_fresh(now, snapshot),
                     controller_exclusive=self._authority,
-                    command_acknowledged=bool(session and
-                        self.adapter._power_matches(session["power_w"]) and
-                        self.adapter._state("operating_mode") == "third_party_control"),
+                    command_acknowledged=bool(
+                        session
+                        and self.adapter._power_matches(session["power_w"])
+                        and self.adapter._state("operating_mode") == "third_party_control"
+                        and self.adapter._state("action_direction") ==
+                            ("charge" if session["action"] == "laden" else "discharge")
+                    ),
                     plan_identity_matches=same_plan,
-                    safety_clear=same_plan and snapshot.get("status") == "ready",
+                    safety_clear=bool(
+                        same_plan and snapshot.get("status") == "ready"
+                        and (
+                            (session["action"] == "laden"
+                             and snapshot.get("discharge_power_w") is not None
+                             and float(snapshot["discharge_power_w"]) <= 100)
+                            or
+                            (session["action"] == "ontladen"
+                             and snapshot.get("charge_power_w") is not None
+                             and float(snapshot["charge_power_w"]) <= 100)
+                        )
+                    ),
                 )
                 if outcome.get("decision") == "stop":
                     blockers = list(outcome.get("blockers") or [])
