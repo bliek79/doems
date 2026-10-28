@@ -292,8 +292,14 @@ class DOEMSCombinedExecutionShadowRuntime:
                     0 if proof is not None else 1
                 ),
                 "auto_bridge_candidates": [proof] if proof else [],
-                "control_path_configured": False,  # No independent writer authority yet.
-                "physical_test_active": True,  # Unknown external test state: block.
+                "control_path_configured": all(
+                    self.adapter.entities.get(key)
+                    and self.adapter._state(key) is not None
+                    for key in ("operating_mode", "action_direction", "power_setpoint")
+                ),
+                # This DOEMS runtime has no physical-test controller. Its only
+                # writer is the R8 ExecutionController, checked separately.
+                "physical_test_active": False,
                 "execution_active": self.controller.session is not None,
             }
             try:
