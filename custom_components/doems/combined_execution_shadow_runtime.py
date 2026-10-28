@@ -453,6 +453,16 @@ class DOEMSCombinedExecutionShadowRuntime:
             plan.get("target_soc"), plan.get("max_runtime_h"),
         )
 
+    @staticmethod
+    def _non_conflicting_power(value: Any) -> bool:
+        """Unavailable, invalid or non-finite battery observations fail closed."""
+        try:
+            from math import isfinite
+            power = float(value)
+            return isfinite(power) and 0 <= power <= 100
+        except (TypeError, ValueError, OverflowError):
+            return False
+
     async def _execute_or_monitor(self) -> None:
         """Use the one existing controller for both Manual and Automatic slots."""
         now = dt_util.utcnow()
@@ -500,12 +510,10 @@ class DOEMSCombinedExecutionShadowRuntime:
                         same_plan and snapshot.get("status") == "ready"
                         and (
                             (session["action"] == "laden"
-                             and snapshot.get("discharge_power_w") is not None
-                             and float(snapshot["discharge_power_w"]) <= 100)
+                             and self._non_conflicting_power(snapshot.get("discharge_power_w")))
                             or
                             (session["action"] == "ontladen"
-                             and snapshot.get("charge_power_w") is not None
-                             and float(snapshot["charge_power_w"]) <= 100)
+                             and self._non_conflicting_power(snapshot.get("charge_power_w")))
                         )
                     ),
                 )
