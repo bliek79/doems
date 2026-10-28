@@ -18,6 +18,7 @@ from .alpha84_controller_link import inspect_alpha84_controller
 from .alpha84_original_registration import OriginalAlpha84Registration, OriginalControllerUnavailable
 from .alpha84_prestart_validator import AnkerEmsPreStartValidator
 from .alpha84_safety_guard import AnkerEmsSafetyGuard
+from .legacy_ems_safety import read_legacy_authority_fence
 
 
 class DOEMSCombinedExecutionShadowRuntime:
@@ -31,6 +32,7 @@ class DOEMSCombinedExecutionShadowRuntime:
         self._authority = bool(authority)
         # Master permission is OFF on every startup; it never grants authority.
         self._master_enabled = False
+        self._exclusive_claimed = False
         self._combined_bridge = None
         self._combined_last_result: dict[str, Any] = {"bridge": "startup", "physical_execution_enabled": False}
         self.adapter = AnkerExecutionAdapter(hass, entities or {}, authority=self._authority)
@@ -97,6 +99,41 @@ class DOEMSCombinedExecutionShadowRuntime:
     def master_enabled(self) -> bool:
         return self._master_enabled
 
+    def _legacy_writer_quiescent(self) -> bool:
+        """Recheck original Alpha84's closed write fence on every authorization."""
+        try:
+            proof = read_legacy_authority_fence(self.hass)
+            return (
+                proof.get("legacy_fence_closed") is True
+                and proof.get("legacy_operations_inactive") is True
+                and proof.get("legacy_inflight_calls") == 0
+            )
+        except (ValueError, LookupError):
+            return False
+
+    def claim_exclusive_authority(self) -> bool:
+        """Explicit, non-actuating claim. Never grant from a UI master toggle."""
+        self._exclusive_claimed = False
+        self._authority = False
+        self.adapter.authority = False
+        if (self._shutdown or self._master_enabled
+                or self.controller.session is not None
+                or self.controller.reconciliation_required):
+            return False
+        if not all(self.adapter.entities.get(name) for name in
+                   ("operating_mode", "action_direction", "power_setpoint")):
+            return False
+        if self.adapter._state("operating_mode") != "self_consumption":
+            return False
+        if not self._legacy_writer_quiescent():
+            return False
+        # One existing DOEMS R8 controller owns all starts; R9's separate
+        # planner bridge is kept permanently non-actuating.
+        self._exclusive_claimed = True
+        self._authority = True
+        self.adapter.authority = True
+        return True
+
     async def async_set_master_enabled(self, enabled: bool) -> None:
         """Master gate: switching off also fences in-flight execution."""
         if enabled:
@@ -108,8 +145,8 @@ class DOEMSCombinedExecutionShadowRuntime:
                 self._authority
                 and self.adapter.authority
                 and self._combined_bridge is not None
-                and self._combined_bridge.authority
-                and self._combined_bridge.exclusive
+                and self._exclusive_claimed
+                and self._legacy_writer_quiescent()
             ):
                 raise ValueError("Physical execution unavailable: verified exclusive authority handoff required")
             if self._shutdown:
@@ -133,7 +170,9 @@ class DOEMSCombinedExecutionShadowRuntime:
         self.refresh()
 
     def _combined_authorized(self) -> bool:
-        return bool(self._master_enabled and self._combined_bridge is not None and self._combined_bridge._authorized())
+        return bool(self._master_enabled and self._exclusive_claimed
+                    and self._authority and self.adapter.authority
+                    and self._legacy_writer_quiescent())
 
     def _combined_identity_current(self, identity: tuple) -> bool:
         return bool(self._combined_bridge is not None and self._combined_bridge._still_current(identity))
@@ -162,7 +201,7 @@ class DOEMSCombinedExecutionShadowRuntime:
             and checks_pass
             and not self.last_result.get("blockers")
             and self._master_enabled
-            and self._authority
+            and self._combined_authorized()
             and plan.get("lifecycle_status") in ("pending", "actief")
             and (plan.get("lifecycle_status") == "actief" or decision.get("selected_lifecycle") == "pending")
             and (plan.get("lifecycle_status") == "actief" or decision.get("safety_status") == "safe")
