@@ -16,6 +16,8 @@ from .execution_anker_adapter import AnkerExecutionAdapter
 from .alpha84_prestart_validator import AnkerEmsPreStartValidator
 from .alpha84_safety_guard import AnkerEmsSafetyGuard
 from .final_revalidation import DOEMSFinalRevalidation
+from .execution_common_safety import common_prestart_blockers
+from .execution_energy_meter import sample_energy, planned_energy_reached
 
 
 class DOEMSCombinedExecutionShadowRuntime:
@@ -51,6 +53,7 @@ class DOEMSCombinedExecutionShadowRuntime:
         self._shutdown = False
         self._restart_reconciled = False
         self._last_stop_blockers = []
+        self._active_energy_sample = {}
 
     def async_add_listener(self, listener: Callable[[], None]) -> Callable[[], None]:
         self._listeners.append(listener)
@@ -80,6 +83,7 @@ class DOEMSCombinedExecutionShadowRuntime:
             return False
         # One existing DOEMS R8 controller owns all starts; R9's separate
         # planner bridge is kept permanently non-actuating.
+        # R8 and the Combined bridge must share the same single-writer claim.
         self._exclusive_claimed = True
         self._authority = True
         self.adapter.authority = True
@@ -112,8 +116,20 @@ class DOEMSCombinedExecutionShadowRuntime:
             # Revoke permission before any asynchronous stop attempt.
             self._master_enabled = False
             try:
-                if self.controller.session is not None or self.controller.reconciliation_required:
+                had_session = self.controller.session is not None
+                if had_session or self.controller.reconciliation_required:
                     await self.controller.stop()
+                # A verified operator stop is a cancellation, never a
+                # successful energy delivery or an automatically failed plan.
+                if had_session and self._active_slot in (1, 2, 3):
+                    active = self.store.get_plan(self._active_slot)
+                    if active.get("lifecycle_status") == "actief":
+                        await self.store.async_mark_lifecycle(
+                            self._active_slot, "geannuleerd",
+                            "manual_execution_disabled", expected_plan=active)
+                self._active_plan = None
+                self._active_slot = None
+                self._active_energy_sample = {}
             finally:
                 for listener in tuple(self._listeners):
                     listener()
@@ -211,6 +227,11 @@ class DOEMSCombinedExecutionShadowRuntime:
             plan.get("target_soc"), plan.get("max_runtime_h"),
         )
         local = self.last_result.get("doems_alpha84_safety") or {}
+        snapshot = self.scheduler.battery.snapshot() if self.scheduler.battery else {}
+        common_safe = not common_prestart_blockers(
+            plan, snapshot, self.scheduler._manual_safety_limits(),
+            sources_fresh=self.scheduler._sources_fresh(dt_util.utcnow(), snapshot),
+        )
         checks_pass = (
             plan.get("origin") == "manual"
             or ((local.get("prestart") or {}).get("auto_prestart_safe") is True
@@ -218,6 +239,7 @@ class DOEMSCombinedExecutionShadowRuntime:
         )
         return (
             identity == actual
+            and common_safe
             and checks_pass
             and (plan.get("origin") != "automatic_72h_planner" or self._automatic_final_safe(identity))
             and not self.last_result.get("blockers")
@@ -276,16 +298,14 @@ class DOEMSCombinedExecutionShadowRuntime:
                     continue
 
     async def _evaluate(self) -> None:
-        if self._combined_bridge is not None:
-            try:
-                self._combined_last_result = await self._combined_bridge.async_reconcile(dt_util.utcnow())
-            except Exception as exc:
-                self._combined_last_result = {
-                    "bridge": "blocked", "reason": "combined_handoff_error",
-                    "error_type": type(exc).__name__,
-                    "physical_execution_enabled": bool(self.controller.session),
-                    "reconciliation_required": self.controller.reconciliation_required,
-                }
+        # The separate R9 bridge is an observer, never a second writer.
+        # Its async_reconcile() may stop a shared controller when the bridge
+        # lacks authority; it must NOT be called by the canonical R8 runtime.
+        self._combined_last_result = {
+            "bridge": "non_actuating_r9",
+            "physical_execution_enabled": False,
+            "execution_performed": False,
+        }
         decision = dict(self.scheduler.last_result)
         slot = decision.get("selected_slot")
         if type(slot) is not int or slot not in (1, 2, 3):
@@ -443,6 +463,25 @@ class DOEMSCombinedExecutionShadowRuntime:
             plan.get("target_soc"), plan.get("max_runtime_h"),
         )
 
+    @staticmethod
+    def _valid_battery_power(value: Any) -> bool:
+        try:
+            from math import isfinite
+            power = float(value)
+            return isfinite(power) and power >= 0
+        except (TypeError, ValueError, OverflowError):
+            return False
+
+    @staticmethod
+    def _non_conflicting_power(value: Any) -> bool:
+        """Unavailable, invalid or non-finite battery observations fail closed."""
+        try:
+            from math import isfinite
+            power = float(value)
+            return isfinite(power) and 0 <= power <= 100
+        except (TypeError, ValueError, OverflowError):
+            return False
+
     async def _execute_or_monitor(self) -> None:
         """Use the one existing controller for both Manual and Automatic slots."""
         now = dt_util.utcnow()
@@ -468,6 +507,63 @@ class DOEMSCombinedExecutionShadowRuntime:
                         for key in ("origin", "planner_identity", "planner_signature",
                                     "action", "power_w", "target_soc", "max_runtime_h"))
             )
+            if session and same_plan and plan.get("origin") == "automatic_72h_planner":
+                measured = snapshot.get(
+                    "charge_power_w" if session["action"] == "laden"
+                    else "discharge_power_w"
+                )
+                self._active_energy_sample = sample_energy(
+                    self._active_energy_sample, now, measured
+                )
+                if planned_energy_reached(
+                    self._active_energy_sample, plan.get("planned_energy_kwh")
+                ):
+                    try:
+                        await self.controller.stop()
+                        await self.store.async_mark_lifecycle(
+                            slot, "voltooid", "planned_energy_reached",
+                            expected_plan=plan)
+                        self._active_plan = None
+                        self._active_slot = None
+                        self._active_energy_sample = {}
+                    except Exception:
+                        self.controller.reconciliation_required = True
+                    return
+            # Alpha84 parity: the Solarbank may reduce Number.max after
+            # a deep-discharge charge has already started. Never increase
+            # an existing setpoint automatically; lower it with readback,
+            # or stop safely if the live cap cannot be honored.
+            if session and session["action"] == "laden":
+                try:
+                    live_limit = self.adapter._live_charge_power_decision(
+                        int(session["planned_power_w"]))
+                    if live_limit.applied_w < session["power_w"]:
+                        # Serialize this nonzero correction against safe-stop.
+                        # Master OFF revokes new writes before taking the lock.
+                        async with self.adapter._lock:
+                            if (not self._combined_authorized()
+                                    or self.controller.session is None):
+                                raise ValueError("Execution disarmed during charge-limit update")
+                            applied = await self.adapter._write_charge_power(
+                                int(session["planned_power_w"]))
+                            if not self.adapter._power_matches(applied):
+                                raise ValueError("Reduced charge setpoint not acknowledged")
+                            self.controller.session["power_w"] = applied
+                            session = dict(self.controller.session)
+                except Exception:
+                    self._last_stop_blockers = ["battery_charge_limit_invalid"]
+                    try:
+                        await self.controller.stop()
+                        if same_plan:
+                            await self.store.async_mark_lifecycle(
+                                slot, "fout", "battery_charge_limit_invalid",
+                                expected_plan=plan)
+                        self._active_plan = None
+                        self._active_slot = None
+                        self._active_energy_sample = {}
+                    except Exception:
+                        self.controller.reconciliation_required = True
+                    return
             soc = snapshot.get("soc_percent")
             try:
                 soc = float(soc)
@@ -478,11 +574,26 @@ class DOEMSCombinedExecutionShadowRuntime:
                     now=now, soc_percent=soc,
                     sources_fresh=self.scheduler._sources_fresh(now, snapshot),
                     controller_exclusive=self._authority,
-                    command_acknowledged=bool(session and
-                        self.adapter._power_matches(session["power_w"]) and
-                        self.adapter._state("operating_mode") == "third_party_control"),
+                    command_acknowledged=bool(
+                        session
+                        and self.adapter._power_matches(session["power_w"])
+                        and self.adapter._state("operating_mode") == "third_party_control"
+                        and self.adapter._state("action_direction") ==
+                            ("charge" if session["action"] == "laden" else "discharge")
+                    ),
                     plan_identity_matches=same_plan,
-                    safety_clear=same_plan and snapshot.get("status") == "ready",
+                    safety_clear=bool(
+                        same_plan and snapshot.get("status") == "ready"
+                        and self._valid_battery_power(snapshot.get("charge_power_w"))
+                        and self._valid_battery_power(snapshot.get("discharge_power_w"))
+                        and (
+                            (session["action"] == "laden"
+                             and self._non_conflicting_power(snapshot.get("discharge_power_w")))
+                            or
+                            (session["action"] == "ontladen"
+                             and self._non_conflicting_power(snapshot.get("charge_power_w")))
+                        )
+                    ),
                 )
                 if outcome.get("decision") == "stop":
                     blockers = list(outcome.get("blockers") or [])
@@ -497,6 +608,7 @@ class DOEMSCombinedExecutionShadowRuntime:
                             expected_plan=plan)
                     self._active_plan = None
                     self._active_slot = None
+                    self._active_energy_sample = {}
             except Exception:
                 # Keep the controller reconciliation fence raised on uncertain stop.
                 self.controller.reconciliation_required = True
@@ -529,6 +641,7 @@ class DOEMSCombinedExecutionShadowRuntime:
                 slot, "actief", "r7_execution_started", expected_plan=plan):
                 self._active_slot = slot
                 self._active_plan = self.store.get_plan(slot)
+                self._active_energy_sample = {}
             else:
                 await self.controller.stop()
         except Exception:

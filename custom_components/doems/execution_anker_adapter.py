@@ -133,10 +133,12 @@ class AnkerExecutionAdapter:
             raise HomeAssistantError("Operating mode unavailable before start")
         async with self._lock:
             try:
-                if self._state("power_setpoint") is None:
-                    raise HomeAssistantError("Power setpoint unavailable before mode switch")
-                await self._call("number", "set_value", "power_setpoint", {"value": 0})
-                await self._wait(self._power_zero, timeout=15)
+                # Match legacy Alpha84: the setpoint may be unavailable
+                # in self_consumption. It must be pinned to 0 W and
+                # acknowledged immediately after external controls appear.
+                if self._state("power_setpoint") is not None:
+                    await self._call("number", "set_value", "power_setpoint", {"value": 0})
+                    await self._wait(self._power_zero, timeout=15)
                 if not revalidate():
                     raise HomeAssistantError("Final revalidation failed after zero-power guard")
                 await self._call("select", "select_option", "operating_mode", {"option": EXTERNAL_MODE})
