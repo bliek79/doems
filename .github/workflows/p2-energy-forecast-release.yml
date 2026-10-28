@@ -70,7 +70,7 @@ jobs:
           tested_sha="$(git rev-parse HEAD)"
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             test "$tested_sha" = "${{ github.event.pull_request.head.sha }}"
-            test "$version" = "0.2.0-alpha.9.9"
+            test "$version" = "0.2.0-alpha.9.10"
           fi
           python scripts/release_contract.py --tag "$tag" --verify-archive dist/doems.zip
           (cd dist && sha256sum --check SHA256SUMS.txt)
