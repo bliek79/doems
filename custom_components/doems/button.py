@@ -6,6 +6,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers import entity_registry as er
 
 from .const import (
     CONF_INSTANCE_NAME, DEFAULT_INSTANCE_NAME, DEVICE_IDENTIFIER, DOMAIN, NAME, VERSION,
@@ -14,13 +15,18 @@ from .const import (
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     runtime = hass.data[DOMAIN][entry.entry_id]["combined_execution_shadow"]
+    registry = er.async_get(hass)
+    old_entity_id = registry.async_get_entity_id("button", DOMAIN, "doems_ems_emergency_acknowledge")
+    new_entity_id = "button.doems_emergency_stop_acknowledge"
+    if old_entity_id and old_entity_id != new_entity_id and not registry.async_get(new_entity_id):
+        registry.async_update_entity(old_entity_id, new_entity_id=new_entity_id)
     async_add_entities([DOEMSEmergencyAcknowledgeButton(hass, entry, runtime)])
 
 
 class DOEMSEmergencyAcknowledgeButton(ButtonEntity):
     _attr_name = "DOEMS Emergency Stop Acknowledge"
     _attr_unique_id = "doems_ems_emergency_acknowledge"
-    _attr_suggested_object_id = "doems_ems_emergency_acknowledge"
+    _attr_suggested_object_id = "doems_emergency_stop_acknowledge"
     _attr_icon = "mdi:shield-check"
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry, runtime) -> None:
