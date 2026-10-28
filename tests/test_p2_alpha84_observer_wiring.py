@@ -4,16 +4,18 @@ from pathlib import Path
 SRC = Path(__file__).resolve().parents[1] / "custom_components/doems/combined_execution_shadow_runtime.py"
 
 
-def test_combined_runtime_projects_slot_for_alpha84_without_granting_authority():
+def test_combined_runtime_uses_local_alpha84_guards_without_granting_authority():
     content = SRC.read_text()
-    assert "from .alpha84_handoff_contract import project_combined_slot" in content
-    assert "inspected = inspect_alpha84_controller(" in content
-    assert "await legacy.async_refresh()" in content
-    assert "live_evidence=live_evidence" in content
-    assert "sources_fresh=self.scheduler._sources_fresh" in content
-    assert 'safety_safe=snapshot.get("status") == "ready"' in content
-    assert '"alpha84_handoff": deepcopy(alpha84_handoff)' in content
-    assert 'blockers.append("alpha84_original_safety_unverified")' in content
+    selected_path = content.split("        # Alpha84 guard code now runs locally", 1)[1]
+    selected_path = selected_path.split("    def _identity(", 1)[0]
+    assert "self._doems_prestart.evaluate(evidence)" in selected_path
+    assert "self._doems_safety_guard.evaluate_automatic_handoff(evidence)" in selected_path
+    assert "await legacy.async_refresh()" not in selected_path
+    assert "inspected = inspect_alpha84_controller(" not in selected_path
+    assert '"auto_bridge_candidates": [proof] if proof else []' in selected_path
+    assert 'blockers.append("doems_alpha84_prestart_blocked")' in selected_path
+    assert 'blockers.append("doems_alpha84_safety_guard_blocked")' in selected_path
+    assert '"doems_alpha84_safety": independent_safety' in selected_path
 
 
 def test_combined_projection_does_not_override_existing_nonactuating_flags():
@@ -32,13 +34,13 @@ def test_original_registration_retried_and_exposed_when_scheduler_idle():
     assert "authority=False, exclusive=False" in content
 
 
-def test_original_safety_observation_is_read_only_and_fail_closed():
+def test_local_alpha84_safety_is_read_only_and_fail_closed():
     content = SRC.read_text()
-    assert '"original_safety_observation": original_safety_observation' in content
+    assert "self._doems_prestart = AnkerEmsPreStartValidator()" in content
+    assert "self._doems_safety_guard = AnkerEmsSafetyGuard()" in content
     assert '"status": "not_required_no_selected_plan"' in content
-    assert '"status": "waiting_scheduler_safety" if not planning_ready' in content
-    assert '"status": "blocked"' in content
-    assert '"prestart": "unverified"' in content
+    assert 'independent_safety = {"status": "blocked", "physical_execution_enabled": False}' in content
+    assert '"control_path_configured": False' in content
+    assert '"physical_test_active": True' in content
     assert '"physical_execution_enabled": False' in content
-    assert "inspected = inspect_alpha84_controller(" in content
     assert "authority=False, exclusive=False" in content
