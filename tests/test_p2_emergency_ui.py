@@ -30,7 +30,7 @@ def test_approved_emergency_sensor_is_registered_and_non_actuating():
     code = source("sensor.py")
     ast.parse(code)
     assert "DOEMSEmergencyStatusSensor(entry, combined_execution)" in code
-    assert '_attr_name = "DOEMS EMS noodstopstatus"' in code
+    assert '_attr_name = "DOEMS Emergency Stop Status"' in code
     assert '_attr_unique_id = "doems_ems_emergency_status"' in code
     assert '_attr_suggested_object_id = "doems_ems_emergency_status"' in code
     assert '"reset_safety_sources_verified": False' in code
