@@ -17,6 +17,7 @@ from .alpha84_prestart_validator import AnkerEmsPreStartValidator
 from .alpha84_safety_guard import AnkerEmsSafetyGuard
 from .final_revalidation import DOEMSFinalRevalidation
 from .execution_common_safety import common_prestart_blockers
+from .execution_energy_meter import sample_energy, planned_energy_reached
 
 
 class DOEMSCombinedExecutionShadowRuntime:
@@ -52,6 +53,7 @@ class DOEMSCombinedExecutionShadowRuntime:
         self._shutdown = False
         self._restart_reconciled = False
         self._last_stop_blockers = []
+        self._active_energy_sample = {}
 
     def async_add_listener(self, listener: Callable[[], None]) -> Callable[[], None]:
         self._listeners.append(listener)
@@ -486,6 +488,28 @@ class DOEMSCombinedExecutionShadowRuntime:
                         for key in ("origin", "planner_identity", "planner_signature",
                                     "action", "power_w", "target_soc", "max_runtime_h"))
             )
+            if session and same_plan and plan.get("origin") == "automatic_72h_planner":
+                measured = snapshot.get(
+                    "charge_power_w" if session["action"] == "laden"
+                    else "discharge_power_w"
+                )
+                self._active_energy_sample = sample_energy(
+                    self._active_energy_sample, now, measured
+                )
+                if planned_energy_reached(
+                    self._active_energy_sample, plan.get("planned_energy_kwh")
+                ):
+                    try:
+                        await self.controller.stop()
+                        await self.store.async_mark_lifecycle(
+                            slot, "voltooid", "planned_energy_reached",
+                            expected_plan=plan)
+                        self._active_plan = None
+                        self._active_slot = None
+                        self._active_energy_sample = {}
+                    except Exception:
+                        self.controller.reconciliation_required = True
+                    return
             # Alpha84 parity: the Solarbank may reduce Number.max after
             # a deep-discharge charge has already started. Never increase
             # an existing setpoint automatically; lower it with readback,
@@ -511,6 +535,7 @@ class DOEMSCombinedExecutionShadowRuntime:
                                 expected_plan=plan)
                         self._active_plan = None
                         self._active_slot = None
+                        self._active_energy_sample = {}
                     except Exception:
                         self.controller.reconciliation_required = True
                     return
@@ -556,6 +581,7 @@ class DOEMSCombinedExecutionShadowRuntime:
                             expected_plan=plan)
                     self._active_plan = None
                     self._active_slot = None
+                    self._active_energy_sample = {}
             except Exception:
                 # Keep the controller reconciliation fence raised on uncertain stop.
                 self.controller.reconciliation_required = True
@@ -588,6 +614,7 @@ class DOEMSCombinedExecutionShadowRuntime:
                 slot, "actief", "r7_execution_started", expected_plan=plan):
                 self._active_slot = slot
                 self._active_plan = self.store.get_plan(slot)
+                self._active_energy_sample = {}
             else:
                 await self.controller.stop()
         except Exception:
