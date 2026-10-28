@@ -18,7 +18,6 @@ from .alpha84_controller_link import inspect_alpha84_controller
 from .alpha84_original_registration import OriginalAlpha84Registration, OriginalControllerUnavailable
 from .alpha84_prestart_validator import AnkerEmsPreStartValidator
 from .alpha84_safety_guard import AnkerEmsSafetyGuard
-from .legacy_ems_safety import read_legacy_authority_fence
 
 
 class DOEMSCombinedExecutionShadowRuntime:
@@ -99,28 +98,6 @@ class DOEMSCombinedExecutionShadowRuntime:
     def master_enabled(self) -> bool:
         return self._master_enabled
 
-    def _legacy_writer_quiescent(self) -> bool:
-        """Do not require an Anker EMS installation to operate DOEMS.
-
-        An unloaded/disabled original integration has no live coordinator to
-        issue commands. If an original coordinator IS loaded, require Alpha84's
-        proven closed and drained physical write fence.
-        """
-        loaded = self.hass.data.get("anker_ems", {})
-        if not loaded:
-            return True
-        if not isinstance(loaded, dict) or len(loaded) != 1:
-            return False
-        try:
-            proof = read_legacy_authority_fence(self.hass)
-            return (
-                proof.get("legacy_fence_closed") is True
-                and proof.get("legacy_operations_inactive") is True
-                and proof.get("legacy_inflight_calls") == 0
-            )
-        except (ValueError, LookupError):
-            return False
-
     def claim_exclusive_authority(self) -> bool:
         """Explicit, non-actuating claim. Never grant from a UI master toggle."""
         self._exclusive_claimed = False
@@ -134,8 +111,6 @@ class DOEMSCombinedExecutionShadowRuntime:
                    ("operating_mode", "action_direction", "power_setpoint")):
             return False
         if self.adapter._state("operating_mode") != "self_consumption":
-            return False
-        if not self._legacy_writer_quiescent():
             return False
         # One existing DOEMS R8 controller owns all starts; R9's separate
         # planner bridge is kept permanently non-actuating.
@@ -160,7 +135,6 @@ class DOEMSCombinedExecutionShadowRuntime:
                 and self.adapter.authority
                 and self._combined_bridge is not None
                 and self._exclusive_claimed
-                and self._legacy_writer_quiescent()
             ):
                 raise ValueError("Physical execution unavailable: verified exclusive authority handoff required")
             if self._shutdown:
@@ -186,7 +160,8 @@ class DOEMSCombinedExecutionShadowRuntime:
     def _combined_authorized(self) -> bool:
         return bool(self._master_enabled and self._exclusive_claimed
                     and self._authority and self.adapter.authority
-                    and self._legacy_writer_quiescent())
+                    and self._combined_bridge is not None
+                    and self.controller is self._combined_bridge.controller)
 
     def _combined_identity_current(self, identity: tuple) -> bool:
         return bool(self._combined_bridge is not None and self._combined_bridge._still_current(identity))
