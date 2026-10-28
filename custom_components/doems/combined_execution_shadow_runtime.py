@@ -116,8 +116,20 @@ class DOEMSCombinedExecutionShadowRuntime:
             # Revoke permission before any asynchronous stop attempt.
             self._master_enabled = False
             try:
-                if self.controller.session is not None or self.controller.reconciliation_required:
+                had_session = self.controller.session is not None
+                if had_session or self.controller.reconciliation_required:
                     await self.controller.stop()
+                # A verified operator stop is a cancellation, never a
+                # successful energy delivery or an automatically failed plan.
+                if had_session and self._active_slot in (1, 2, 3):
+                    active = self.store.get_plan(self._active_slot)
+                    if active.get("lifecycle_status") == "actief":
+                        await self.store.async_mark_lifecycle(
+                            self._active_slot, "geannuleerd",
+                            "manual_execution_disabled", expected_plan=active)
+                self._active_plan = None
+                self._active_slot = None
+                self._active_energy_sample = {}
             finally:
                 for listener in tuple(self._listeners):
                     listener()
