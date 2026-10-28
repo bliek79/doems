@@ -484,6 +484,28 @@ class DOEMSCombinedExecutionShadowRuntime:
                         for key in ("origin", "planner_identity", "planner_signature",
                                     "action", "power_w", "target_soc", "max_runtime_h"))
             )
+            # Alpha84 parity: the Solarbank may reduce Number.max after
+            # a deep-discharge charge has already started. Never increase
+            # an existing setpoint automatically; lower it with readback,
+            # or stop safely if the live cap cannot be honored.
+            if session and session["action"] == "laden":
+                try:
+                    live_limit = self.adapter._live_charge_power_decision(
+                        int(session["planned_power_w"]))
+                    if live_limit.applied_w < session["power_w"]:
+                        applied = await self.adapter._write_charge_power(
+                            int(session["planned_power_w"]))
+                        if not self.adapter._power_matches(applied):
+                            raise ValueError("Reduced charge setpoint not acknowledged")
+                        self.controller.session["power_w"] = applied
+                        session = dict(self.controller.session)
+                except Exception:
+                    self._last_stop_blockers = ["battery_charge_limit_invalid"]
+                    try:
+                        await self.controller.stop()
+                    except Exception:
+                        self.controller.reconciliation_required = True
+                    return
             soc = snapshot.get("soc_percent")
             try:
                 soc = float(soc)
