@@ -69,9 +69,6 @@ class DOEMSCombinedExecutionShadowRuntime:
         self._exclusive_claimed = False
         self._authority = False
         self.adapter.authority = False
-        if self._combined_bridge is not None:
-            self._combined_bridge.authority = False
-            self._combined_bridge.exclusive = False
         if (self._shutdown or self._master_enabled
                 or self.controller.session is not None
                 or self.controller.reconciliation_required):
@@ -87,9 +84,6 @@ class DOEMSCombinedExecutionShadowRuntime:
         self._exclusive_claimed = True
         self._authority = True
         self.adapter.authority = True
-        if self._combined_bridge is not None:
-            self._combined_bridge.authority = True
-            self._combined_bridge.exclusive = True
         return True
 
     async def async_set_master_enabled(self, enabled: bool) -> None:
@@ -106,7 +100,6 @@ class DOEMSCombinedExecutionShadowRuntime:
             if not (
                 self._authority
                 and self.adapter.authority
-                and self._combined_bridge is not None
                 and self._exclusive_claimed
             ):
                 raise ValueError("Physical execution unavailable: verified exclusive authority handoff required")
@@ -118,9 +111,6 @@ class DOEMSCombinedExecutionShadowRuntime:
         else:
             # Revoke permission before any asynchronous stop attempt.
             self._master_enabled = False
-            if self._combined_bridge is not None:
-                self._combined_bridge.authority = False
-                self._combined_bridge.exclusive = False
             try:
                 if self.controller.session is not None or self.controller.reconciliation_required:
                     await self.controller.stop()
@@ -136,8 +126,7 @@ class DOEMSCombinedExecutionShadowRuntime:
     def _combined_authorized(self) -> bool:
         return bool(self._master_enabled and self._exclusive_claimed
                     and self._authority and self.adapter.authority
-                    and self._combined_bridge is not None
-                    and self.controller is self._combined_bridge.controller)
+                    and self.controller is not None)
 
     def _combined_identity_current(self, identity: tuple) -> bool:
         return bool(self._combined_bridge is not None and self._combined_bridge._still_current(identity))
