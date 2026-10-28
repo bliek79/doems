@@ -22,3 +22,25 @@ def test_execution_stays_default_off():
     source = RUNTIME.read_text(encoding="utf-8")
     assert "entities=None, authority=False" in source
     assert "self._authority = bool(authority)" in source
+
+
+def test_bridge_claim_and_disarm_are_symmetric():
+    source = RUNTIME.read_text(encoding="utf-8")
+    assert "self._combined_bridge.authority = True" in source
+    assert "self._combined_bridge.exclusive = True" in source
+    assert "self._combined_bridge.authority = False" in source
+    assert "self._combined_bridge.exclusive = False" in source
+
+
+def test_runtime_watchdog_checks_direction_and_conflicting_flow():
+    source = RUNTIME.read_text(encoding="utf-8")
+    assert 'self.adapter._state("action_direction")' in source
+    assert 'self._non_conflicting_power(snapshot.get("discharge_power_w"))' in source
+    assert 'self._non_conflicting_power(snapshot.get("charge_power_w"))' in source
+
+
+def test_mode_switch_allows_unavailable_pre_mode_setpoint_but_checks_post_mode_zero():
+    source = Path("custom_components/doems/execution_anker_adapter.py").read_text(encoding="utf-8")
+    assert 'if self._state("power_setpoint") is not None:' in source
+    assert 'await self._wait(self._power_zero, timeout=15)' in source
+    assert 'post_mode_ready") is True' in source
