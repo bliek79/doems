@@ -25,13 +25,14 @@ def test_combined_projection_does_not_override_existing_nonactuating_flags():
     assert "self._authority = bool(authority)" in content
 
 
-def test_original_registration_retried_and_exposed_when_scheduler_idle():
+def test_doems_observer_has_no_live_anker_ems_registration():
     content = SRC.read_text()
-    evaluation = content.split("    async def _evaluate(self) -> None:", 1)[1]
-    assert "original_link = self.original_alpha84.register()" in evaluation
-    assert 'original_link["reason"] = str(err)' in evaluation
-    assert evaluation.count('"original_controller_registration": original_link') == 2
-    assert "authority=False, exclusive=False" in content
+    assert "OriginalAlpha84Registration" not in content
+    assert "self.original_alpha84.register()" not in content
+    assert "read_legacy_authority_fence" not in content
+    assert "original_controller_registration" not in content
+    assert "self._doems_prestart.evaluate(evidence)" in content
+    assert "self._doems_safety_guard.evaluate_automatic_handoff(evidence)" in content
 
 
 def test_local_alpha84_safety_is_read_only_and_fail_closed():
