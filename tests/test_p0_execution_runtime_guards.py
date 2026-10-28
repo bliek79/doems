@@ -56,3 +56,16 @@ def test_watchdog_requires_both_battery_power_sources():
     source = RUNTIME.read_text(encoding="utf-8")
     assert 'self._valid_battery_power(snapshot.get("charge_power_w"))' in source
     assert 'self._valid_battery_power(snapshot.get("discharge_power_w"))' in source
+
+
+def test_charge_cap_update_is_serialized_with_safe_stop():
+    source = RUNTIME.read_text(encoding="utf-8")
+    assert "async with self.adapter._lock:" in source
+    assert 'ValueError("Execution disarmed during charge-limit update")' in source
+
+
+def test_operator_master_off_cancels_only_after_verified_stop():
+    source = RUNTIME.read_text(encoding="utf-8")
+    assert '"geannuleerd"' in source
+    assert '"manual_execution_disabled"' in source
+    assert "await self.controller.stop()" in source
