@@ -1225,7 +1225,7 @@ class DOEMSEmergencyStatusSensor(SensorEntity):
 
     _attr_should_poll = False
     _attr_has_entity_name = False
-    _attr_name = "DOEMS EMS noodstopstatus"
+    _attr_name = "DOEMS Emergency Stop Status"
     _attr_unique_id = "doems_ems_emergency_status"
     _attr_suggested_object_id = "doems_ems_emergency_status"
     _attr_icon = "mdi:shield-alert"
