@@ -503,6 +503,12 @@ class DOEMSCombinedExecutionShadowRuntime:
                     self._last_stop_blockers = ["battery_charge_limit_invalid"]
                     try:
                         await self.controller.stop()
+                        if same_plan:
+                            await self.store.async_mark_lifecycle(
+                                slot, "fout", "battery_charge_limit_invalid",
+                                expected_plan=plan)
+                        self._active_plan = None
+                        self._active_slot = None
                     except Exception:
                         self.controller.reconciliation_required = True
                     return
