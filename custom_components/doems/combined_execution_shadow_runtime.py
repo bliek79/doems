@@ -16,6 +16,7 @@ from .execution_anker_adapter import AnkerExecutionAdapter
 from .alpha84_prestart_validator import AnkerEmsPreStartValidator
 from .alpha84_safety_guard import AnkerEmsSafetyGuard
 from .final_revalidation import DOEMSFinalRevalidation
+from .execution_common_safety import common_prestart_blockers
 
 
 class DOEMSCombinedExecutionShadowRuntime:
@@ -210,6 +211,11 @@ class DOEMSCombinedExecutionShadowRuntime:
             plan.get("target_soc"), plan.get("max_runtime_h"),
         )
         local = self.last_result.get("doems_alpha84_safety") or {}
+        snapshot = self.scheduler.battery.snapshot() if self.scheduler.battery else {}
+        common_safe = not common_prestart_blockers(
+            plan, snapshot, self.scheduler._manual_safety_limits(),
+            sources_fresh=self.scheduler._sources_fresh(dt_util.utcnow(), snapshot),
+        )
         checks_pass = (
             plan.get("origin") == "manual"
             or ((local.get("prestart") or {}).get("auto_prestart_safe") is True
@@ -217,6 +223,7 @@ class DOEMSCombinedExecutionShadowRuntime:
         )
         return (
             identity == actual
+            and common_safe
             and checks_pass
             and (plan.get("origin") != "automatic_72h_planner" or self._automatic_final_safe(identity))
             and not self.last_result.get("blockers")
