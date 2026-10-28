@@ -526,12 +526,18 @@ class DOEMSCombinedExecutionShadowRuntime:
                     live_limit = self.adapter._live_charge_power_decision(
                         int(session["planned_power_w"]))
                     if live_limit.applied_w < session["power_w"]:
-                        applied = await self.adapter._write_charge_power(
-                            int(session["planned_power_w"]))
-                        if not self.adapter._power_matches(applied):
-                            raise ValueError("Reduced charge setpoint not acknowledged")
-                        self.controller.session["power_w"] = applied
-                        session = dict(self.controller.session)
+                        # Serialize this nonzero correction against safe-stop.
+                        # Master OFF revokes new writes before taking the lock.
+                        async with self.adapter._lock:
+                            if (not self._combined_authorized()
+                                    or self.controller.session is None):
+                                raise ValueError("Execution disarmed during charge-limit update")
+                            applied = await self.adapter._write_charge_power(
+                                int(session["planned_power_w"]))
+                            if not self.adapter._power_matches(applied):
+                                raise ValueError("Reduced charge setpoint not acknowledged")
+                            self.controller.session["power_w"] = applied
+                            session = dict(self.controller.session)
                 except Exception:
                     self._last_stop_blockers = ["battery_charge_limit_invalid"]
                     try:
