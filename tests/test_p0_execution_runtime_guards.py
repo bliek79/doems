@@ -29,7 +29,7 @@ def test_only_canonical_r8_route_gets_authority():
     assert "authority=False, exclusive=False, controller=self.controller" in source
     assert "self._combined_bridge.authority = True" not in source
     assert "self._combined_bridge.exclusive = True" not in source
-    assert "self.controller is not None" in source
+    assert "self.controller is self._combined_bridge.controller" in source
 
 
 def test_runtime_watchdog_checks_direction_and_conflicting_flow():
