@@ -24,7 +24,6 @@ class DOEMSCombinedExecutionShadowRuntime:
         self._doems_prestart = AnkerEmsPreStartValidator()
         self._doems_safety_guard = AnkerEmsSafetyGuard()
         self._doems_final_revalidation = DOEMSFinalRevalidation()
-        self._last_alpha84_evidence = None
         self.scheduler = scheduler
         self.store = store
         self._authority = bool(authority)
@@ -134,17 +133,33 @@ class DOEMSCombinedExecutionShadowRuntime:
         return bool(self._combined_bridge is not None and self._combined_bridge._still_current(identity))
 
     def _automatic_final_safe(self, identity: tuple) -> bool:
-        """Recheck live DOEMS evidence immediately before every controller write."""
-        base = self._last_alpha84_evidence
-        if not isinstance(base, dict) or base.get("plan_identity_tuple") != identity:
-            return False
+        """Rebuild final Alpha84 evidence from current DOEMS state for every write."""
         try:
-            evidence = dict(base)
+            decision = self.scheduler.last_result
+            slot = decision.get("selected_slot")
+            if type(slot) is not int or slot not in (1, 2, 3):
+                return False
+            plan = self.store.get_plan(slot)
+            if plan.get("origin") != "automatic_72h_planner" or self._identity(slot, plan) != identity:
+                return False
+            if (decision.get("selected_lifecycle") != "pending"
+                    or decision.get("safety_status") != "safe"
+                    or decision.get("safety_blockers")):
+                return False
             snapshot = self.scheduler.battery.snapshot() if self.scheduler.battery else {}
             bundle = self.scheduler.planner.bundle_snapshot()
             settings = self.scheduler._manual_safety_limits()
-            evidence.update({
+            reader = getattr(self.scheduler.bridge, "verified_published_candidate", None)
+            proof = reader(plan) if callable(reader) else None
+            if not isinstance(proof, dict):
+                return False
+            evidence = {
+                "scheduler_selected_slot": slot,
+                "scheduler_slots": {slot: dict(plan)},
+                "scheduler_ready": True,
                 "soc": snapshot.get("soc_percent"),
+                "max_charge_power_w": settings.get("max_charge_power_w"),
+                "max_discharge_power_w": settings.get("max_discharge_power_w"),
                 "forecast_ready": (
                     self.scheduler._sources_fresh(dt_util.utcnow(), snapshot)
                     and bundle.get("status") == "ready"
@@ -153,19 +168,22 @@ class DOEMSCombinedExecutionShadowRuntime:
                 "auto_plan_72h_execution_buffer_safe": (
                     (bundle.get("automatic") or {}).get("execution_buffer_safe") is True
                 ),
-                "max_charge_power_w": settings.get("max_charge_power_w"),
-                "max_discharge_power_w": settings.get("max_discharge_power_w"),
+                "auto_bridge_valid": True,
+                "auto_bridge_invalid_candidate_count": 0,
+                "auto_bridge_candidates": [proof],
                 "control_path_configured": all(
                     self.adapter.entities.get(k) and self.adapter._state(k) is not None
                     for k in ("operating_mode", "action_direction", "power_setpoint")
                 ),
-                "operating_mode": self.adapter._state("operating_mode"),
-                "execution_active": self.controller.session is not None,
                 "physical_test_active": False,
-                "scheduler_ready": self.scheduler.last_result.get("selected_slot") ==
-                                   evidence.get("scheduler_selected_slot")
-                                   and self.scheduler.last_result.get("safety_status") == "safe",
-            })
+                "execution_active": self.controller.session is not None,
+                "operating_mode": self.adapter._state("operating_mode"),
+                "charge_power_w": snapshot.get("charge_power_w"),
+                "discharge_power_w": snapshot.get("discharge_power_w"),
+                "auto_execution_handoff_selected_slot": slot,
+                "auto_execution_handoff_required": True,
+                "auto_execution_handoff_planner_identity": plan.get("planner_identity"),
+            }
             prestart = self._doems_prestart.evaluate(evidence)
             evidence.update(prestart)
             guard = self._doems_safety_guard.evaluate_automatic_handoff(evidence)
@@ -369,7 +387,6 @@ class DOEMSCombinedExecutionShadowRuntime:
                     prestart.get("auto_prestart_safe") is True
                     and guard.get("auto_safety_handoff_safe") is True
                 )
-                self._last_alpha84_evidence = dict(evidence)
                 final = self._doems_final_revalidation.evaluate_final_revalidation(evidence)
                 independent_safety = {
                     "final_revalidation": final,
