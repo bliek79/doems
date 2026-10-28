@@ -101,6 +101,7 @@ class DOEMSCombinedExecutionShadowRuntime:
             if not (
                 self._authority
                 and self.adapter.authority
+                and self._combined_bridge is not None
                 and self._exclusive_claimed
             ):
                 raise ValueError("Physical execution unavailable: verified exclusive authority handoff required")
@@ -127,7 +128,8 @@ class DOEMSCombinedExecutionShadowRuntime:
     def _combined_authorized(self) -> bool:
         return bool(self._master_enabled and self._exclusive_claimed
                     and self._authority and self.adapter.authority
-                    and self.controller is not None)
+                    and self._combined_bridge is not None
+                    and self.controller is self._combined_bridge.controller)
 
     def _combined_identity_current(self, identity: tuple) -> bool:
         return bool(self._combined_bridge is not None and self._combined_bridge._still_current(identity))
