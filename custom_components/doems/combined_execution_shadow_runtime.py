@@ -34,7 +34,7 @@ class DOEMSCombinedExecutionShadowRuntime:
         self._combined_bridge = None
         self._combined_last_result: dict[str, Any] = {"bridge": "startup", "physical_execution_enabled": False}
         self.adapter = AnkerExecutionAdapter(hass, entities or {}, authority=self._authority)
-        self.controller = ExecutionController(self.adapter, authorized=self._combined_authorized, revalidate=self._combined_identity_current)
+        self.controller = ExecutionController(self.adapter, authorized=self._combined_authorized, revalidate=self._identity_current)
         if planner is not None:
             self._combined_bridge = CombinedAnkerBridge(
                 planner, self.adapter, battery=battery,
@@ -151,8 +151,16 @@ class DOEMSCombinedExecutionShadowRuntime:
             plan.get("action"), plan.get("power_w"),
             plan.get("target_soc"), plan.get("max_runtime_h"),
         )
+        local = self.last_result.get("doems_alpha84_safety") or {}
+        checks_pass = (
+            plan.get("origin") == "manual"
+            or ((local.get("prestart") or {}).get("auto_prestart_safe") is True
+                and (local.get("safety_guard") or {}).get("auto_safety_handoff_safe") is True)
+        )
         return (
             identity == actual
+            and checks_pass
+            and not self.last_result.get("blockers")
             and self._master_enabled
             and self._authority
             and plan.get("lifecycle_status") in ("pending", "actief")
@@ -196,6 +204,10 @@ class DOEMSCombinedExecutionShadowRuntime:
             self._dirty = False
             try:
                 await self._evaluate()
+                if (self.controller.session is not None
+                        or self.controller.reconciliation_required
+                        or self._combined_authorized()):
+                    await self._execute_or_monitor()
             except Exception as exc:
                 self.last_result = {
                     "status": "blocked", "reason": "slot_observer_error",
