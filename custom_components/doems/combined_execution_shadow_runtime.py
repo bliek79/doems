@@ -13,20 +13,27 @@ from homeassistant.util import dt as dt_util
 from .combined_anker_bridge import CombinedAnkerBridge
 from .execution_controller import ExecutionController
 from .execution_anker_adapter import AnkerExecutionAdapter
+from .alpha84_prestart_validator import AnkerEmsPreStartValidator
+from .alpha84_safety_guard import AnkerEmsSafetyGuard
+from .final_revalidation import DOEMSFinalRevalidation
 
 
 class DOEMSCombinedExecutionShadowRuntime:
     def __init__(self, hass: Any, scheduler: Any, store: Any, *, entities=None, authority=False, planner=None, battery=None) -> None:
         self.hass = hass
+        self._doems_prestart = AnkerEmsPreStartValidator()
+        self._doems_safety_guard = AnkerEmsSafetyGuard()
+        self._doems_final_revalidation = DOEMSFinalRevalidation()
         self.scheduler = scheduler
         self.store = store
         self._authority = bool(authority)
         # Master permission is OFF on every startup; it never grants authority.
         self._master_enabled = False
+        self._exclusive_claimed = False
         self._combined_bridge = None
         self._combined_last_result: dict[str, Any] = {"bridge": "startup", "physical_execution_enabled": False}
         self.adapter = AnkerExecutionAdapter(hass, entities or {}, authority=self._authority)
-        self.controller = ExecutionController(self.adapter, authorized=self._combined_authorized, revalidate=self._combined_identity_current)
+        self.controller = ExecutionController(self.adapter, authorized=self._combined_authorized, revalidate=self._identity_current)
         if planner is not None:
             self._combined_bridge = CombinedAnkerBridge(
                 planner, self.adapter, battery=battery,
@@ -57,9 +64,45 @@ class DOEMSCombinedExecutionShadowRuntime:
     def master_enabled(self) -> bool:
         return self._master_enabled
 
+    def claim_exclusive_authority(self) -> bool:
+        """Explicit, non-actuating claim. Never grant from a UI master toggle."""
+        self._exclusive_claimed = False
+        self._authority = False
+        self.adapter.authority = False
+        if (self._shutdown or self._master_enabled
+                or self.controller.session is not None
+                or self.controller.reconciliation_required):
+            return False
+        if not all(self.adapter.entities.get(name) for name in
+                   ("operating_mode", "action_direction", "power_setpoint")):
+            return False
+        if self.adapter._state("operating_mode") != "self_consumption":
+            return False
+        # One existing DOEMS R8 controller owns all starts; R9's separate
+        # planner bridge is kept permanently non-actuating.
+        self._exclusive_claimed = True
+        self._authority = True
+        self.adapter.authority = True
+        return True
+
     async def async_set_master_enabled(self, enabled: bool) -> None:
         """Master gate: switching off also fences in-flight execution."""
         if enabled:
+            # The operator's existing master switch can request a verified
+            # standalone claim; it never bypasses live single-writer checks.
+            if not self._exclusive_claimed and not self.claim_exclusive_authority():
+                raise ValueError("Physical execution unavailable: exclusive DOEMS control not verified")
+            # Never present the master switch as armed while the proven
+            # legacy-to-DOEMS single-writer authority handoff is absent.
+            # Physical authority and exclusive ownership must be established
+            # and validated independently; the UI switch cannot grant them.
+            if not (
+                self._authority
+                and self.adapter.authority
+                and self._combined_bridge is not None
+                and self._exclusive_claimed
+            ):
+                raise ValueError("Physical execution unavailable: verified exclusive authority handoff required")
             if self._shutdown:
                 raise ValueError("Cannot enable a stopped execution runtime")
             if self.controller.session is not None or self.controller.reconciliation_required:
@@ -81,10 +124,78 @@ class DOEMSCombinedExecutionShadowRuntime:
         self.refresh()
 
     def _combined_authorized(self) -> bool:
-        return bool(self._master_enabled and self._combined_bridge is not None and self._combined_bridge._authorized())
+        return bool(self._master_enabled and self._exclusive_claimed
+                    and self._authority and self.adapter.authority
+                    and self._combined_bridge is not None
+                    and self.controller is self._combined_bridge.controller)
 
     def _combined_identity_current(self, identity: tuple) -> bool:
         return bool(self._combined_bridge is not None and self._combined_bridge._still_current(identity))
+
+    def _automatic_final_safe(self, identity: tuple) -> bool:
+        """Rebuild final Alpha84 evidence from current DOEMS state for every write."""
+        try:
+            decision = self.scheduler.last_result
+            slot = decision.get("selected_slot")
+            if type(slot) is not int or slot not in (1, 2, 3):
+                return False
+            plan = self.store.get_plan(slot)
+            if plan.get("origin") != "automatic_72h_planner" or self._identity(slot, plan) != identity:
+                return False
+            if (decision.get("selected_lifecycle") != "pending"
+                    or decision.get("safety_status") != "safe"
+                    or decision.get("safety_blockers")):
+                return False
+            snapshot = self.scheduler.battery.snapshot() if self.scheduler.battery else {}
+            bundle = self.scheduler.planner.bundle_snapshot()
+            settings = self.scheduler._manual_safety_limits()
+            reader = getattr(self.scheduler.bridge, "verified_published_candidate", None)
+            proof = reader(plan) if callable(reader) else None
+            if not isinstance(proof, dict):
+                return False
+            evidence = {
+                "scheduler_selected_slot": slot,
+                "scheduler_slots": {slot: dict(plan)},
+                "scheduler_ready": True,
+                "soc": snapshot.get("soc_percent"),
+                "max_charge_power_w": settings.get("max_charge_power_w"),
+                "max_discharge_power_w": settings.get("max_discharge_power_w"),
+                "forecast_ready": (
+                    self.scheduler._sources_fresh(dt_util.utcnow(), snapshot)
+                    and bundle.get("status") == "ready"
+                ),
+                "auto_plan_72h_valid": bundle.get("valid") is True,
+                "auto_plan_72h_execution_buffer_safe": (
+                    (bundle.get("automatic") or {}).get("execution_buffer_safe") is True
+                ),
+                "auto_bridge_valid": True,
+                "auto_bridge_invalid_candidate_count": 0,
+                "auto_bridge_candidates": [proof],
+                "control_path_configured": all(
+                    self.adapter.entities.get(k) and self.adapter._state(k) is not None
+                    for k in ("operating_mode", "action_direction", "power_setpoint")
+                ),
+                "physical_test_active": False,
+                "execution_active": self.controller.session is not None,
+                "operating_mode": self.adapter._state("operating_mode"),
+                "charge_power_w": snapshot.get("charge_power_w"),
+                "discharge_power_w": snapshot.get("discharge_power_w"),
+                "auto_execution_handoff_selected_slot": slot,
+                "auto_execution_handoff_required": True,
+                "auto_execution_handoff_planner_identity": plan.get("planner_identity"),
+            }
+            prestart = self._doems_prestart.evaluate(evidence)
+            evidence.update(prestart)
+            guard = self._doems_safety_guard.evaluate_automatic_handoff(evidence)
+            evidence.update(guard)
+            evidence["auto_execution_handoff_ready"] = (
+                prestart.get("auto_prestart_safe") is True
+                and guard.get("auto_safety_handoff_safe") is True
+            )
+            final = self._doems_final_revalidation.evaluate_final_revalidation(evidence)
+            return final.get("auto_final_revalidation_safe") is True
+        except (TypeError, ValueError, KeyError, AttributeError):
+            return False
 
     def _identity_current(self, identity: tuple) -> bool:
         """Verify that R7 still selects exactly the same pending slot revision."""
@@ -99,10 +210,19 @@ class DOEMSCombinedExecutionShadowRuntime:
             plan.get("action"), plan.get("power_w"),
             plan.get("target_soc"), plan.get("max_runtime_h"),
         )
+        local = self.last_result.get("doems_alpha84_safety") or {}
+        checks_pass = (
+            plan.get("origin") == "manual"
+            or ((local.get("prestart") or {}).get("auto_prestart_safe") is True
+                and (local.get("safety_guard") or {}).get("auto_safety_handoff_safe") is True)
+        )
         return (
             identity == actual
+            and checks_pass
+            and (plan.get("origin") != "automatic_72h_planner" or self._automatic_final_safe(identity))
+            and not self.last_result.get("blockers")
             and self._master_enabled
-            and self._authority
+            and self._combined_authorized()
             and plan.get("lifecycle_status") in ("pending", "actief")
             and (plan.get("lifecycle_status") == "actief" or decision.get("selected_lifecycle") == "pending")
             and (plan.get("lifecycle_status") == "actief" or decision.get("safety_status") == "safe")
@@ -139,6 +259,10 @@ class DOEMSCombinedExecutionShadowRuntime:
             self._dirty = False
             try:
                 await self._evaluate()
+                if (self.controller.session is not None
+                        or self.controller.reconciliation_required
+                        or self._combined_authorized()):
+                    await self._execute_or_monitor()
             except Exception as exc:
                 self.last_result = {
                     "status": "blocked", "reason": "slot_observer_error",
@@ -162,7 +286,6 @@ class DOEMSCombinedExecutionShadowRuntime:
                     "physical_execution_enabled": bool(self.controller.session),
                     "reconciliation_required": self.controller.reconciliation_required,
                 }
-        # R7 remains observational; only Combined may supply physical commands.
         decision = dict(self.scheduler.last_result)
         slot = decision.get("selected_slot")
         if type(slot) is not int or slot not in (1, 2, 3):
@@ -171,6 +294,13 @@ class DOEMSCombinedExecutionShadowRuntime:
                 "scheduler_status": decision.get("status"),
                 "physical_execution_enabled": bool(self.controller.session),
                 "combined_handoff": deepcopy(self._combined_last_result),
+                "original_safety_observation": {
+                    "status": "not_required_no_selected_plan",
+                    "prestart": "not_evaluated",
+                    "safety_guard": "not_evaluated",
+                    "final_revalidation": "not_evaluated",
+                    "physical_execution_enabled": False,
+                },
             }
             return
         plan = self.store.get_plan(slot)
@@ -188,12 +318,101 @@ class DOEMSCombinedExecutionShadowRuntime:
         # Shadow mode must report planning readiness independently of
         # physical authority. Never imply that the battery is being controlled.
         planning_ready = not blockers
+        # Alpha84 guard code now runs locally on DOEMS state below.
+        # No live Anker EMS coordinator is consulted for these decisions.
+        alpha84_original_controller_link = {
+            "status": "not_required_standalone_doems",
+            "physical_execution_enabled": False,
+        }
+        alpha84_handoff = None
+        original_safety_observation = {
+            "status": "superseded_by_doems_local_guards",
+            "physical_execution_enabled": False,
+        }
+        # Run the exact ported Alpha84 read-only guards against DOEMS R7
+        # state. Missing evidence is deliberately FALSE, never invented.
+        independent_safety = {"status": "blocked", "physical_execution_enabled": False}
+        self._last_alpha84_evidence = None
+        if planning_ready:
+            snapshot = self.scheduler.battery.snapshot() if self.scheduler.battery else {}
+            bundle = self.scheduler.planner.bundle_snapshot()
+            fresh = self.scheduler._sources_fresh(dt_util.utcnow(), snapshot)
+            settings = self.scheduler._manual_safety_limits()
+            proof = None
+            if plan.get("origin") == "automatic_72h_planner":
+                reader = getattr(self.scheduler.bridge, "verified_published_candidate", None)
+                proof = reader(plan) if callable(reader) else None
+            detail = dict(plan)
+            evidence = {
+                "scheduler_selected_slot": slot,
+                "scheduler_slots": {slot: detail},
+                "scheduler_ready": decision.get("selected_slot") == slot
+                                   and decision.get("safety_status") == "safe",
+                "soc": snapshot.get("soc_percent"),
+                "max_charge_power_w": settings.get("max_charge_power_w"),
+                "max_discharge_power_w": settings.get("max_discharge_power_w"),
+                "forecast_ready": fresh and bundle.get("status") == "ready",
+                "auto_plan_72h_valid": bundle.get("valid") is True,
+                "auto_plan_72h_execution_buffer_safe": (
+                    (bundle.get("automatic") or {}).get("execution_buffer_safe") is True
+                ),
+                "auto_bridge_valid": proof is not None,
+                "auto_bridge_invalid_candidate_count": (
+                    0 if proof is not None else 1
+                ),
+                "auto_bridge_candidates": [proof] if proof else [],
+                "control_path_configured": all(
+                    self.adapter.entities.get(key)
+                    and self.adapter._state(key) is not None
+                    for key in ("operating_mode", "action_direction", "power_setpoint")
+                ),
+                # This DOEMS runtime has no physical-test controller. Its only
+                # writer is the R8 ExecutionController, checked separately.
+                "physical_test_active": False,
+                "execution_active": self.controller.session is not None,
+                "operating_mode": self.adapter._state("operating_mode"),
+                "charge_power_w": snapshot.get("charge_power_w"),
+                "discharge_power_w": snapshot.get("discharge_power_w"),
+                "plan_identity_tuple": self._identity(slot, plan),
+                "auto_execution_handoff_selected_slot": slot,
+                "auto_execution_handoff_required": plan.get("origin") == "automatic_72h_planner",
+                "auto_execution_handoff_planner_identity": plan.get("planner_identity"),
+            }
+            try:
+                prestart = self._doems_prestart.evaluate(evidence)
+                evidence.update(prestart)
+                guard = self._doems_safety_guard.evaluate_automatic_handoff(evidence)
+                evidence.update(guard)
+                evidence["auto_execution_handoff_ready"] = (
+                    prestart.get("auto_prestart_safe") is True
+                    and guard.get("auto_safety_handoff_safe") is True
+                )
+                final = self._doems_final_revalidation.evaluate_final_revalidation(evidence)
+                independent_safety = {
+                    "final_revalidation": final,
+                    "status": "evaluated",
+                    "prestart": prestart,
+                    "safety_guard": guard,
+                    "physical_execution_enabled": False,
+                }
+            except (TypeError, ValueError, KeyError, AttributeError) as err:
+                independent_safety = {
+                    "status": "blocked", "reason": type(err).__name__,
+                    "physical_execution_enabled": False,
+                }
+        if planning_ready and plan.get("origin") == "automatic_72h_planner":
+            if (independent_safety.get("prestart") or {}).get("auto_prestart_safe") is not True:
+                blockers.append("doems_alpha84_prestart_blocked")
+            if (independent_safety.get("safety_guard") or {}).get("auto_safety_handoff_safe") is not True:
+                blockers.append("doems_alpha84_safety_guard_blocked")
+            if (independent_safety.get("final_revalidation") or {}).get("auto_final_revalidation_safe") is not True:
+                blockers.append("doems_alpha84_final_revalidation_blocked")
         if not self._master_enabled:
             blockers.append("master_execution_disabled")
         if not self._authority:
             blockers.append("physical_authority_disabled")
         self.last_result = {
-            "status": ("slot_ready_observe" if planning_ready else "blocked"),
+            "status": ("slot_ready_observe" if not blockers else "blocked"),
             "selected_slot": slot,
             "origin": plan.get("origin"),
             "action": plan.get("action"),
@@ -210,6 +429,10 @@ class DOEMSCombinedExecutionShadowRuntime:
             "reconciliation_required": self.controller.reconciliation_required,
             "last_stop_blockers": list(self._last_stop_blockers),
             "combined_handoff": deepcopy(self._combined_last_result),
+            "alpha84_handoff": deepcopy(alpha84_handoff),
+            "original_safety_observation": original_safety_observation,
+            "alpha84_original_controller_link": deepcopy(alpha84_original_controller_link),
+            "doems_alpha84_safety": independent_safety,
         }
 
     def _identity(self, slot, plan):

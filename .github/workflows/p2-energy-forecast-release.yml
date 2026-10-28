@@ -2,7 +2,7 @@ name: DOEMS validation and immutable release
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, p2-alpha84-execution-safety-parity]
   workflow_dispatch:
 permissions:
   contents: read
@@ -43,7 +43,7 @@ jobs:
           name: test-results-${{ matrix.python }}
           path: test-results.xml
   publish:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.event.pull_request.number == 107 && github.event.pull_request.head.repo.full_name == 'bliek79/doems' && github.head_ref == 'p2-alpha84-execution-safety-parity')
     needs: validate
     runs-on: ubuntu-latest
     permissions:
@@ -52,6 +52,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -66,6 +67,11 @@ jobs:
           set -euo pipefail
           version=$(python -c 'import json; print(json.load(open("custom_components/doems/manifest.json"))["version"])')
           tag="v$version"
+          tested_sha="$(git rev-parse HEAD)"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            test "$tested_sha" = "${{ github.event.pull_request.head.sha }}"
+            test "$version" = "0.2.0-alpha.9.10"
+          fi
           python scripts/release_contract.py --tag "$tag" --verify-archive dist/doems.zip
           (cd dist && sha256sum --check SHA256SUMS.txt)
           if git show-ref --verify --quiet "refs/tags/$tag"; then
@@ -77,11 +83,11 @@ jobs:
             exit 1
           fi
           gh release create "$tag" dist/doems.zip dist/SHA256SUMS.txt \
-            --target "$GITHUB_SHA" --prerelease \
+            --target "$tested_sha" --prerelease \
             --title "DOEMS $version" --notes-file "RELEASE_NOTES_$version.md"
           gh release view "$tag" --json tagName,isPrerelease,targetCommitish,assets
           mkdir downloaded
           gh release download "$tag" --dir downloaded --pattern doems.zip --pattern SHA256SUMS.txt
           (cd downloaded && sha256sum --check SHA256SUMS.txt)
           python scripts/release_contract.py --tag "$tag" --verify-archive downloaded/doems.zip
-          test "$(git ls-remote origin "refs/tags/$tag" | cut -f1)" = "$GITHUB_SHA"
+          test "$(git ls-remote origin "refs/tags/$tag" | cut -f1)" = "$tested_sha"

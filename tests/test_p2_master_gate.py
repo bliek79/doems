@@ -10,7 +10,8 @@ def test_master_switch_registered_and_default_off():
     switch = (ROOT / "switch.py").read_text()
     assert '"switch"' in const.split("PLATFORMS =", 1)[1].split("\n", 1)[0]
     assert "self._master_enabled = False" in runtime
-    assert "self._master_enabled and self._combined_bridge" in runtime
+    assert "self._master_enabled and self._exclusive_claimed" in runtime
+    assert "self.controller is self._combined_bridge.controller" in runtime
     assert "and self._master_enabled" in runtime
     assert "await self.runtime.async_set_master_enabled(False)" in switch
     assert "await self.runtime.async_set_master_enabled(True)" in switch
