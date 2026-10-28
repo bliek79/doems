@@ -147,6 +147,10 @@ class DOEMSCombinedExecutionShadowRuntime:
     async def async_set_master_enabled(self, enabled: bool) -> None:
         """Master gate: switching off also fences in-flight execution."""
         if enabled:
+            # The operator's existing master switch can request a verified
+            # standalone claim; it never bypasses live single-writer checks.
+            if not self._exclusive_claimed and not self.claim_exclusive_authority():
+                raise ValueError("Physical execution unavailable: exclusive DOEMS control not verified")
             # Never present the master switch as armed while the proven
             # legacy-to-DOEMS single-writer authority handoff is absent.
             # Physical authority and exclusive ownership must be established
