@@ -452,6 +452,15 @@ class DOEMSCombinedExecutionShadowRuntime:
         )
 
     @staticmethod
+    def _valid_battery_power(value: Any) -> bool:
+        try:
+            from math import isfinite
+            power = float(value)
+            return isfinite(power) and power >= 0
+        except (TypeError, ValueError, OverflowError):
+            return False
+
+    @staticmethod
     def _non_conflicting_power(value: Any) -> bool:
         """Unavailable, invalid or non-finite battery observations fail closed."""
         try:
@@ -557,6 +566,8 @@ class DOEMSCombinedExecutionShadowRuntime:
                     plan_identity_matches=same_plan,
                     safety_clear=bool(
                         same_plan and snapshot.get("status") == "ready"
+                        and self._valid_battery_power(snapshot.get("charge_power_w"))
+                        and self._valid_battery_power(snapshot.get("discharge_power_w"))
                         and (
                             (session["action"] == "laden"
                              and self._non_conflicting_power(snapshot.get("discharge_power_w")))
