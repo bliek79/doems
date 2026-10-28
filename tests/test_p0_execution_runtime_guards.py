@@ -24,12 +24,12 @@ def test_execution_stays_default_off():
     assert "self._authority = bool(authority)" in source
 
 
-def test_bridge_claim_and_disarm_are_symmetric():
+def test_only_canonical_r8_route_gets_authority():
     source = RUNTIME.read_text(encoding="utf-8")
-    assert "self._combined_bridge.authority = True" in source
-    assert "self._combined_bridge.exclusive = True" in source
-    assert "self._combined_bridge.authority = False" in source
-    assert "self._combined_bridge.exclusive = False" in source
+    assert "authority=False, exclusive=False, controller=self.controller" in source
+    assert "self._combined_bridge.authority = True" not in source
+    assert "self._combined_bridge.exclusive = True" not in source
+    assert "self.controller is not None" in source
 
 
 def test_runtime_watchdog_checks_direction_and_conflicting_flow():
