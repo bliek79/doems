@@ -44,3 +44,9 @@ def test_mode_switch_allows_unavailable_pre_mode_setpoint_but_checks_post_mode_z
     assert 'if self._state("power_setpoint") is not None:' in source
     assert 'await self._wait(self._power_zero, timeout=15)' in source
     assert 'post_mode_ready") is True' in source
+
+
+def test_passive_r9_bridge_cannot_stop_canonical_r8_session():
+    source = RUNTIME.read_text(encoding="utf-8")
+    assert 'self._combined_bridge.async_reconcile(' not in source
+    assert '"bridge": "non_actuating_r9"' in source
