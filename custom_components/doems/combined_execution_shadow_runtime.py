@@ -100,7 +100,17 @@ class DOEMSCombinedExecutionShadowRuntime:
         return self._master_enabled
 
     def _legacy_writer_quiescent(self) -> bool:
-        """Recheck original Alpha84's closed write fence on every authorization."""
+        """Do not require an Anker EMS installation to operate DOEMS.
+
+        An unloaded/disabled original integration has no live coordinator to
+        issue commands. If an original coordinator IS loaded, require Alpha84's
+        proven closed and drained physical write fence.
+        """
+        loaded = self.hass.data.get("anker_ems", {})
+        if not loaded:
+            return True
+        if not isinstance(loaded, dict) or len(loaded) != 1:
+            return False
         try:
             proof = read_legacy_authority_fence(self.hass)
             return (
