@@ -41,7 +41,8 @@ def test_local_alpha84_safety_is_read_only_and_fail_closed():
     assert "self._doems_safety_guard = AnkerEmsSafetyGuard()" in content
     assert '"status": "not_required_no_selected_plan"' in content
     assert 'independent_safety = {"status": "blocked", "physical_execution_enabled": False}' in content
-    assert '"control_path_configured": False' in content
-    assert '"physical_test_active": True' in content
+    assert '"control_path_configured": all(' in content
+    assert 'self.adapter._state(key) is not None' in content
+    assert '"physical_test_active": False' in content
     assert '"physical_execution_enabled": False' in content
     assert "authority=False, exclusive=False" in content
