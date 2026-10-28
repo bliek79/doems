@@ -50,3 +50,9 @@ def test_passive_r9_bridge_cannot_stop_canonical_r8_session():
     source = RUNTIME.read_text(encoding="utf-8")
     assert 'self._combined_bridge.async_reconcile(' not in source
     assert '"bridge": "non_actuating_r9"' in source
+
+
+def test_watchdog_requires_both_battery_power_sources():
+    source = RUNTIME.read_text(encoding="utf-8")
+    assert 'self._valid_battery_power(snapshot.get("charge_power_w"))' in source
+    assert 'self._valid_battery_power(snapshot.get("discharge_power_w"))' in source
