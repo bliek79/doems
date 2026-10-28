@@ -13,9 +13,6 @@ from homeassistant.util import dt as dt_util
 from .combined_anker_bridge import CombinedAnkerBridge
 from .execution_controller import ExecutionController
 from .execution_anker_adapter import AnkerExecutionAdapter
-from .alpha84_handoff_contract import project_combined_slot, HandoffContractError
-from .alpha84_controller_link import inspect_alpha84_controller
-from .alpha84_original_registration import OriginalAlpha84Registration, OriginalControllerUnavailable
 from .alpha84_prestart_validator import AnkerEmsPreStartValidator
 from .alpha84_safety_guard import AnkerEmsSafetyGuard
 
@@ -23,7 +20,6 @@ from .alpha84_safety_guard import AnkerEmsSafetyGuard
 class DOEMSCombinedExecutionShadowRuntime:
     def __init__(self, hass: Any, scheduler: Any, store: Any, *, entities=None, authority=False, planner=None, battery=None) -> None:
         self.hass = hass
-        self.original_alpha84 = OriginalAlpha84Registration(hass)
         self._doems_prestart = AnkerEmsPreStartValidator()
         self._doems_safety_guard = AnkerEmsSafetyGuard()
         self.scheduler = scheduler
@@ -53,38 +49,6 @@ class DOEMSCombinedExecutionShadowRuntime:
         self._shutdown = False
         self._restart_reconciled = False
         self._last_stop_blockers = []
-
-    def original_anker_planner_publication(self) -> dict[str, Any]:
-        """Provide current R6-published plans to the original coordinator.
-
-        Only a read-only provider: never arms or calls an actuator. The
-        original coordinator owns writing to its own Plan Store and revalidates.
-        """
-        bridge = getattr(self.scheduler, "bridge", None)
-        planner = getattr(self.scheduler, "planner", None)
-        if bridge is None or planner is None:
-            raise ValueError("DOEMS planner/bridge unavailable")
-        bundle = planner.bundle_snapshot()
-        generation = bundle.get("planner_published_generation")
-        if (type(generation) is not int or generation != planner._generation
-                or bridge.last_result.get("status") != "ready"):
-            raise ValueError("Current published DOEMS generation unavailable")
-        proposals = {}
-        for slot in (1, 2, 3):
-            plan = self.store.get_plan(slot)
-            if (plan.get("origin") != "automatic_72h_planner"
-                    or plan.get("action") not in ("laden", "ontladen")
-                    or plan.get("lifecycle_status") not in ("concept", "pending")):
-                continue
-            candidate = bridge.verified_published_candidate(plan)
-            if candidate is None:
-                raise ValueError(f"DOEMS slot {slot} has no current R6 proof")
-            candidate["origin"] = "automatic_72h_planner"
-            candidate["execution_mode"] = "gepland"
-            candidate["max_start_delay_min"] = plan.get("max_start_delay_min")
-            candidate["max_runtime_h"] = plan.get("max_runtime_h")
-            proposals[slot] = candidate
-        return {"generation": generation, "proposals": proposals}
 
     def async_add_listener(self, listener: Callable[[], None]) -> Callable[[], None]:
         self._listeners.append(listener)
@@ -201,11 +165,6 @@ class DOEMSCombinedExecutionShadowRuntime:
         )
 
     async def async_setup(self) -> None:
-        # Reuse only the original Anker instance; never create a second writer.
-        try:
-            self.original_alpha84.register()
-        except OriginalControllerUnavailable:
-            pass  # No physical authorization is granted on either outcome.
         self._unsubs.append(self.scheduler.async_add_listener(self.refresh))
         self._unsubs.append(self.store.add_listener(self.refresh))
         self._unsubs.append(async_track_time_interval(self.hass, self._tick, timedelta(seconds=5)))
@@ -248,22 +207,6 @@ class DOEMSCombinedExecutionShadowRuntime:
                     # A faulty UI listener must not terminate the observer drain.
                     continue
 
-    def _legacy_fence_diagnostics(self) -> dict[str, Any]:
-        """Read-only legacy evidence, never physical authorization."""
-        try:
-            from .legacy_ems_safety import read_legacy_authority_fence
-            return {
-                "status": "closed_and_quiescent",
-                **read_legacy_authority_fence(self.hass),
-            }
-        except (ValueError, LookupError) as err:
-            return {
-                "status": "unverified",
-                "reason": str(err),
-                "legacy_fence_closed": False,
-                "legacy_operations_inactive": False,
-            }
-
     async def _evaluate(self) -> None:
         if self._combined_bridge is not None:
             try:
@@ -275,14 +218,6 @@ class DOEMSCombinedExecutionShadowRuntime:
                     "physical_execution_enabled": bool(self.controller.session),
                     "reconciliation_required": self.controller.reconciliation_required,
                 }
-        # Retry read-only binding: the original integration may load after DOEMS.
-        # Never construct a controller or grant physical authority.
-        original_link = {"status": "blocked", "physical_execution_enabled": False}
-        try:
-            original_link = self.original_alpha84.register()
-        except OriginalControllerUnavailable as err:
-            original_link["reason"] = str(err)
-        # R7 remains observational; only Combined may supply physical commands.
         decision = dict(self.scheduler.last_result)
         slot = decision.get("selected_slot")
         if type(slot) is not int or slot not in (1, 2, 3):
@@ -291,8 +226,6 @@ class DOEMSCombinedExecutionShadowRuntime:
                 "scheduler_status": decision.get("status"),
                 "physical_execution_enabled": bool(self.controller.session),
                 "combined_handoff": deepcopy(self._combined_last_result),
-                "legacy_fence_evidence": self._legacy_fence_diagnostics(),
-                "original_controller_registration": original_link,
                 "original_safety_observation": {
                     "status": "not_required_no_selected_plan",
                     "prestart": "not_evaluated",
@@ -408,8 +341,6 @@ class DOEMSCombinedExecutionShadowRuntime:
             "alpha84_handoff": deepcopy(alpha84_handoff),
             "original_safety_observation": original_safety_observation,
             "alpha84_original_controller_link": deepcopy(alpha84_original_controller_link),
-            "legacy_fence_evidence": self._legacy_fence_diagnostics(),
-            "original_controller_registration": original_link,
             "doems_alpha84_safety": independent_safety,
         }
 
