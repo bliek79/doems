@@ -304,3 +304,21 @@ async def test_p2_emergency_acknowledgement_denied_while_armed():
     with pytest.raises(HomeAssistantError):
         await controller.async_reset_emergency_status(automatic_armed=True)
     assert controller.emergency_status["status"] == "emergency_stopped"
+
+
+@run_async
+async def test_active_session_does_not_reuse_pending_prestart_gate():
+    """Active plan is no longer pending but must remain monitored safely."""
+    gate = {"pending": True}
+    controller, adapter = build(revalidate=lambda _: gate["pending"])
+    now = datetime.now(timezone.utc)
+    await controller.start(identity="plan-1", action="laden", power_w=500,
+                           target_soc=80, max_runtime_h=1, now=now)
+    gate["pending"] = False
+    result = await controller.monitor(
+        now=now + timedelta(minutes=2), soc_percent=40,
+        sources_fresh=True, controller_exclusive=True,
+        command_acknowledged=True, plan_identity_matches=True, safety_clear=True)
+    assert result["decision"] == "continue"
+    assert controller.session is not None
+    assert adapter.stops == 0
