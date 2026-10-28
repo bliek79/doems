@@ -18,9 +18,9 @@ def test_emergency_platform_registered():
 def test_approved_button_name_and_central_service():
     code = source("button.py")
     ast.parse(code)
-    assert '_attr_name = "DOEMS EMS noodstop bevestigen"' in code
+    assert '_attr_name = "DOEMS Emergency Stop Acknowledge"' in code
     assert '_attr_unique_id = "doems_ems_emergency_acknowledge"' in code
-    assert '_attr_suggested_object_id = "doems_ems_emergency_acknowledge"' in code
+    assert '_attr_suggested_object_id = "doems_emergency_stop_acknowledge"' in code
     assert 'DOMAIN, "reset_emergency_status", {}, blocking=True' in code
     assert "number.set_value" not in code
     assert "select.select_option" not in code
