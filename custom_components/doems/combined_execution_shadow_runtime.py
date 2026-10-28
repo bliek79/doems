@@ -277,71 +277,17 @@ class DOEMSCombinedExecutionShadowRuntime:
         # Shadow mode must report planning readiness independently of
         # physical authority. Never imply that the battery is being controlled.
         planning_ready = not blockers
-        # Read only the already-loaded original controller and its genuine
-        # coordinator evidence. Never create a second battery writer.
-        alpha84_original_controller_link = {"status": "blocked", "physical_execution_enabled": False}
-        alpha84_handoff = None
-        original_safety_observation = {
-            "status": "waiting_scheduler_safety" if not planning_ready else "pending_original_validation",
-            "prestart": "not_evaluated",
-            "safety_guard": "not_evaluated",
-            "final_revalidation": "not_evaluated",
+        # Alpha84 guard code now runs locally on DOEMS state below.
+        # No live Anker EMS coordinator is consulted for these decisions.
+        alpha84_original_controller_link = {
+            "status": "not_required_standalone_doems",
             "physical_execution_enabled": False,
         }
-        if planning_ready:
-            snapshot = self.scheduler.battery.snapshot() if self.scheduler.battery else {}
-            try:
-                original = self.original_alpha84.verified_controller()
-                # Alpha84's own live coordinator is authoritative for every
-                # prestart/safety check. Never synthesize a positive safety flag.
-                legacy = self.original_alpha84.coordinator
-                await legacy.async_refresh()
-                live_evidence = legacy.data
-                if not isinstance(live_evidence, dict) or not live_evidence:
-                    raise HandoffContractError("Original Alpha84 live evidence missing")
-                verified_candidate = None
-                if plan.get("origin") == "automatic_72h_planner":
-                    candidate_reader = getattr(self.scheduler.bridge, "verified_published_candidate", None)
-                    if not callable(candidate_reader):
-                        raise HandoffContractError("Original R6 provenance reader unavailable")
-                    verified_candidate = candidate_reader(plan)
-                    if verified_candidate is None:
-                        raise HandoffContractError("Current published R6 candidate unavailable or stale")
-                inspected = inspect_alpha84_controller(
-                    original, decision, plan,
-                    sources_fresh=self.scheduler._sources_fresh(dt_util.utcnow(), snapshot),
-                    safety_safe=snapshot.get("status") == "ready",
-                    live_evidence=live_evidence,
-                    verified_doems_candidate=verified_candidate,
-                )
-                alpha84_handoff = inspected
-                original_safety_observation = {
-                    "status": "original_checks_observed",
-                    "prestart": (inspected.get("original_prestart") or {}).get("status", "not_reported"),
-                    "safety_guard": "observed" if isinstance(inspected.get("original_safety_guard"), dict) else "not_reported",
-                    "final_revalidation": "observed" if isinstance(inspected.get("validation"), dict) else "not_reported",
-                    "physical_execution_enabled": False,
-                }
-                alpha84_original_controller_link = {
-                    "status": "original_validator_observed",
-                    "entry_id": self.original_alpha84.entry_id,
-                    "physical_execution_enabled": False,
-                }
-            except (OriginalControllerUnavailable, HandoffContractError, TypeError, ValueError) as err:
-                blockers.append("alpha84_original_safety_unverified")
-                alpha84_original_controller_link = {
-                    "status": "blocked", "reason": str(err),
-                    "physical_execution_enabled": False,
-                }
-                alpha84_handoff = {"handoff_phase": "blocked", "reason": str(err)}
-                original_safety_observation = {
-                    "status": "blocked",
-                    "reason": str(err),
-                    "prestart": "unverified",
-                    "safety_guard": "unverified",
-                    "final_revalidation": "unverified",
-                    "physical_execution_enabled": False,
-                }
+        alpha84_handoff = None
+        original_safety_observation = {
+            "status": "superseded_by_doems_local_guards",
+            "physical_execution_enabled": False,
+        }
         # Run the exact ported Alpha84 read-only guards against DOEMS R7
         # state. Missing evidence is deliberately FALSE, never invented.
         independent_safety = {"status": "blocked", "physical_execution_enabled": False}
@@ -392,12 +338,17 @@ class DOEMSCombinedExecutionShadowRuntime:
                     "status": "blocked", "reason": type(err).__name__,
                     "physical_execution_enabled": False,
                 }
+        if planning_ready and plan.get("origin") == "automatic_72h_planner":
+            if (independent_safety.get("prestart") or {}).get("auto_prestart_safe") is not True:
+                blockers.append("doems_alpha84_prestart_blocked")
+            if (independent_safety.get("safety_guard") or {}).get("auto_safety_handoff_safe") is not True:
+                blockers.append("doems_alpha84_safety_guard_blocked")
         if not self._master_enabled:
             blockers.append("master_execution_disabled")
         if not self._authority:
             blockers.append("physical_authority_disabled")
         self.last_result = {
-            "status": ("slot_ready_observe" if planning_ready else "blocked"),
+            "status": ("slot_ready_observe" if not blockers else "blocked"),
             "selected_slot": slot,
             "origin": plan.get("origin"),
             "action": plan.get("action"),
