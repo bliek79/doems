@@ -16,12 +16,16 @@ from .execution_anker_adapter import AnkerExecutionAdapter
 from .alpha84_handoff_contract import project_combined_slot, HandoffContractError
 from .alpha84_controller_link import inspect_alpha84_controller
 from .alpha84_original_registration import OriginalAlpha84Registration, OriginalControllerUnavailable
+from .alpha84_prestart_validator import AnkerEmsPreStartValidator
+from .alpha84_safety_guard import AnkerEmsSafetyGuard
 
 
 class DOEMSCombinedExecutionShadowRuntime:
     def __init__(self, hass: Any, scheduler: Any, store: Any, *, entities=None, authority=False, planner=None, battery=None) -> None:
         self.hass = hass
         self.original_alpha84 = OriginalAlpha84Registration(hass)
+        self._doems_prestart = AnkerEmsPreStartValidator()
+        self._doems_safety_guard = AnkerEmsSafetyGuard()
         self.scheduler = scheduler
         self.store = store
         self._authority = bool(authority)
@@ -338,6 +342,56 @@ class DOEMSCombinedExecutionShadowRuntime:
                     "final_revalidation": "unverified",
                     "physical_execution_enabled": False,
                 }
+        # Run the exact ported Alpha84 read-only guards against DOEMS R7
+        # state. Missing evidence is deliberately FALSE, never invented.
+        independent_safety = {"status": "blocked", "physical_execution_enabled": False}
+        if planning_ready:
+            snapshot = self.scheduler.battery.snapshot() if self.scheduler.battery else {}
+            bundle = self.scheduler.planner.bundle_snapshot()
+            fresh = self.scheduler._sources_fresh(dt_util.utcnow(), snapshot)
+            settings = self.scheduler._manual_safety_limits()
+            proof = None
+            if plan.get("origin") == "automatic_72h_planner":
+                reader = getattr(self.scheduler.bridge, "verified_published_candidate", None)
+                proof = reader(plan) if callable(reader) else None
+            detail = dict(plan)
+            evidence = {
+                "scheduler_selected_slot": slot,
+                "scheduler_slots": {slot: detail},
+                "scheduler_ready": decision.get("selected_slot") == slot
+                                   and decision.get("safety_status") == "safe",
+                "soc": snapshot.get("soc_percent"),
+                "max_charge_power_w": settings.get("max_charge_power_w"),
+                "max_discharge_power_w": settings.get("max_discharge_power_w"),
+                "forecast_ready": fresh and bundle.get("status") == "ready",
+                "auto_plan_72h_valid": bundle.get("valid") is True,
+                "auto_plan_72h_execution_buffer_safe": (
+                    (bundle.get("automatic") or {}).get("execution_buffer_safe") is True
+                ),
+                "auto_bridge_valid": proof is not None,
+                "auto_bridge_invalid_candidate_count": (
+                    0 if proof is not None else 1
+                ),
+                "auto_bridge_candidates": [proof] if proof else [],
+                "control_path_configured": False,  # No independent writer authority yet.
+                "physical_test_active": True,  # Unknown external test state: block.
+                "execution_active": self.controller.session is not None,
+            }
+            try:
+                prestart = self._doems_prestart.evaluate(evidence)
+                evidence.update(prestart)
+                guard = self._doems_safety_guard.evaluate_automatic_handoff(evidence)
+                independent_safety = {
+                    "status": "evaluated",
+                    "prestart": prestart,
+                    "safety_guard": guard,
+                    "physical_execution_enabled": False,
+                }
+            except (TypeError, ValueError, KeyError, AttributeError) as err:
+                independent_safety = {
+                    "status": "blocked", "reason": type(err).__name__,
+                    "physical_execution_enabled": False,
+                }
         if not self._master_enabled:
             blockers.append("master_execution_disabled")
         if not self._authority:
@@ -365,6 +419,7 @@ class DOEMSCombinedExecutionShadowRuntime:
             "alpha84_original_controller_link": deepcopy(alpha84_original_controller_link),
             "legacy_fence_evidence": self._legacy_fence_diagnostics(),
             "original_controller_registration": original_link,
+            "doems_alpha84_safety": independent_safety,
         }
 
     def _identity(self, slot, plan):
