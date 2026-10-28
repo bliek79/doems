@@ -286,16 +286,14 @@ class DOEMSCombinedExecutionShadowRuntime:
                     continue
 
     async def _evaluate(self) -> None:
-        if self._combined_bridge is not None:
-            try:
-                self._combined_last_result = await self._combined_bridge.async_reconcile(dt_util.utcnow())
-            except Exception as exc:
-                self._combined_last_result = {
-                    "bridge": "blocked", "reason": "combined_handoff_error",
-                    "error_type": type(exc).__name__,
-                    "physical_execution_enabled": bool(self.controller.session),
-                    "reconciliation_required": self.controller.reconciliation_required,
-                }
+        # The separate R9 bridge is an observer, never a second writer.
+        # Its async_reconcile() may stop a shared controller when the bridge
+        # lacks authority; it must NOT be called by the canonical R8 runtime.
+        self._combined_last_result = {
+            "bridge": "non_actuating_r9",
+            "physical_execution_enabled": False,
+            "execution_performed": False,
+        }
         decision = dict(self.scheduler.last_result)
         slot = decision.get("selected_slot")
         if type(slot) is not int or slot not in (1, 2, 3):
