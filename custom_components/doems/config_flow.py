@@ -206,9 +206,6 @@ class DOEMSOptionsFlow(OptionsFlow):
         if self._pending.get(CONF_ENERGY_NEED_ENABLED, False):
             return await self.async_step_energy_need()
         return await self._continue_after_energy_need()
-        if self._pending.get(CONF_PRICES_ENABLED, False):
-            return await self.async_step_prices()
-        return self._save()
 
     async def _continue_after_energy_need(self) -> ConfigFlowResult:
         if self._pending.get(CONF_SOLAR_FOUNDATION_ENABLED, False):
@@ -231,11 +228,11 @@ class DOEMSOptionsFlow(OptionsFlow):
                 return await self._continue_after_energy_need()
         schema = {
             _required_entity(CONF_ENERGY_NEED_SOC_ENTITY, self._current(CONF_ENERGY_NEED_SOC_ENTITY)): _sensor_selector(),
-            vol.Required(CONF_ENERGY_NEED_CAPACITY_KWH, default=float(self._current(CONF_ENERGY_NEED_CAPACITY_KWH, 7.2))): _number(0.1, 100, "any", "kWh"),
-            vol.Required(CONF_ENERGY_NEED_MIN_SOC_PERCENT, default=float(self._current(CONF_ENERGY_NEED_MIN_SOC_PERCENT, 5))): _number(0, 100, "any", "%"),
-            vol.Required(CONF_ENERGY_NEED_RESERVE_PERCENT, default=float(self._current(CONF_ENERGY_NEED_RESERVE_PERCENT, 0))): _number(0, 100, "any", "%"),
-            vol.Required(CONF_ENERGY_NEED_CHARGE_EFFICIENCY, default=float(self._current(CONF_ENERGY_NEED_CHARGE_EFFICIENCY, 0.92))): _number(0.01, 1, "any"),
-            vol.Required(CONF_ENERGY_NEED_DISCHARGE_EFFICIENCY, default=float(self._current(CONF_ENERGY_NEED_DISCHARGE_EFFICIENCY, 0.92))): _number(0.01, 1, "any"),
+            (vol.Required(CONF_ENERGY_NEED_CAPACITY_KWH, default=float(self._current(CONF_ENERGY_NEED_CAPACITY_KWH))) if self._current(CONF_ENERGY_NEED_CAPACITY_KWH) is not None else vol.Required(CONF_ENERGY_NEED_CAPACITY_KWH)): _number(0.1, 100, "any", "kWh"),
+            (vol.Required(CONF_ENERGY_NEED_MIN_SOC_PERCENT, default=float(self._current(CONF_ENERGY_NEED_MIN_SOC_PERCENT))) if self._current(CONF_ENERGY_NEED_MIN_SOC_PERCENT) is not None else vol.Required(CONF_ENERGY_NEED_MIN_SOC_PERCENT)): _number(0, 100, "any", "%"),
+            (vol.Required(CONF_ENERGY_NEED_RESERVE_PERCENT, default=float(self._current(CONF_ENERGY_NEED_RESERVE_PERCENT))) if self._current(CONF_ENERGY_NEED_RESERVE_PERCENT) is not None else vol.Required(CONF_ENERGY_NEED_RESERVE_PERCENT)): _number(0, 100, "any", "%"),
+            (vol.Required(CONF_ENERGY_NEED_CHARGE_EFFICIENCY, default=float(self._current(CONF_ENERGY_NEED_CHARGE_EFFICIENCY))) if self._current(CONF_ENERGY_NEED_CHARGE_EFFICIENCY) is not None else vol.Required(CONF_ENERGY_NEED_CHARGE_EFFICIENCY)): _number(0.01, 1, "any"),
+            (vol.Required(CONF_ENERGY_NEED_DISCHARGE_EFFICIENCY, default=float(self._current(CONF_ENERGY_NEED_DISCHARGE_EFFICIENCY))) if self._current(CONF_ENERGY_NEED_DISCHARGE_EFFICIENCY) is not None else vol.Required(CONF_ENERGY_NEED_DISCHARGE_EFFICIENCY)): _number(0.01, 1, "any"),
         }
         return self.async_show_form(step_id="energy_need", data_schema=vol.Schema(schema), errors=errors)
 
@@ -247,6 +244,13 @@ class DOEMSOptionsFlow(OptionsFlow):
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
             self._pending.update(user_input)
+            if self._pending.get(CONF_ENERGY_NEED_ENABLED, False) and not (self._pending.get(CONF_ENERGY_FORECAST_ENABLED, False) and self._pending.get(CONF_SOLAR_FOUNDATION_ENABLED, False)):
+                return self.async_show_form(step_id="init", data_schema=vol.Schema({
+                    vol.Required(CONF_ENERGY_FORECAST_ENABLED, default=bool(self._current(CONF_ENERGY_FORECAST_ENABLED, False))): bool,
+                    vol.Required(CONF_SOLAR_FOUNDATION_ENABLED, default=bool(self._current(CONF_SOLAR_FOUNDATION_ENABLED, False))): bool,
+                    vol.Required(CONF_PRICES_ENABLED, default=bool(self._current(CONF_PRICES_ENABLED, False))): bool,
+                    vol.Required(CONF_ENERGY_NEED_ENABLED, default=True): bool,
+                }), errors={"base": "energy_need_requires_energy_and_solar"})
             if self._pending.get(CONF_ENERGY_FORECAST_ENABLED, False):
                 return await self.async_step_energy_forecast()
             if self._pending.get(CONF_ENERGY_NEED_ENABLED, False):
