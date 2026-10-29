@@ -79,6 +79,7 @@ from .const import (
     CONF_ENERGY_NEED_RESERVE_PERCENT, CONF_ENERGY_NEED_CHARGE_EFFICIENCY,
     CONF_ENERGY_NEED_DISCHARGE_EFFICIENCY,
 )
+from .const import CONF_ENERGY_NEED_CAPACITY_ENTITY, CONF_ENERGY_NEED_MIN_SOC_ENTITY, CONF_ENERGY_NEED_ROUNDTRIP_EFFICIENCY
 from .energy_sources import normalize_power_w
 from .solar_foundation_model import validate_solar_foundation
 
@@ -216,23 +217,35 @@ class DOEMSOptionsFlow(OptionsFlow):
 
     async def async_step_energy_need(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
+        defaults = {
+            CONF_ENERGY_NEED_SOC_ENTITY: "sensor.anker_solix_solarbank_max_ac_185_soc",
+            CONF_ENERGY_NEED_CAPACITY_ENTITY: "sensor.anker_solix_solarbank_max_ac_185_accucapaciteit",
+            CONF_ENERGY_NEED_MIN_SOC_ENTITY: "number.anker_solix_solarbank_max_ac_185_ontladingslimiet",
+        }
         if user_input is not None:
-            soc_entity = user_input.get(CONF_ENERGY_NEED_SOC_ENTITY)
-            state = self.hass.states.get(soc_entity) if soc_entity else None
-            if not soc_entity or state is None or state.attributes.get("unit_of_measurement") != "%":
-                errors[CONF_ENERGY_NEED_SOC_ENTITY] = "source_required"
-            elif soc_entity.startswith("sensor.doems_"):
-                errors[CONF_ENERGY_NEED_SOC_ENTITY] = "doems_source_not_allowed"
+            for key, domain, unit in (
+                (CONF_ENERGY_NEED_SOC_ENTITY, "sensor", "%"),
+                (CONF_ENERGY_NEED_CAPACITY_ENTITY, "sensor", "kWh"),
+                (CONF_ENERGY_NEED_MIN_SOC_ENTITY, "number", "%"),
+            ):
+                entity_id = user_input.get(key)
+                state = self.hass.states.get(entity_id) if entity_id else None
+                if not entity_id or not entity_id.startswith(domain + ".") or entity_id.startswith(domain + ".doems_") or state is None or state.attributes.get("unit_of_measurement") != unit:
+                    errors[key] = "source_required"
             if not errors:
                 self._pending.update(user_input)
+                for legacy in (
+                    CONF_ENERGY_NEED_CAPACITY_KWH, CONF_ENERGY_NEED_MIN_SOC_PERCENT,
+                    CONF_ENERGY_NEED_CHARGE_EFFICIENCY, CONF_ENERGY_NEED_DISCHARGE_EFFICIENCY,
+                ):
+                    self._pending.pop(legacy, None)
                 return await self._continue_after_energy_need()
         schema = {
-            _required_entity(CONF_ENERGY_NEED_SOC_ENTITY, self._current(CONF_ENERGY_NEED_SOC_ENTITY)): _sensor_selector(),
-            (vol.Required(CONF_ENERGY_NEED_CAPACITY_KWH, default=float(self._current(CONF_ENERGY_NEED_CAPACITY_KWH))) if self._current(CONF_ENERGY_NEED_CAPACITY_KWH) is not None else vol.Required(CONF_ENERGY_NEED_CAPACITY_KWH)): _number(0.1, 100, "any", "kWh"),
-            (vol.Required(CONF_ENERGY_NEED_MIN_SOC_PERCENT, default=float(self._current(CONF_ENERGY_NEED_MIN_SOC_PERCENT))) if self._current(CONF_ENERGY_NEED_MIN_SOC_PERCENT) is not None else vol.Required(CONF_ENERGY_NEED_MIN_SOC_PERCENT)): _number(0, 100, "any", "%"),
-            (vol.Required(CONF_ENERGY_NEED_RESERVE_PERCENT, default=float(self._current(CONF_ENERGY_NEED_RESERVE_PERCENT))) if self._current(CONF_ENERGY_NEED_RESERVE_PERCENT) is not None else vol.Required(CONF_ENERGY_NEED_RESERVE_PERCENT)): _number(0, 100, "any", "%"),
-            (vol.Required(CONF_ENERGY_NEED_CHARGE_EFFICIENCY, default=float(self._current(CONF_ENERGY_NEED_CHARGE_EFFICIENCY))) if self._current(CONF_ENERGY_NEED_CHARGE_EFFICIENCY) is not None else vol.Required(CONF_ENERGY_NEED_CHARGE_EFFICIENCY)): _number(0.01, 1, "any"),
-            (vol.Required(CONF_ENERGY_NEED_DISCHARGE_EFFICIENCY, default=float(self._current(CONF_ENERGY_NEED_DISCHARGE_EFFICIENCY))) if self._current(CONF_ENERGY_NEED_DISCHARGE_EFFICIENCY) is not None else vol.Required(CONF_ENERGY_NEED_DISCHARGE_EFFICIENCY)): _number(0.01, 1, "any"),
+            vol.Required(CONF_ENERGY_NEED_SOC_ENTITY, default=self._current(CONF_ENERGY_NEED_SOC_ENTITY, defaults[CONF_ENERGY_NEED_SOC_ENTITY])): _sensor_selector(),
+            vol.Required(CONF_ENERGY_NEED_CAPACITY_ENTITY, default=self._current(CONF_ENERGY_NEED_CAPACITY_ENTITY, defaults[CONF_ENERGY_NEED_CAPACITY_ENTITY])): _sensor_selector(),
+            vol.Required(CONF_ENERGY_NEED_MIN_SOC_ENTITY, default=self._current(CONF_ENERGY_NEED_MIN_SOC_ENTITY, defaults[CONF_ENERGY_NEED_MIN_SOC_ENTITY])): selector.EntitySelector(selector.EntitySelectorConfig(domain="number")),
+            vol.Required(CONF_ENERGY_NEED_RESERVE_PERCENT, default=float(self._current(CONF_ENERGY_NEED_RESERVE_PERCENT, 5.0))): _number(0, 100, "any", "%"),
+            vol.Required(CONF_ENERGY_NEED_ROUNDTRIP_EFFICIENCY, default=float(self._current(CONF_ENERGY_NEED_ROUNDTRIP_EFFICIENCY, 84.64))): _number(0.01, 100, "any", "%"),
         }
         return self.async_show_form(step_id="energy_need", data_schema=vol.Schema(schema), errors=errors)
 
