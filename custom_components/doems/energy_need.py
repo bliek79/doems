@@ -21,6 +21,8 @@ def calculate_energy_need(home_slots, solar_slots, *, now, soc_percent, capacity
         return failed("invalid_battery_configuration")
     now = now.astimezone(timezone.utc)
     start = now.replace(minute=(now.minute // 15) * 15, second=0, microsecond=0)
+    if start < now:
+        start += timedelta(minutes=15)
     stamps = [start + timedelta(minutes=15 * n) for n in range(288)]
     def by_time(slots):
         result = {}
@@ -37,7 +39,7 @@ def calculate_energy_need(home_slots, solar_slots, *, now, soc_percent, capacity
         return failed("missing_or_incomplete_288_quarter_forecast")
     usable = next((i for i in range(285) if all(solar[stamps[j]] > 0 and solar[stamps[j]] >= home[stamps[j]] for j in range(i,i+4))), None)
     endpoint = usable if usable is not None else 288
-    fractions = [max(0.0, min(1.0, (stamps[0]+timedelta(minutes=15)-now).total_seconds()/900))] + [1.] * 287
+    fractions = [1.] * 288
     demand = sum(max(home[stamps[i]]-solar[stamps[i]], 0) * fractions[i] for i in range(endpoint))
     available = capacity * max(soc-minimum, 0)/100
     extra_reserve = capacity * reserve/100
