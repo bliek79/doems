@@ -1,6 +1,7 @@
 """Read-only Home Assistant runtime for DOEMS 3.0 Energy Need."""
 from __future__ import annotations
 from datetime import datetime
+from math import sqrt
 from typing import Any
 
 from homeassistant.components.sensor import SensorEntity, SensorDeviceClass
@@ -18,6 +19,7 @@ from .const import (
     CONF_ENERGY_NEED_DISCHARGE_EFFICIENCY, DOMAIN, DEVICE_IDENTIFIER, NAME,
     VERSION,
 )
+from .const import CONF_ENERGY_NEED_CAPACITY_ENTITY, CONF_ENERGY_NEED_MIN_SOC_ENTITY, CONF_ENERGY_NEED_ROUNDTRIP_EFFICIENCY
 from .energy_need import calculate_energy_need
 
 
@@ -33,7 +35,7 @@ class EnergyNeedRuntime:
     async def async_setup(self) -> None:
         self.unsubs.append(self.coordinator.async_add_listener(self.refresh))
         self.unsubs.append(self.solar.async_add_listener(self.refresh))
-        self.unsubs.append(async_track_state_change_event(self.hass, [self.entry.options[CONF_ENERGY_NEED_SOC_ENTITY]], self._soc_changed))
+        self.unsubs.append(async_track_state_change_event(self.hass, [self.entry.options[key] for key in (CONF_ENERGY_NEED_SOC_ENTITY, CONF_ENERGY_NEED_CAPACITY_ENTITY, CONF_ENERGY_NEED_MIN_SOC_ENTITY)], self._soc_changed))
         self.unsubs.append(async_track_time_change(self.hass, self._quarter_tick, minute=[0, 15, 30, 45], second=2))
         self.refresh()
 
@@ -62,6 +64,13 @@ class EnergyNeedRuntime:
         opts = self.entry.options
         state = self.hass.states.get(opts.get(CONF_ENERGY_NEED_SOC_ENTITY))
         soc = state.state if state is not None else None
+        capacity_state = self.hass.states.get(opts.get(CONF_ENERGY_NEED_CAPACITY_ENTITY))
+        minimum_state = self.hass.states.get(opts.get(CONF_ENERGY_NEED_MIN_SOC_ENTITY))
+        roundtrip = opts.get(CONF_ENERGY_NEED_ROUNDTRIP_EFFICIENCY)
+        try:
+            symmetric_efficiency = sqrt(float(roundtrip) / 100)
+        except (ValueError, TypeError):
+            symmetric_efficiency = None
         now = dt_util.utcnow()
         # Both managers expose native quarter data directly, without history/recorder reads.
         home = self.coordinator.forecast(now=now)
@@ -75,11 +84,11 @@ class EnergyNeedRuntime:
             [{"start": slot.start, "energy_kwh": slot.energy_kwh} for slot in home],
             [{"start": slot.start, "energy_kwh": slot.total_kwh} for slot in solar],
             now=now, soc_percent=soc,
-            capacity_kwh=opts[CONF_ENERGY_NEED_CAPACITY_KWH],
-            min_soc_percent=opts[CONF_ENERGY_NEED_MIN_SOC_PERCENT],
+            capacity_kwh=capacity_state.state if capacity_state is not None else None,
+            min_soc_percent=minimum_state.state if minimum_state is not None else None,
             reserve_percent=opts[CONF_ENERGY_NEED_RESERVE_PERCENT],
-            charge_efficiency=opts[CONF_ENERGY_NEED_CHARGE_EFFICIENCY],
-            discharge_efficiency=opts[CONF_ENERGY_NEED_DISCHARGE_EFFICIENCY],
+            charge_efficiency=symmetric_efficiency,
+            discharge_efficiency=symmetric_efficiency,
         )
         for listener in tuple(self.listeners):
             listener()
