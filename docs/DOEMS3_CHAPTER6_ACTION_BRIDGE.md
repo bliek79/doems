@@ -68,3 +68,46 @@ functional assertions remain intact.
 
 Live installation and validation, release packaging, release checksums and the
 C.6 work-document record remain pending. No release workflow is enabled here.
+
+## Read-only old-window comparison
+
+The user requested comparison with the original DOEMS route before deciding on
+minimum duration or a new preparation contract. `scripts/analyze_action_windows.py`
+provides a reproducible synthetic comparison with old main commit
+`d0c3a133dadcb94136e0641f25644780bd395ad6` (old DOEMS alpha.9.11).
+It uses the unchanged Plan72 `_Model.simulate` kernel for fixed-command replay.
+The optimizer is not rerun to conceal new shortfalls. Exact segment replay is
+first checked against the original route (SOC difference below 0.000001 point).
+
+The old adapter groups adjacent explicit quarters of the same action/purpose,
+sums their grid energy, computes average power (10 W steps, minimum 100 W), and
+allows a maximum 12-hour window. The two-minute subtraction applies only to pure
+safety charging. It does not bridge empty quarters or impose a minimum physical
+charging duration. Its 11 existing bridge/Alpha83-84 contract tests passed in a
+separate read-only export of that commit.
+
+Synthetic results, not live measurements:
+- Constant home demand without PV: 193 explicit source segments form three
+  quarter windows. The old Bridge rejects the first as longer than 12 hours;
+  no proposals are emitted. No full-horizon comparison of an empty prefix is
+  interpreted as a valid alternative route.
+- Variable demand with PV: 55 source segments form three windows. The first
+  proposal passes, but the second fails the old target-SOC range check. The
+  resulting prefix is not a complete replacement for the source route.
+- Low demand without PV: 26 source segments form two valid old-style windows.
+  Both fit the old contract. On replay the maximum quarter-end SOC difference
+  is about 24.687 percentage points. End SOC changes from 10.000017% to
+  16.394717%; home grid import increases from 0.089236 to 0.513332 kWh.
+
+The reason is functional: a sustained charge replaces passive home discharge
+that the original segmented route expected during the remainder of those
+quarters. Equal assigned charge energy does not imply an equal SOC route.
+Preparation is modelled optimistically as normal passive operation for two
+minutes; any forced-zero transition still needs later modelling/validation.
+
+Conclusion: old window formation is a useful reference, but transplanting it
+into the Bridge does not preserve Alpha52's validated segmented projection.
+A plan-aware action-window design must be discussed before changing chapter 5.
+No minimum duration, pause, new planner policy, release or HA modification has
+been approved by this experiment. Existing GitHub build/publication permission
+remains valid within the agreed scope; this finding is not release readiness.
