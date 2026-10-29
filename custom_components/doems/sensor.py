@@ -34,6 +34,7 @@ from .energy_coordinator import DOEMSEnergyCoordinator
 from .energy_forecast import EnergyBaselineForecast, ceil_quarter
 from .prices import DOEMSPricesManager
 from .prices_sensor import build_prices_sensors
+from .planner_72h_runtime import Plan72Runtime, build_plan72_sensors
 from .solar_forecast import SolarForecastManager
 from .solar_sensor import build_solar_sensors
 
@@ -78,6 +79,9 @@ async def async_setup_entry(
     energy_need = entry_data.get("energy_need")
     if isinstance(energy_need, EnergyNeedRuntime):
         entities.extend(EnergyNeedSensor(energy_need, field) for field in FIELDS)
+    plan72 = entry_data.get("plan72")
+    if isinstance(plan72, Plan72Runtime):
+        entities.extend(build_plan72_sensors(plan72))
     solar_forecast = entry_data.get("solar_forecast")
     if isinstance(solar_forecast, SolarForecastManager):
         entities.extend(build_solar_sensors(entry, solar_forecast))

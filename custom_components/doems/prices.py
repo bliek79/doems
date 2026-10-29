@@ -531,6 +531,24 @@ class DOEMSPricesManager:
             return None
         return point
 
+    def forecast_window(
+        self, *, start: datetime, slot_count: int = FORECAST_SLOTS
+    ) -> tuple[list[PricePoint], list[datetime]]:
+        """Read an exact UTC window from the buffer without moving public states.
+
+        The public price timeline is a snapshot from the last provider refresh.
+        Consumers with their own rolling clock must select by timestamp instead
+        of matching the public list to other forecasts by list position.
+        """
+        start = utc(start)
+        if start != floor_quarter(start):
+            raise ValueError("price_window_start_not_quarter_aligned")
+        if type(slot_count) is not int or not 1 <= slot_count <= PRICE_BUFFER_SLOT_COUNT:
+            raise ValueError("invalid_price_window_slot_count")
+        return select_exact_price_window(
+            self._price_buffer_by_start, start=start, slot_count=slot_count
+        )
+
     @property
     def freshness(self) -> str:
         if self.last_update is None:

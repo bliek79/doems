@@ -9,10 +9,11 @@ from homeassistant.core import Event, EventStateChangedData, HomeAssistant, call
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
 
-from .const import CONF_ENERGY_FORECAST_ENABLED, CONF_PRICES_ENABLED, CONF_ENERGY_NEED_ENABLED, DOMAIN, PLATFORMS
+from .const import CONF_ENERGY_FORECAST_ENABLED, CONF_PRICES_ENABLED, CONF_ENERGY_NEED_ENABLED, CONF_PLAN72_ENABLED, DOMAIN, PLATFORMS
 from .energy_need_runtime import EnergyNeedRuntime
 from .energy_coordinator import DOEMSEnergyCoordinator
 from .prices_runtime import DOEMSRegisteredPricesManager
+from .planner_72h_runtime import Plan72Runtime
 from .solar_forecast import SolarForecastManager
 from .solar_foundation import SolarFoundationManager
 
@@ -61,10 +62,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
         energy_need = EnergyNeedRuntime(hass, entry, coordinator, solar_forecast)
         await energy_need.async_setup()
 
+    plan72 = None
+    if entry.options.get(CONF_PLAN72_ENABLED, False):
+        plan72 = Plan72Runtime(hass, entry, coordinator, solar_forecast, prices, energy_need)
+        await plan72.async_setup()
+
     entry.runtime_data = coordinator
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "energy_forecast_enabled": coordinator is not None,
         "energy_need": energy_need,
+        "plan72": plan72,
         "solar_foundation": foundation,
         "solar_forecast": solar_forecast,
         "prices": prices,
@@ -105,11 +112,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> bool:
+    entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    plan72 = entry_data.get("plan72")
+    if isinstance(plan72, Plan72Runtime):
+        await plan72.async_shutdown()
+
     coordinator = entry.runtime_data
     if isinstance(coordinator, DOEMSEnergyCoordinator):
         await coordinator.async_shutdown()
 
-    entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
     energy_need = entry_data.get("energy_need")
     if isinstance(energy_need, EnergyNeedRuntime):
         await energy_need.async_shutdown()

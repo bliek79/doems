@@ -80,6 +80,39 @@ class SolarForecastManager:
     def source_point_count(self) -> int:
         return len(self._source_points)
 
+    def forecast_window(
+        self, *, start: datetime, slot_count: int = SOLAR_FORECAST_SLOTS
+    ) -> tuple[list[SolarForecastPoint], list[datetime]]:
+        """Read exact quarter timestamps using the caller's fixed clock.
+
+        Conflicting duplicate timestamps are reported as missing rather than
+        silently selecting a value. Existing public forecast properties and
+        the provider refresh schedule are unaffected.
+        """
+        if start.tzinfo is None or start.utcoffset() is None:
+            raise ValueError("timezone_aware_timestamp_required")
+        start = dt_util.as_utc(start)
+        if start != next_complete_slot(start):
+            raise ValueError("solar_window_start_not_quarter_aligned")
+        if type(slot_count) is not int or not 1 <= slot_count <= SOLAR_FORECAST_SLOTS:
+            raise ValueError("invalid_solar_window_slot_count")
+        indexed: dict[datetime, SolarForecastPoint] = {}
+        duplicates: set[datetime] = set()
+        for point in self._source_points:
+            if point.start in indexed:
+                duplicates.add(point.start)
+            indexed[point.start] = point
+        selected: list[SolarForecastPoint] = []
+        missing: list[datetime] = []
+        for offset in range(slot_count):
+            timestamp = start + timedelta(minutes=offset * SOLAR_RESOLUTION_MINUTES)
+            point = indexed.get(timestamp)
+            if point is None or timestamp in duplicates:
+                missing.append(timestamp)
+            else:
+                selected.append(point)
+        return selected, missing
+
     @property
     def age_minutes(self) -> float | None:
         if self.last_successful_update is None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from math import isfinite
 from typing import Any, Literal
 from uuid import uuid4
 
@@ -80,6 +81,14 @@ from .const import (
     CONF_ENERGY_NEED_DISCHARGE_EFFICIENCY,
 )
 from .const import CONF_ENERGY_NEED_CAPACITY_ENTITY, CONF_ENERGY_NEED_MIN_SOC_ENTITY, CONF_ENERGY_NEED_ROUNDTRIP_EFFICIENCY
+from .const import (
+    CONF_PLAN72_ENABLED,
+    CONF_PLAN72_MAX_CHARGE_POWER_W,
+    CONF_PLAN72_MAX_DISCHARGE_POWER_W,
+    CONF_PLAN72_MINIMUM_TRADE_MARGIN,
+    CONF_PLAN72_TRADE_ENABLED,
+    DEFAULT_PLAN72_MINIMUM_TRADE_MARGIN,
+)
 from .energy_sources import normalize_power_w
 from .solar_foundation_model import validate_solar_foundation
 
@@ -257,13 +266,18 @@ class DOEMSOptionsFlow(OptionsFlow):
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
             self._pending.update(user_input)
+            if self._pending.get(CONF_PLAN72_ENABLED, False) and not all(
+                self._pending.get(key, False)
+                for key in (CONF_ENERGY_FORECAST_ENABLED, CONF_SOLAR_FOUNDATION_ENABLED,
+                            CONF_PRICES_ENABLED, CONF_ENERGY_NEED_ENABLED)
+            ):
+                return self.async_show_form(
+                    step_id="init", data_schema=self._component_schema(),
+                    errors={"base": "plan72_requires_sources"},
+                )
             if self._pending.get(CONF_ENERGY_NEED_ENABLED, False) and not (self._pending.get(CONF_ENERGY_FORECAST_ENABLED, False) and self._pending.get(CONF_SOLAR_FOUNDATION_ENABLED, False)):
-                return self.async_show_form(step_id="init", data_schema=vol.Schema({
-                    vol.Required(CONF_ENERGY_FORECAST_ENABLED, default=bool(self._current(CONF_ENERGY_FORECAST_ENABLED, False))): bool,
-                    vol.Required(CONF_SOLAR_FOUNDATION_ENABLED, default=bool(self._current(CONF_SOLAR_FOUNDATION_ENABLED, False))): bool,
-                    vol.Required(CONF_PRICES_ENABLED, default=bool(self._current(CONF_PRICES_ENABLED, False))): bool,
-                    vol.Required(CONF_ENERGY_NEED_ENABLED, default=True): bool,
-                }), errors={"base": "energy_need_requires_energy_and_solar"})
+                return self.async_show_form(step_id="init", data_schema=self._component_schema(),
+                                            errors={"base": "energy_need_requires_energy_and_solar"})
             if self._pending.get(CONF_ENERGY_FORECAST_ENABLED, False):
                 return await self.async_step_energy_forecast()
             if self._pending.get(CONF_ENERGY_NEED_ENABLED, False):
@@ -276,13 +290,66 @@ class DOEMSOptionsFlow(OptionsFlow):
 
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema({
+            data_schema=self._component_schema(),
+        )
+
+    def _component_schema(self) -> vol.Schema:
+        """Retain all component choices when a dependency error is shown."""
+        return vol.Schema({
                 vol.Optional(CONF_INSTANCE_NAME, default=self._current(CONF_INSTANCE_NAME, DEFAULT_INSTANCE_NAME)): str,
                 vol.Required(CONF_ENERGY_FORECAST_ENABLED, default=bool(self._current(CONF_ENERGY_FORECAST_ENABLED, False))): bool,
                 vol.Required(CONF_SOLAR_FOUNDATION_ENABLED, default=bool(self._current(CONF_SOLAR_FOUNDATION_ENABLED, False))): bool,
                 vol.Required(CONF_PRICES_ENABLED, default=bool(self._current(CONF_PRICES_ENABLED, False))): bool,
                 vol.Required(CONF_ENERGY_NEED_ENABLED, default=bool(self._current(CONF_ENERGY_NEED_ENABLED, False))): bool,
+                vol.Required(CONF_PLAN72_ENABLED, default=bool(self._current(CONF_PLAN72_ENABLED, False))): bool,
+            })
+
+    async def _continue_after_prices(self) -> ConfigFlowResult:
+        if self._pending.get(CONF_PLAN72_ENABLED, False):
+            return await self.async_step_plan72()
+        return self._save()
+
+    async def async_step_plan72(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Configure explicit planning limits without changing the battery."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            values: dict[str, float] = {}
+            for key in (CONF_PLAN72_MAX_CHARGE_POWER_W, CONF_PLAN72_MAX_DISCHARGE_POWER_W,
+                        CONF_PLAN72_MINIMUM_TRADE_MARGIN):
+                raw = user_input.get(key)
+                try:
+                    value = float(raw)
+                    maximum = 100.0 if key == CONF_PLAN72_MINIMUM_TRADE_MARGIN else 100000.0
+                    if isinstance(raw, bool) or not isfinite(value) or value < 0 or value > maximum:
+                        raise ValueError
+                    if key != CONF_PLAN72_MINIMUM_TRADE_MARGIN and value == 0:
+                        raise ValueError
+                    values[key] = value
+                except (TypeError, ValueError, OverflowError):
+                    errors[key] = "invalid_plan72_value"
+            if not isinstance(user_input.get(CONF_PLAN72_TRADE_ENABLED), bool):
+                errors[CONF_PLAN72_TRADE_ENABLED] = "invalid_plan72_value"
+            if not errors:
+                self._pending.update(values)
+                self._pending[CONF_PLAN72_TRADE_ENABLED] = user_input[CONF_PLAN72_TRADE_ENABLED]
+                return self._save()
+
+        def power_field(key: str) -> vol.Marker:
+            current = user_input.get(key) if user_input is not None else self._current(key)
+            return vol.Required(key, default=current) if current is not None else vol.Required(key)
+
+        return self.async_show_form(
+            step_id="plan72",
+            data_schema=vol.Schema({
+                power_field(CONF_PLAN72_MAX_CHARGE_POWER_W): _number(1, 100000, "any", "W"),
+                power_field(CONF_PLAN72_MAX_DISCHARGE_POWER_W): _number(1, 100000, "any", "W"),
+                vol.Required(CONF_PLAN72_MINIMUM_TRADE_MARGIN,
+                             default=self._current(CONF_PLAN72_MINIMUM_TRADE_MARGIN,
+                                                   DEFAULT_PLAN72_MINIMUM_TRADE_MARGIN)): _number(0, 100, "any", "EUR/kWh"),
+                vol.Required(CONF_PLAN72_TRADE_ENABLED,
+                             default=bool(self._current(CONF_PLAN72_TRADE_ENABLED, True))): bool,
             }),
+            errors=errors,
         )
 
     async def async_step_energy_forecast(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
@@ -529,7 +596,7 @@ class DOEMSOptionsFlow(OptionsFlow):
                 CONF_GAS_GRID_PER_DAY,
             ):
                 self._pending.pop(key, None)
-            return self._save()
+            return await self._continue_after_prices()
         return self.async_show_form(
             step_id="prices",
             data_schema=vol.Schema({
@@ -585,7 +652,7 @@ class DOEMSOptionsFlow(OptionsFlow):
                     self._pending.pop(CONF_GAS_MARKET_ENTITY, None)
                 else:
                     self._pending.pop(CONF_GAS_ENERGYZERO_CONFIG_ENTRY, None)
-                return self._save()
+                return await self._continue_after_prices()
 
         current_mode = str(
             self._current(CONF_GAS_SOURCE_MODE, GAS_SOURCE_HOME_ASSISTANT_ENTITY)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 DOMAIN = "doems"
 NAME = "DOEMS"
-VERSION = "0.3.0-alpha.4.3"
+VERSION = "0.3.0-alpha.5.1"
 
 CONF_INSTANCE_NAME = "instance_name"
 DEFAULT_INSTANCE_NAME = NAME
@@ -128,3 +128,11 @@ CONF_ENERGY_NEED_DISCHARGE_EFFICIENCY = "energy_need_discharge_efficiency"
 CONF_ENERGY_NEED_CAPACITY_ENTITY = "energy_need_capacity_entity"
 CONF_ENERGY_NEED_MIN_SOC_ENTITY = "energy_need_min_soc_entity"
 CONF_ENERGY_NEED_ROUNDTRIP_EFFICIENCY = "energy_need_roundtrip_efficiency"
+
+# Plan72 is observational; power limits must be explicitly configured.
+CONF_PLAN72_ENABLED = "plan72_enabled"
+CONF_PLAN72_MAX_CHARGE_POWER_W = "plan72_max_charge_power_w"
+CONF_PLAN72_MAX_DISCHARGE_POWER_W = "plan72_max_discharge_power_w"
+CONF_PLAN72_MINIMUM_TRADE_MARGIN = "plan72_minimum_trade_margin"
+CONF_PLAN72_TRADE_ENABLED = "plan72_trade_enabled"
+DEFAULT_PLAN72_MINIMUM_TRADE_MARGIN = 0.10

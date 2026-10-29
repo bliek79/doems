@@ -1,0 +1,109 @@
+# Optionele losse kaart. Bestaande dashboards worden niet vervangen.
+# Alleen standaard Home Assistant-kaarten; geen custom cards of JavaScript.
+# De 35 onderstaande entity-ID's ontstaan wanneer Plan72 is ingeschakeld.
+type: vertical-stack
+cards:
+  - type: markdown
+    content: >-
+      ## DOEMS Plan72 controle
+
+      Plan72 berekent 72 uur in 288 kwartieren en stuurt de batterij niet aan.
+      **Geldig** betreft de berekening. **Beperkt (limited)** kan een geldige
+      projectie met zichtbare tekorten of reserveonderschrijdingen zijn.
+      Beste handelstijden mogen onbekend zijn als geen handel is geaccepteerd.
+      Open de tijdlijn-entiteit voor kwartieren, bronherkomst en verklaringen.
+  - type: entities
+    title: Plan72 status en tijdlijn
+    show_header_toggle: false
+    entities:
+      - entity: binary_sensor.doems_ems_plan72_valid
+        name: Berekening geldig
+      - entity: sensor.doems_ems_plan72_status
+        name: Status
+      - entity: sensor.doems_ems_plan72_reason
+        name: Verklaring
+      - entity: sensor.doems_ems_plan72_replan_reason
+        name: Aanleiding herberekening
+      - entity: sensor.doems_ems_plan72_hours
+        name: Horizon
+      - entity: sensor.doems_ems_plan72_timeline
+        name: Kwartieren en tijdlijnattributen
+  - type: entities
+    title: Plan72 SOC en reservering
+    show_header_toggle: false
+    entities:
+      - entity: sensor.doems_ems_plan72_start_soc
+        name: Begin-SOC
+      - entity: sensor.doems_ems_plan72_end_soc
+        name: Eind-SOC
+      - entity: sensor.doems_ems_plan72_minimum_soc
+        name: Laagste SOC
+      - entity: sensor.doems_ems_plan72_maximum_soc
+        name: Hoogste SOC
+      - entity: sensor.doems_ems_plan72_reserve_target_soc
+        name: Reservetarget SOC
+      - entity: sensor.doems_ems_plan72_reserve
+        name: Hardwareminimum plus extra reserve
+      - entity: binary_sensor.doems_ems_plan72_reserve_satisfied
+        name: Hele route voldoet aan reserve
+      - entity: sensor.doems_ems_plan72_reserve_breaches
+        name: Kwartieren met reserveonderschrijding
+      - entity: sensor.doems_ems_plan72_remaining_charge_need
+        name: Resterende laadbehoefte diagnose
+  - type: entities
+    title: Plan72 energiestromen over de horizon
+    show_header_toggle: false
+    entities:
+      - entity: sensor.doems_ems_plan72_solar_charge
+        name: Zonnestroom naar batterij
+      - entity: sensor.doems_ems_plan72_safety_charge
+        name: Netlading voor woning en reserve
+      - entity: sensor.doems_ems_plan72_trade_charge
+        name: Netlading voor handel
+      - entity: sensor.doems_ems_plan72_manual_charge
+        name: Handmatig netladen in aangeleverde plannen
+      - entity: sensor.doems_ems_plan72_home_discharge
+        name: Batterij naar woning
+      - entity: sensor.doems_ems_plan72_grid_discharge
+        name: Batterij naar net
+      - entity: sensor.doems_ems_plan72_manual_grid_discharge
+        name: Handmatige batterij-export in aangeleverde plannen
+      - entity: sensor.doems_ems_plan72_grid_import
+        name: Resterende netafname woning
+      - entity: sensor.doems_ems_plan72_solar_export
+        name: Rechtstreekse PV-export
+      - entity: sensor.doems_ems_plan72_losses
+        name: Laad- en ontlaadverliezen
+  - type: entities
+    title: Plan72 handel en handmatige invoer
+    show_header_toggle: false
+    entities:
+      - entity: binary_sensor.doems_ems_plan72_trade_profitable
+        name: Handelsverbetering geaccepteerd
+      - entity: sensor.doems_ems_plan72_best_charge_time
+        name: Laadmoment beste geaccepteerde handelsroute
+      - entity: sensor.doems_ems_plan72_best_discharge_time
+        name: Verkoopmoment beste geaccepteerde handelsroute
+      - entity: sensor.doems_ems_plan72_best_charge_price
+        name: Importprijs beste handelsroute
+      - entity: sensor.doems_ems_plan72_best_discharge_price
+        name: Exportprijs beste handelsroute
+      - entity: sensor.doems_ems_plan72_effective_charge_cost
+        name: Laadkosten inclusief roundtrip-verlies
+      - entity: sensor.doems_ems_plan72_expected_trade_margin
+        name: Beste berekende marge per geëxporteerde kWh
+      - entity: sensor.doems_ems_plan72_trade_candidates
+        name: Theoretische handelskandidaten
+      - entity: sensor.doems_ems_plan72_trade_accepted
+        name: Geaccepteerde handelsverbeteringen
+      - entity: sensor.doems_ems_plan72_manual_plans
+        name: Aangeleverde handmatige plannen
+  - type: markdown
+    content: >-
+      **Betekenis van de waarden:** energiestromen zijn AC-kWh. De reserve
+      is batterij-inhoud bij hardwareminimum plus de extra reserve.
+      Netafname voor de woning en batterijladen worden apart getoond.
+      De handmatige HA-planslots zijn in hoofdstuk 5 nog niet aangesloten;
+      handmatige waarden zijn daarom nul bij een geldige projectie.
+      De laatste gemeten SOC wordt bij de volgende volledige kwartiergrens
+      aangenomen; de beginperiode en bronherkomst staan in de tijdlijnattributen.
