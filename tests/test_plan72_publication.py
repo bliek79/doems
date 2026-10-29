@@ -17,11 +17,11 @@ def publisher(monkeypatch):
 
 def test_only_real_404_means_absent(publisher, monkeypatch):
     def missing(request, timeout):
-        assert request.full_url.endswith("/git/ref/tags/v0.3.0-alpha.5.1")
+        assert request.full_url.endswith("/git/ref/tags/v0.3.0-alpha.5.2")
         assert request.get_header("Authorization") == "Bearer test-token"
         raise urllib.error.HTTPError(request.full_url, 404, "Not Found", {}, None)
     monkeypatch.setattr(publisher.urllib.request, "urlopen", missing)
-    publisher.require_absent("bliek79/doems", "git/ref/tags/v0.3.0-alpha.5.1", "test-token")
+    publisher.require_absent("bliek79/doems", "git/ref/tags/v0.3.0-alpha.5.2", "test-token")
 
 
 @pytest.mark.parametrize("status", [401, 403, 429, 500, 503])
@@ -30,7 +30,7 @@ def test_auth_rate_limit_and_server_failures_block_publication(publisher, monkey
         raise urllib.error.HTTPError(request.full_url, status, "Failure", {}, None)
     monkeypatch.setattr(publisher.urllib.request, "urlopen", fail)
     with pytest.raises(RuntimeError, match="publication blocked"):
-        publisher.require_absent("bliek79/doems", "releases/tags/v0.3.0-alpha.5.1", "test-token")
+        publisher.require_absent("bliek79/doems", "releases/tags/v0.3.0-alpha.5.2", "test-token")
 
 
 def test_existing_release_cannot_be_replaced(publisher, monkeypatch):
@@ -38,7 +38,7 @@ def test_existing_release_cannot_be_replaced(publisher, monkeypatch):
     response.__enter__.return_value.status = 200
     monkeypatch.setattr(publisher.urllib.request, "urlopen", lambda request, timeout: response)
     with pytest.raises(RuntimeError, match="Refusing to replace"):
-        publisher.require_absent("bliek79/doems", "releases/tags/v0.3.0-alpha.5.1", "test-token")
+        publisher.require_absent("bliek79/doems", "releases/tags/v0.3.0-alpha.5.2", "test-token")
 
 
 def test_network_failure_is_not_absence(publisher, monkeypatch):
@@ -46,4 +46,4 @@ def test_network_failure_is_not_absence(publisher, monkeypatch):
         raise urllib.error.URLError("connection failed")
     monkeypatch.setattr(publisher.urllib.request, "urlopen", fail)
     with pytest.raises(urllib.error.URLError):
-        publisher.require_absent("bliek79/doems", "releases/tags/v0.3.0-alpha.5.1", "test-token")
+        publisher.require_absent("bliek79/doems", "releases/tags/v0.3.0-alpha.5.2", "test-token")

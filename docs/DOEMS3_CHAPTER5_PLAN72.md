@@ -2,9 +2,9 @@
 
 Plan72 berekent de energiestromen en batterij-SOC voor de volgende 72 uur. Dit hoofdstuk voegt één observerende rekenmodule aan de bestaande forecastbasis en Energy Need toe. Het resultaat beschrijft een mogelijke route; fysieke uitvoering, planslotbeheer en de uitvoeringsveiligheidsketen behoren tot latere hoofdstukken.
 
-De code is bestemd voor `v0.3.0-alpha.5.1`. De basis is de functioneel gevalideerde hoofdstuk-4-release [`v0.3.0-alpha.4.3`](https://github.com/bliek79/doems/releases/tag/v0.3.0-alpha.4.3), commit [`75516b5aa99282b03b91c1f5b534c02b7b07ce82`](https://github.com/bliek79/doems/commit/75516b5aa99282b03b91c1f5b534c02b7b07ce82). De historische Alpha7.7-basis wordt niet opnieuw gestart. De bestaande elf Energy Need-entiteiten blijven behouden.
+De code is bestemd voor `v0.3.0-alpha.5.2`, de gerichte tolerantiecorrectie op Alpha 5.1. De basis is de functioneel gevalideerde hoofdstuk-4-release [`v0.3.0-alpha.4.3`](https://github.com/bliek79/doems/releases/tag/v0.3.0-alpha.4.3), commit [`75516b5aa99282b03b91c1f5b534c02b7b07ce82`](https://github.com/bliek79/doems/commit/75516b5aa99282b03b91c1f5b534c02b7b07ce82). De historische Alpha7.7-basis wordt niet opnieuw gestart. De bestaande elf Energy Need-entiteiten blijven behouden.
 
-Publicatie wordt door automatische controles bewaakt. Livevalidatie van hoofdstuk 5 in Home Assistant staat nog open. De aanwezigheid van deze documentatie bewijst geen livewerking of gepubliceerde release.
+Publicatie wordt door automatische controles bewaakt. Eerste livewaarnemingen van Alpha 5.1 leidden tot de met synthetische scenario's gereproduceerde correctie hieronder. De livehercontrole van Alpha 5.2 en de volledige functionele aftekening van hoofdstuk 5 staan nog open.
 
 ## 1 Verantwoordelijkheden
 
@@ -124,7 +124,9 @@ De pure rekenuitkomst bevat daarnaast `reserve_end_breach_count` en `deadline_re
 
 `remaining_charge_need_kwh` is een diagnoseschatting in benodigde AC-laadenergie: de grootste resterende reserveafstand aan een kwartiereinde gedeeld door het laadrendement, plus het relevante ongedekte woningdeel gedeeld door het roundtrip-rendement. Dit betreft een tekort in de batterijdekking; resterende woningvraag verschijnt als netafname en wordt niet als stroomuitval gemodelleerd. Het is geen direct laadcommando en geen garantie dat dit volume in een beschikbaar venster past. Een herstelde beginonderschrijding kan tot `limited` leiden terwijl deze resterende behoefte nul is.
 
-De numerieke correctie op de diagnostiekbranch bewaart deze ruwe AC-restwaarde ook onder de rekentolerantie. `remaining_charge_need_tolerance_kwh` is de batterijzijdige tolerantie van 0,00001 kWh gedeeld door het laadrendement; de HA-sensor toont die als attribuut `numerical_tolerance_kwh`. Status en reden gebruiken dezelfde batterijzijdige tekorttoets. Een klein positief restgetal binnen die grens wordt daardoor niet als een materieel tekort aangemerkt. De handelscontrole bewaakt bovendien de vaste route vóór de handelsstappen: de tolerantie wordt niet bij iedere geaccepteerde stap opnieuw toegevoegd. Deze ontwikkelcorrectie is nog niet onderdeel van de gepubliceerde Alpha 5.1.
+Alpha 5.2 corrigeert twee samenhangende numerieke fouten: opeenvolgende handelsstappen konden telkens opnieuw tolerantie toestaan ten opzichte van de vorige route, en status en reden vergeleken batterij- en AC-energie met dezelfde numerieke grens. De handelscontrole bewaakt nu de vaste route vóór de handelsstappen én de gezamenlijke resterende behoefte over de horizon. Een reeds aanwezige kleine restwaarde krijgt geen tweede tolerantie bovenop de oorspronkelijke grens.
+
+De batterijzijdige tolerantie blijft **0,00001 kWh (0,01 Wh)**; zij is niet vergroot. `remaining_charge_need_tolerance_kwh` is die tolerantie omgerekend naar AC-kWh door te delen door het laadrendement; de HA-sensor toont haar als attribuut `numerical_tolerance_kwh`. De ruwe AC-restwaarde blijft ook onder deze bijbehorende AC-grens zichtbaar. Status en reden gebruiken dezelfde batterijzijdige tekorttoets. Een tekort boven de toepasselijke grens blijft `limited`, ook als de weergave op twee decimalen `0.00 kWh` toont. Werkelijke reserveonderschrijdingen en handmatige beperkingen houden hun afzonderlijke betekenis.
 
 ### Handel
 
@@ -152,7 +154,7 @@ Wanneer geen handel wordt geaccepteerd, blijven beste handelstijden en -prijzen 
 
 `valid: true` betekent uitsluitend dat de berekening geldig is. Het is geen vrijgave voor uitvoering. Bij `invalid` worden numerieke voorspellingen onbekend; er worden geen fictieve nul-kWh-resultaten getoond.
 
-Er zijn **32 nieuwe sensoren en drie binaire sensoren**. Onderstaande IDs zijn de voorgestelde object-ID's en unique-ID-conventie van de implementatie; een handmatig hernoemde HA-entiteit kan lokaal een ander entity-ID hebben.
+Er zijn **32 nieuwe sensoren en drie binaire sensoren**. Onderstaande IDs zijn de voorgestelde object-ID's en unique-ID-conventie van de implementatie. Een bestaande registratie, naamconflict of handmatig hernoemde HA-entiteit kan lokaal een ander entity-ID opleveren. De 35 unique IDs blijven in Alpha 5.2 gelijk.
 
 | Entiteit-ID | Eenheid | Betekenis |
 | --- | --- | --- |
@@ -194,6 +196,10 @@ Er zijn **32 nieuwe sensoren en drie binaire sensoren**. Onderstaande IDs zijn d
 
 De attributen van `timeline` bevatten de kwartierregels, `energy_need` voor dezelfde invoer, `sources`, `trade` en `manual`. De grote attributen worden niet in Recorder-historie opgenomen. Tijdstipsensoren gebruiken echte timezone-aware datetime-waarden. De validatiekaart is een optioneel voorbeeld; bestaande dashboards worden niet gewijzigd.
 
+### Bestaande entiteitsregistraties en kaartbindingen
+
+Een oude registratie kan als `unavailable` met `restored: true` aanwezig blijven terwijl de actuele entiteit onder een ID met een nummerachtervoegsel bestaat. Controleer bij een ontbrekende kaartwaarde eerst de werkelijke IDs, states en `plan_generation` in Ontwikkelaarstools. Verbind de lokale kaart met de actieve entiteit. Achtervoegsels zoals `_2` zijn installatiespecifiek en worden daarom niet in het generieke voorbeeld opgenomen. Alpha 5.2 hernoemt of verwijdert geen registry-items automatisch.
+
 ## 7 Handmatige invoer en toekomstige aansluiting
 
 De pure functie `calculate_plan72(..., manual_plans=...)` kan handmatige plannen als constraints ontvangen. Een plan bevat een unieke `id`, `action` (`charge` of `discharge`), timezone-aware `start_time`, positief `max_runtime_h`, positief `power_w` en `target_soc`. `enabled` en `lifecycle_status`/`lifecycle` bepalen mede of een plan wordt meegenomen.
@@ -215,6 +221,8 @@ Bij nieuwe invoer wordt een oude berekening direct ongeldig. Tijdens een lopende
 ## 9 Controles en livevalidatie
 
 De repository bevat tests voor de rekenmodule, handmatige constraints, adversariële energie-/vermogensscenario's, configuratiemigratie, runtimegebeurtenissen en publicatiecontroles. De release moet aan de automatische controles voldoen. De definitieve CI-run, commit en release-identificatie horen bij de daadwerkelijke publicatie en worden niet uit alleen deze tekst afgeleid.
+
+De volledige lokale testset voor de Alpha 5.2-correctie telt **171 geslaagde tests**. De aanvullende regressies gebruiken synthetische invoer en controleren herhaald tolerantiegebruik bij handel, een reeds aanwezige kleine restwaarde, de omzetting tussen batterij- en AC-kWh, behoud van de ruwe restwaarde en optelling van kleine woningtekorten over de horizon. Private HA-bronwaarden zijn geen onderdeel van deze fixtures. De hercontrole van Alpha 5.2 in Home Assistant staat nog open.
 
 Na installatie in Home Assistant moeten afzonderlijk worden gecontroleerd:
 

@@ -4,7 +4,7 @@ DOEMS is a Home Assistant Energy Management System integration built component b
 
 ## Current stage
 
-`0.3.0-alpha.5.1` implements **DOEMS 3.0 chapter 5: Plan72**, an observational 72-hour battery-energy planner. Development continues from the functionally validated chapter-4 release `v0.3.0-alpha.4.3`, commit `75516b5aa99282b03b91c1f5b534c02b7b07ce82`. Chapter-4 Energy Need and the existing forecast interfaces remain in place. Publication is gated by automated checks; chapter-5 live validation in Home Assistant is still pending.
+`0.3.0-alpha.5.2` corrects numerical tolerance handling in **DOEMS 3.0 chapter 5: Plan72**, the observational 72-hour battery-energy planner introduced in Alpha 5.1. Development continues from the functionally validated chapter-4 release `v0.3.0-alpha.4.3`, commit `75516b5aa99282b03b91c1f5b534c02b7b07ce82`. Chapter-4 Energy Need and the existing forecast interfaces remain in place. The full local suite passes 171 tests. Publication is gated by automated checks; the Alpha 5.2 live recheck in Home Assistant is still pending.
 
 The current integration provides:
 
@@ -23,14 +23,14 @@ The current integration provides:
 
 ## Installation and upgrade
 
-1. Select the intended DOEMS release through HACS or install it manually. For chapter-5 validation, select `v0.3.0-alpha.5.1` explicitly after that pre-release is published.
+1. Select the intended DOEMS release through HACS or install it manually. For chapter-5 validation, select `v0.3.0-alpha.5.2` explicitly after that pre-release is published.
 2. Restart Home Assistant.
 3. Open **DOEMS -> Configure / Options**.
 4. Enable only the components you want to configure. Plan72 requires **Energy Forecast, Solar Foundation, Prices Forecast and Energy Need**.
 5. Existing component settings are prefilled when reconfiguring.
 6. Plan72 starts disabled. To use it, enable Plan72 and enter explicit permitted charge and discharge power limits in watts. The planner reuses the Energy Need battery sources, reserve and efficiency; it does not change the battery settings.
 
-See [chapter-5 release notes](RELEASE_NOTES_v0.3.0-alpha.5.1.md) for the validation steps. The optional [Plan72 validation card](examples/plan72_validation_card.yaml) uses standard Home Assistant cards and does not replace any existing dashboard.
+See [Alpha 5.2 release notes](RELEASE_NOTES_v0.3.0-alpha.5.2.md) for the correction and validation steps. The optional [Plan72 validation card](examples/plan72_validation_card.yaml) uses standard Home Assistant cards and does not replace any existing dashboard. Existing HA registry entries can cause local entity IDs to differ from the example, including numeric suffixes. Bind the local card to the active entities shown by Home Assistant; the integration's 35 unique IDs remain unchanged.
 
 ## Energy Forecast
 
@@ -57,6 +57,8 @@ The planner selects exact timestamps from the existing forecast and price buffer
 The current incomplete quarter is outside the forecast window. The latest measured SOC is assumed at the next complete quarter boundary, with its observation time and the unmodelled start interval exposed in timeline source metadata. Flow energies are AC kWh; stored battery energy and reserve are battery-side kWh.
 
 `Plan72 Valid` confirms a valid calculation, not execution permission. `limited` is a valid projection with a visible reserve breach, unresolved physical shortage or limited manual constraint. `Plan72 Reserve Satisfied` reports whether the entire projected route, including its initial SOC and intra-quarter minima, respects the reserve target. The passive self-consumption model still follows the hardware minimum; it does not invent a device command that holds the extra software reserve.
+
+Alpha 5.2 prevents successive accepted trades from repeatedly spending the same numerical tolerance against an already changed route. It protects the fixed pre-trade route and the aggregate remaining need. The battery-side tolerance stays **0.00001 kWh (0.01 Wh)**. Status and reason now use the same battery-energy test; `Remaining Charge Need` retains the raw AC value and exposes its matching `numerical_tolerance_kwh` attribute. A displayed `0.00 kWh` can still represent a positive value, and a shortage above the tolerance remains visible.
 
 The calculation API supports supplied manual-plan constraints and their priority. The Home Assistant runtime passes an empty manual-plan set until the chapter-7 Plan Store is connected. Chapter 5 does not fill the three execution slots, schedule actions or control the battery.
 

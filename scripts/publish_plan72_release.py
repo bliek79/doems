@@ -27,7 +27,7 @@ def publish() -> None:
     validate()
     repository = os.environ["GITHUB_REPOSITORY"]
     commit = os.environ["GITHUB_SHA"]
-    assert os.environ["GITHUB_REF"] == "refs/heads/doems3-publish-alpha-5-1"
+    assert os.environ["GITHUB_REF"] == "refs/heads/doems3-publish-alpha-5-2"
     assert subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip() == commit
     token = os.environ["GH_TOKEN"]
     tag = "v" + VERSION
@@ -44,7 +44,7 @@ def publish() -> None:
         "gh", "release", "create", tag,
         "build/doems.zip", "build/SHA256SUMS.txt", "build/RELEASE_PROVENANCE.json",
         "--target", commit, "--prerelease", "--latest=false",
-        "--title", "DOEMS 3.0 - Alpha 5.1 - Plan72",
+        "--title", "DOEMS 3.0 - Alpha 5.2 - Plan72 tolerance correction",
         "--notes-file", f"RELEASE_NOTES_v{VERSION}.md",
     ], cwd=ROOT, check=True)
 

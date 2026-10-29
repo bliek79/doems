@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.3.0-alpha.5.1"
+VERSION = "0.3.0-alpha.5.2"
 BASE_COMMIT = "75516b5aa99282b03b91c1f5b534c02b7b07ce82"
 PRESERVED_BLOBS = {
     "custom_components/doems/brand/icon.png": "fb0dd2dee9b6c7074da8bdde0f5663260677c779",
