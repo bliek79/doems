@@ -35,7 +35,10 @@ class EnergyNeedRuntime:
     async def async_setup(self) -> None:
         self.unsubs.append(self.coordinator.async_add_listener(self.refresh))
         self.unsubs.append(self.solar.async_add_listener(self.refresh))
-        self.unsubs.append(async_track_state_change_event(self.hass, [self.entry.options[key] for key in (CONF_ENERGY_NEED_SOC_ENTITY, CONF_ENERGY_NEED_CAPACITY_ENTITY, CONF_ENERGY_NEED_MIN_SOC_ENTITY)], self._soc_changed))
+        source_entities = [self.entry.options.get(key) for key in (CONF_ENERGY_NEED_SOC_ENTITY, CONF_ENERGY_NEED_CAPACITY_ENTITY, CONF_ENERGY_NEED_MIN_SOC_ENTITY)]
+        source_entities = [entity_id for entity_id in source_entities if entity_id]
+        if source_entities:
+            self.unsubs.append(async_track_state_change_event(self.hass, source_entities, self._soc_changed))
         self.unsubs.append(async_track_time_change(self.hass, self._quarter_tick, minute=[0, 15, 30, 45], second=2))
         self.refresh()
 
