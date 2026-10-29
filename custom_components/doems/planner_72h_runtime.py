@@ -557,6 +557,7 @@ class Plan72Sensor(_Plan72Entity, SensorEntity):
             attributes["meaning"] = self.field.meaning
         if self.field.key == "remaining_charge_need":
             attributes["energy_basis"] = self.runtime.snapshot.get("remaining_charge_need_basis")
+            attributes["numerical_tolerance_kwh"] = self.runtime.snapshot.get("remaining_charge_need_tolerance_kwh")
         if self.field.key == "timeline":
             snapshot = self.runtime.snapshot
             attributes.update({

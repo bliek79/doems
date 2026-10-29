@@ -61,6 +61,7 @@ def _empty(reason: str, manual: dict | None = None) -> dict:
         "execution_reserve_kwh": None, "reserve_satisfied": False,
         "reserve_breach_count": None, "reserve_end_breach_count": None,
         "deadline_reserve_satisfied": False, "remaining_charge_need_kwh": None,
+        "remaining_charge_need_tolerance_kwh": None,
         "totals": {key: None for key in _FLOWS},
         "trade": {
             "enabled": False, "profitable": False, "expected_margin": None,
@@ -374,6 +375,17 @@ def _need(row, battery):
     return row["reserve_gap_kwh"] + row["uncovered_home_kwh"] / battery.discharge_eff
 
 
+def _remaining_battery_need(trace, battery):
+    """Return the route shortfall in stored kWh, before charging losses."""
+    return (max(row["reserve_gap_kwh"] for row in trace)
+            + sum(row["uncovered_home_kwh"] for row in trace) / battery.discharge_eff)
+
+
+def _protected_ceiling(previous, reference):
+    """Spend one tolerance budget, including any pre-existing small residue."""
+    return min(previous + _TOL, max(reference, _TOL))
+
+
 def _safety_schedule(model):
     schedule = {}
     trace, _ = model.simulate(schedule)
@@ -484,25 +496,37 @@ def _trade_schedule(model, safety, baseline, minimum_margin, enabled):
     search.sort(key=lambda item: (-item[0], item[2], -1 if item[1] is None else item[1]))
     diagnostic["search_limited"] = len(candidates) > len(search)
     current = baseline
-    _, current_manual = model.simulate(safety)
+    _, baseline_manual = model.simulate(safety)
+    current_manual = baseline_manual
+    baseline_need = _remaining_battery_need(baseline, model.b)
+    current_need = baseline_need
+    # An accepted purchase intentionally imports the home's demand during its
+    # charge segment.  Freeze that allowance once; subsequent trades must not
+    # spend another tolerance against the already changed route.
+    home_import_reference = [row["grid_import_for_home_kwh"] for row in baseline]
     manual_actions = {plan.id: plan.action for plan in model.manual}
 
     def protected(trial, before, buy, manual_trial):
-        route_safe = all(
-            row["uncovered_home_kwh"] <= old["uncovered_home_kwh"] + _TOL
-            and row["reserve_gap_kwh"] <= old["reserve_gap_kwh"] + _TOL
-            and row["reserve_min_gap_kwh"] <= old["reserve_min_gap_kwh"] + _TOL
+        # The original protected route owns one numerical tolerance budget.
+        # Comparing only with the last accepted trade lets that budget accrue
+        # once per trade.  Also protect the aggregate household shortfall so
+        # tiny gaps in different quarters cannot accumulate into a new need.
+        aggregate_safe = _remaining_battery_need(trial, model.b) <= _protected_ceiling(current_need, baseline_need)
+        route_safe = aggregate_safe and all(
+            row["uncovered_home_kwh"] <= _protected_ceiling(old["uncovered_home_kwh"], baseline[i]["uncovered_home_kwh"])
+            and row["reserve_gap_kwh"] <= _protected_ceiling(old["reserve_gap_kwh"], baseline[i]["reserve_gap_kwh"])
+            and row["reserve_min_gap_kwh"] <= _protected_ceiling(old["reserve_min_gap_kwh"], baseline[i]["reserve_min_gap_kwh"])
             # Conservatively retain every PV-storage opportunity already in
             # the protected route.  A trade purchase cannot displace free PV;
             # necessary safety charges and manual instructions are unaffected.
             and row["charge_from_solar_kwh"] >= max(old["charge_from_solar_kwh"], baseline[i]["charge_from_solar_kwh"]) - _TOL
-            and (i == buy or row["grid_import_for_home_kwh"] <= old["grid_import_for_home_kwh"] + _TOL)
+            and (i == buy or row["grid_import_for_home_kwh"] <= _protected_ceiling(old["grid_import_for_home_kwh"], home_import_reference[i]))
             for i, (row, old) in enumerate(zip(trial, before))
         )
         manual_safe = all(
             (not old["target_reached"] or manual_trial[identifier]["target_reached"])
-            and (manual_trial[identifier]["remaining_target_kwh"] or 0.0) <= (old["remaining_target_kwh"] or 0.0) + _TOL
-            and (manual_actions[identifier] != "discharge" or manual_trial[identifier]["battery_energy_kwh"] >= old["battery_energy_kwh"] - _TOL)
+            and (manual_trial[identifier]["remaining_target_kwh"] or 0.0) <= _protected_ceiling(old["remaining_target_kwh"] or 0.0, baseline_manual[identifier]["remaining_target_kwh"] or 0.0)
+            and (manual_actions[identifier] != "discharge" or manual_trial[identifier]["battery_energy_kwh"] >= max(old["battery_energy_kwh"], baseline_manual[identifier]["battery_energy_kwh"]) - _TOL)
             for identifier, old in current_manual.items()
         )
         return route_safe and manual_safe
@@ -548,6 +572,9 @@ def _trade_schedule(model, safety, baseline, minimum_margin, enabled):
             continue
         charges, discharges, current = candidate_charges, candidate_discharges, trial
         current_manual = trial_manual
+        current_need = _remaining_battery_need(current, model.b)
+        if buy is not None:
+            home_import_reference[buy] = current[buy]["grid_import_for_home_kwh"]
         actual_margin = saving / exported
         if diagnostic["expected_margin"] is None or actual_margin > diagnostic["expected_margin"] + _EPS:
             diagnostic.update(expected_margin=actual_margin,
@@ -614,13 +641,15 @@ def calculate_plan72(home_slots, solar_slots, price_slots, *, now, soc_percent,
     totals = {key: sum(row[key] for row in timeline) for key in _FLOWS}
     reserve_end_breaches = sum(row["reserve_gap_kwh"] > _TOL for row in timeline)
     reserve_breaches = sum(row["reserve_min_gap_kwh"] > _TOL for row in timeline)
-    unserved = sum(row["uncovered_home_kwh"] for row in timeline)
-    remaining = max(row["reserve_gap_kwh"] for row in timeline) / eta_in + unserved / (eta_in * eta_out)
-    if remaining <= _TOL:
-        remaining = 0.0
+    remaining_battery = _remaining_battery_need(timeline, battery)
+    physical_shortfall = remaining_battery > _TOL
+    # Preserve the raw AC requirement, even below tolerance.  Status and reason
+    # both use the same stored-energy tolerance as the safety scheduler; apply
+    # charging efficiency once when publishing the AC energy and its tolerance.
+    remaining = remaining_battery / eta_in
     manual_limited = any(item.get("limited") for item in manual_diagnostic["plans"])
-    limited = reserve_breaches > 0 or unserved > _TOL or manual_limited
-    reason = ("remaining_physical_shortfall" if remaining > _TOL else
+    limited = reserve_breaches > 0 or physical_shortfall or manual_limited
+    reason = ("remaining_physical_shortfall" if physical_shortfall else
               "manual_plan_limited" if manual_limited else
               "reserve_breach_in_projection" if reserve_breaches else "sequential_plan_ready")
     return {
@@ -641,6 +670,7 @@ def calculate_plan72(home_slots, solar_slots, price_slots, *, now, soc_percent,
         "deadline_reserve_satisfied": reserve_end_breaches == 0,
         "reserve_breach_basis": "minimum_within_each_quarter_including_measured_start_soc",
         "remaining_charge_need_kwh": remaining,
+        "remaining_charge_need_tolerance_kwh": _TOL / eta_in,
         "remaining_charge_need_basis": "maximum_reserve_gap_plus_uncovered_household_ac_energy",
         "totals": totals, "trade": trade, "manual": manual_diagnostic,
         "projection_count": model.calls,

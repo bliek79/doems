@@ -124,6 +124,8 @@ De pure rekenuitkomst bevat daarnaast `reserve_end_breach_count` en `deadline_re
 
 `remaining_charge_need_kwh` is een diagnoseschatting in benodigde AC-laadenergie: de grootste resterende reserveafstand aan een kwartiereinde gedeeld door het laadrendement, plus het relevante ongedekte woningdeel gedeeld door het roundtrip-rendement. Dit betreft een tekort in de batterijdekking; resterende woningvraag verschijnt als netafname en wordt niet als stroomuitval gemodelleerd. Het is geen direct laadcommando en geen garantie dat dit volume in een beschikbaar venster past. Een herstelde beginonderschrijding kan tot `limited` leiden terwijl deze resterende behoefte nul is.
 
+De numerieke correctie op de diagnostiekbranch bewaart deze ruwe AC-restwaarde ook onder de rekentolerantie. `remaining_charge_need_tolerance_kwh` is de batterijzijdige tolerantie van 0,00001 kWh gedeeld door het laadrendement; de HA-sensor toont die als attribuut `numerical_tolerance_kwh`. Status en reden gebruiken dezelfde batterijzijdige tekorttoets. Een klein positief restgetal binnen die grens wordt daardoor niet als een materieel tekort aangemerkt. De handelscontrole bewaakt bovendien de vaste route vóór de handelsstappen: de tolerantie wordt niet bij iedere geaccepteerde stap opnieuw toegevoegd. Deze ontwikkelcorrectie is nog niet onderdeel van de gepubliceerde Alpha 5.1.
+
 ### Handel
 
 Handel is een tweede rekenstap na de huishoudelijke route. De planner vergelijkt een kandidaat met de volledige voorafgaande route. De werkelijke verandering van importkosten en exportopbrengsten, inclusief omzettingsverliezen en verdrongen stromen, bepaalt de gerealiseerde modelmarge per extra geëxporteerde AC-kWh.

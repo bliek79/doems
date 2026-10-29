@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - doems3-plan72-alpha43
+      - doems3-plan72-diagnostics
       - doems3-publish-alpha-5-1
 
 permissions:
