@@ -12,10 +12,10 @@ def run(home, solar, **changes):
     params.update(changes)
     return calculate_energy_need(home, solar, **params)
 
-def test_sun_after_one_hour():
-    result = run(slots(0.2), slots(lambda i: 0 if i < 4 else 0.3))
-    assert result["valid"] and result["to_solar_kwh"] == 0.8
-    assert result["horizon_hours"] == 1.0
+def test_sun_after_two_hours():
+    result = run(slots(0.2), slots(lambda i: 0 if i < 8 else 0.3))
+    assert result["valid"] and result["to_solar_kwh"] == 1.6
+    assert result["horizon_hours"] == 2.0
 
 def test_no_sun_uses_full_horizon():
     result = run(slots(0.1), slots(0))
