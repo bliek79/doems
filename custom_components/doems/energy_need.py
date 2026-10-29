@@ -37,7 +37,7 @@ def calculate_energy_need(home_slots, solar_slots, *, now, soc_percent, capacity
     home, solar = by_time(home_slots), by_time(solar_slots)
     if any(t not in home or t not in solar or home[t] is None or solar[t] is None for t in stamps):
         return failed("missing_or_incomplete_288_quarter_forecast")
-    usable = next((i for i in range(285) if all(solar[stamps[j]] > 0 and solar[stamps[j]] >= home[stamps[j]] for j in range(i,i+4))), None)
+    usable = next((i for i in range(281) if all(solar[stamps[j]] > 0 and solar[stamps[j]] >= home[stamps[j]] for j in range(i,i+8))), None)
     endpoint = usable if usable is not None else 288
     fractions = [1.] * 288
     demand = sum(max(home[stamps[i]]-solar[stamps[i]], 0) * fractions[i] for i in range(endpoint))
