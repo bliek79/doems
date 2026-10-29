@@ -115,3 +115,12 @@ FOUNDATION_PHASE = "solar_p3_0_foundation"
 CANONICAL_HOME_POWER_ENTITY = "sensor.doems_source_home_power"
 
 PUBLIC_OBJECT_ID_PREFIX = "doems_"
+
+# DOEMS 3.0 Energy Need (read-only; disabled unless explicitly configured).
+CONF_ENERGY_NEED_ENABLED = "energy_need_enabled"
+CONF_ENERGY_NEED_SOC_ENTITY = "energy_need_soc_entity"
+CONF_ENERGY_NEED_CAPACITY_KWH = "energy_need_capacity_kwh"
+CONF_ENERGY_NEED_MIN_SOC_PERCENT = "energy_need_min_soc_percent"
+CONF_ENERGY_NEED_RESERVE_PERCENT = "energy_need_reserve_percent"
+CONF_ENERGY_NEED_CHARGE_EFFICIENCY = "energy_need_charge_efficiency"
+CONF_ENERGY_NEED_DISCHARGE_EFFICIENCY = "energy_need_discharge_efficiency"
