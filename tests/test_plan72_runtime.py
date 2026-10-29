@@ -229,6 +229,8 @@ def test_real_engine_uses_current_price_window_and_consistent_energy_need(enviro
         result = runtime.snapshot
         assert result["valid"] is True
         assert result["slot_count"] == 288
+        assert result["action_window_contract"] == "quarter_windows_v1"
+        assert result["battery_parameters"]["max_charge_power_w"] == 3200.0
         assert result["timeline"][0]["start"] == "2026-10-29T10:30:00+00:00"
         assert result["timeline"][0]["import_all_in"] == pytest.approx(0.2001)
         assert result["timeline"][-1]["import_all_in"] == pytest.approx(0.2288)
@@ -440,6 +442,7 @@ def test_entity_ids_units_timestamps_and_invalid_values(environment):
     binaries = environment.runtime.build_plan72_binary_sensors(runtime)
     identifiers = [entity._attr_unique_id for entity in [*sensors, *binaries]]
     assert len(identifiers) == len(set(identifiers)) == 35
+    assert "action_windows" in sensors[0]._unrecorded_attributes
     assert all(value.startswith("doems_ems_plan72_") for value in identifiers)
     indexed = {sensor.field.key: sensor for sensor in sensors}
     runtime.snapshot = {"valid": True, "execution_reserve_kwh": 0.72,

@@ -9,9 +9,11 @@ passive behaviour.  This module has no Home Assistant or device dependencies.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from math import isfinite
+from hashlib import sha256
+import json
 from typing import Any, Iterable
 
 QUARTERS = 288
@@ -54,6 +56,7 @@ def _empty(reason: str, manual: dict | None = None) -> dict:
     return {
         "status": "invalid", "valid": False, "reason": reason,
         "observational_only": True, "execution_enabled": False,
+        "action_windows": [], "action_window_count": 0,
         "timeline": [], "slot_count": 0, "horizon_hours": None,
         "start": None, "end": None, "start_soc": None, "end_soc": None,
         "min_soc": None, "max_soc": None, "hardware_min_soc": None,
@@ -97,6 +100,21 @@ class _Manual:
     end: datetime
     power_kw: float
     target: float
+
+
+@dataclass(frozen=True)
+class _Window:
+    id: str
+    action: str
+    origin: str
+    start: datetime
+    end: datetime
+    power_kw: float
+    target: float
+
+    @property
+    def power_start(self):
+        return self.start + timedelta(minutes=2)
 
 
 def _source(rows: Iterable[dict], stamps: list[datetime], kind: str) -> list:
@@ -193,7 +211,7 @@ class _Model:
         self.by_slot = [[p for p in manual if p.start < t + timedelta(minutes=15) and p.end > t] for t in stamps]
         self.calls = 0
 
-    def simulate(self, safety, trade_charge=None, trade_discharge=None, *, detail=False):
+    def simulate(self, safety, trade_charge=None, trade_discharge=None, *, detail=False, windows=()):
         """Replay the entire causal route; no value is borrowed from the future."""
         self.calls += 1
         trade_charge = trade_charge or {}
@@ -202,6 +220,7 @@ class _Model:
         stored = b.initial
         result = []
         finished = set()
+        window_finished = set()
         manual_result = {p.id: {"duration_hours": 0.0, "battery_energy_kwh": 0.0,
                                "target_reached": False, "remaining_target_kwh": None,
                                "limited": False, "reasons": []} for p in self.manual}
@@ -220,7 +239,7 @@ class _Model:
             actions, origins = [], []
             manual_ids = []
 
-            def piece(begin, duration, mode="self_consumption", origin="passive", power=None, target=None, manual_id=None):
+            def piece(begin, duration, mode="self_consumption", origin="passive", power=None, target=None, manual_id=None, window_id=None):
                 nonlocal stored, smallest, largest, uncovered, limited
                 if duration <= _EPS:
                     return
@@ -274,6 +293,11 @@ class _Model:
                         reason = "reserve_limited"
                     if rate <= _EPS and available > _EPS and reason is None:
                         reason = "discharge_unavailable"
+                elif mode == "preparation":
+                    # Conservative fixed-zero-power handoff: PV supplies the
+                    # home first, surplus exports, home deficit imports.
+                    values["grid_import_for_home_kwh"] = deficit * duration
+                    values["solar_export_kwh"] = surplus * duration
                 else:
                     values["charge_from_solar_kwh"] = min(surplus * duration, b.charge_kw * duration, max(0.0, b.capacity - stored) / b.charge_eff)
                     input_energy = values["charge_from_solar_kwh"]
@@ -303,10 +327,12 @@ class _Model:
                     if detail:
                         segments.append({"start": begin.isoformat(), "end": (begin + timedelta(hours=actual_duration)).isoformat(),
                                          "duration_hours": actual_duration, "action": action, "origin": origin,
-                                         "manual_id": manual_id, "battery_power_w": (input_energy - output_energy) / actual_duration * 1000,
+                                         "manual_id": manual_id, "window_id": window_id, "battery_power_w": (input_energy - output_energy) / actual_duration * 1000,
                                          "stored_start_kwh": before, "stored_end_kwh": stored,
                                          "target_soc": target / b.capacity * 100 if target is not None else None,
                                          "limited": bool(reason), "reason": reason, **values})
+                if window_id is not None and (reached or actual_duration < duration - _EPS):
+                    window_finished.add(window_id)
                 if manual_id is not None:
                     progress = manual_result[manual_id]
                     progress["duration_hours"] += actual_duration
@@ -333,6 +359,22 @@ class _Model:
                         piece(begin, duration)
                     else:
                         piece(begin, duration, current.action, "manual", current.power_kw, current.target, current.id)
+            elif windows:
+                current_windows = [w for w in windows if w.start < finish and w.end > stamp]
+                boundaries = sorted({stamp, finish,
+                    *(max(stamp, w.start) for w in current_windows),
+                    *(min(finish, w.end) for w in current_windows),
+                    *(w.power_start for w in current_windows if stamp < w.power_start < finish)})
+                for begin, end in zip(boundaries, boundaries[1:]):
+                    current = next((w for w in current_windows if w.start <= begin < w.end), None)
+                    duration = (end-begin).total_seconds()/3600
+                    if current is None or current.id in window_finished:
+                        piece(begin, duration)
+                    elif begin < current.power_start:
+                        piece(begin, duration, "preparation", current.origin, window_id=current.id)
+                    else:
+                        piece(begin, duration, current.action, current.origin,
+                              current.power_kw, current.target, window_id=current.id)
             else:
                 duration = safety.get(index, 0.0)
                 origin = "safety"
@@ -591,11 +633,373 @@ def _trade_schedule(model, safety, baseline, minimum_margin, enabled):
     return charges, discharges, diagnostic
 
 
+def _window_free(model, window, others):
+    return (window.end-window.start <= timedelta(hours=12)
+            and window.start >= model.stamps[0]
+            and window.end <= model.stamps[-1]+timedelta(minutes=15)
+            and not any(p.start < window.end and p.end > window.start for p in model.manual)
+            and not any(w.start < window.end and w.end > window.start for w in others))
+
+
+def _safety_windows(model):
+    """Resolve chronological needs using complete quarter-aligned commands.
+
+    Extend an existing charge first, then open a price-ranked earlier window.
+    Power is searched in hardware-bounded 10 W steps, not in pulse seconds.
+    Every accepted edit is replayed through the SAME causal simulator.
+    """
+    windows = []
+    trace, _ = model.simulate({})
+    blocked = set()
+    diagnostics = {"search_limited": False, "replay_budget": 4096,
+                   "minimum_window_minutes": 15, "maximum_window_hours": 12,
+                   "preparation_minutes": 2, "minimum_power_w": 100,
+                   "power_step_w": 10, "method": "bounded_chronological_window_replay"}
+    max_step = int(model.b.charge_kw*1000//10)
+    if max_step < 10:
+        diagnostics["reason"] = "no_representable_charge_power"
+        return windows, trace, diagnostics
+    for _ in range(QUARTERS*3):
+        if model.calls >= diagnostics["replay_budget"]:
+            diagnostics["search_limited"] = True
+            break
+        deadline = next((i for i,r in enumerate(trace) if i not in blocked and _need(r,model.b)>_TOL),None)
+        if deadline is None:
+            break
+        finish = model.stamps[deadline]+timedelta(minutes=15)
+        edits = []
+        # Reuse/extend the most recent existing safety window when possible.
+        for old in reversed(windows):
+            if old.origin != "safety" or old.start > model.stamps[deadline]:
+                continue
+            others = [w for w in windows if w.id != old.id]
+            # Increase an existing cheap charge before extending its time
+            # into later prices: more useful stored energy, fewer switches.
+            stronger = replace(old,power_kw=max_step/100)
+            if _window_free(model,stronger,others):
+                edits.append((stronger,others))
+            candidate = replace(old, end=max(finish,old.end),power_kw=max_step/100)
+            if candidate.end != old.end and _window_free(model,candidate,others):
+                edits.append((candidate,others))
+            if len(edits)>=4:
+                break
+        # No fixed daily action-count limit. Search a bounded set of the
+        # cheapest unoccupied full quarters that precede this actual deadline.
+        cheap = sorted(range(deadline+1),key=lambda i:(model.prices[i][0],-i))
+        # The cheapest earlier quarters may be unusable due to capacity.
+        # Always reserve candidate coverage for the latest deadline quarters.
+        available = list(dict.fromkeys(cheap[:32]+list(range(deadline,max(-1,deadline-16),-1))))
+        added = 0
+        for i in available:
+            candidate = _Window("safety_"+model.stamps[i].isoformat(),"charge","safety",
+                                model.stamps[i],model.stamps[i]+timedelta(minutes=15),
+                                max_step/100,model.b.capacity)
+            if not _window_free(model,candidate,windows):
+                continue
+            edits.append((candidate,list(windows)))
+            added+=1
+            if added>=48:
+                break
+        improved = False
+        for candidate,others in edits:
+            if model.calls+12 >= diagnostics["replay_budget"]:
+                diagnostics["search_limited"] = True
+                break
+            begin_index = int((candidate.start-model.stamps[0]).total_seconds()/900)
+            stored_before = trace[begin_index]["stored_start_kwh"]
+            available_hours = (candidate.end-candidate.power_start).total_seconds()/3600
+            # A practical charge occupies the whole power phase. Prevent
+            # capacity clipping/early target stop from turning the power
+            # search non-monotonic or recreating a short charge pulse.
+            local_max_step = min(max_step,int(max(0.,model.b.capacity-stored_before)
+                / model.b.charge_eff / available_hours * 100 + _EPS))
+            if local_max_step < 10:
+                continue
+            candidate = replace(candidate,power_kw=local_max_step/100)
+            trial,_ = model.simulate({},windows=others+[candidate])
+            before_need = _need(trace[deadline],model.b)
+            if before_need-_need(trial[deadline],model.b)<=_TOL:
+                continue
+            if any(_need(trial[i],model.b)>_need(trace[i],model.b)+_TOL for i in range(deadline)):
+                continue
+            if _need(trial[deadline],model.b)<=_TOL:
+                low,high=10,local_max_step
+                # Integer search prevents accumulated rounding outside limits.
+                while low<high:
+                    middle=(low+high)//2
+                    probe,_=model.simulate({},windows=others+[replace(candidate,power_kw=middle/100)])
+                    if (_need(probe[deadline],model.b)<=_TOL/4
+                            and not any(_need(probe[i],model.b)>_need(trace[i],model.b)+_TOL for i in range(deadline))):
+                        high=middle
+                    else:
+                        low=middle+1
+                candidate=replace(candidate,power_kw=high/100)
+                trial,_=model.simulate({},windows=others+[candidate])
+            windows=sorted(others+[candidate],key=lambda w:w.start)
+            trace=trial
+            improved=True
+            break
+        if not improved:
+            blocked.add(deadline)
+        if diagnostics["search_limited"]:
+            break
+    windows,trace = _compact_windows(model,windows,trace)
+    diagnostics["replays_used"] = model.calls
+    diagnostics["unresolved_deadlines"] = len(blocked)
+    return windows,trace,diagnostics
+
+
+def _trade_windows(model, windows, baseline, minimum_margin, enabled):
+    """Secondary route-cost improvement using the same practical windows.
+
+    A fixed reference owns the single Alpha52 numerical tolerance budget.
+    No forecast, home-import hold assumption, or second SOC engine is added.
+    """
+    diagnostic = {"enabled":enabled,"profitable":False,"expected_margin":None,
+        "effective_charge_cost":None,"best_charge_time":None,"best_discharge_time":None,
+        "best_charge_price":None,"best_discharge_price":None,"candidate_count":0,
+        "accepted_count":0,"reason":"disabled" if not enabled else "no_safe_profitable_trade",
+        "search_method":"bounded_practical_window_route_comparison","globally_optimal":False,
+        "evaluated_count":0,"search_limited":False,
+        "margin_basis":"best_accepted_incremental_cash_saving_per_exported_ac_kwh",
+        "total_horizon_cost_saving":0.,"total_traded_export_kwh":0.,"aggregate_expected_margin":None}
+    max_out=int(model.b.discharge_kw*1000//10)
+    max_in=int(model.b.charge_kw*1000//10)
+    if not enabled or max_out<10:
+        return windows,diagnostic
+    current=baseline
+    _,reference_manual=model.simulate({},windows=windows)
+    current_manual=reference_manual
+    reference_need=_remaining_battery_need(baseline,model.b)
+    import_reference=[r["grid_import_for_home_kwh"] for r in baseline]
+    manual_actions={p.id:p.action for p in model.manual}
+    def make(i,action,step):
+        return _Window("trade_"+action+"_"+model.stamps[i].isoformat(),action,"trade",
+            model.stamps[i],model.stamps[i]+timedelta(minutes=15),step/100,
+            model.b.capacity if action=="charge" else model.b.reserve)
+    available=[i for i in range(QUARTERS) if _window_free(model,make(i,"discharge",max_out),windows)]
+    rt=model.b.charge_eff*model.b.discharge_eff
+    candidates=[]
+    for sell in available:
+        price=model.prices[sell][1]
+        if price<0:
+            continue
+        if price>=minimum_margin and baseline[sell]["stored_start_kwh"]>model.b.reserve+_TOL:
+            candidates.append((price,None,sell))
+        if max_in>=10:
+            for buy in available:
+                if buy>=sell:
+                    break
+                margin=price-model.prices[buy][0]/rt
+                if margin>=minimum_margin:
+                    candidates.append((margin,buy,sell))
+    candidates.sort(key=lambda x:(-x[0],x[2],-1 if x[1] is None else x[1]))
+    diagnostic["candidate_count"]=len(candidates)
+    direct=[x for x in candidates if x[1] is None]
+    pairs=[x for x in candidates if x[1] is not None]
+    search=sorted(direct[:24]+pairs[:24],key=lambda x:(-x[0],x[2]))
+    diagnostic["search_limited"]=len(search)<len(candidates)
+    def protected(trial,before,buy,manual_trial):
+        if _remaining_battery_need(trial,model.b)>_protected_ceiling(_remaining_battery_need(before,model.b),reference_need):
+            return False
+        for i,(r,old) in enumerate(zip(trial,before)):
+            for key in ("reserve_gap_kwh","reserve_min_gap_kwh","uncovered_home_kwh"):
+                if r[key]>_protected_ceiling(old[key],baseline[i][key]):
+                    return False
+            if r["charge_from_solar_kwh"]<max(old["charge_from_solar_kwh"],baseline[i]["charge_from_solar_kwh"])-_TOL:
+                return False
+            if i!=buy and r["grid_import_for_home_kwh"]>_protected_ceiling(old["grid_import_for_home_kwh"],import_reference[i]):
+                return False
+        for identifier,old in current_manual.items():
+            value=manual_trial[identifier]
+            if old["target_reached"] and not value["target_reached"]:
+                return False
+            if (value["remaining_target_kwh"] or 0)>_protected_ceiling(old["remaining_target_kwh"] or 0,reference_manual[identifier]["remaining_target_kwh"] or 0):
+                return False
+            if manual_actions[identifier]=="discharge" and value["battery_energy_kwh"]<max(old["battery_energy_kwh"],reference_manual[identifier]["battery_energy_kwh"])-_TOL:
+                return False
+        return True
+    for _,buy,sell in search:
+        sale=make(sell,"discharge",max_out)
+        purchase=make(buy,"charge",max_in) if buy is not None else None
+        if not _window_free(model,sale,windows) or (purchase and not _window_free(model,purchase,windows)):
+            continue
+        diagnostic["evaluated_count"]+=1
+        additions=([purchase] if purchase else [])
+        trial,progress=model.simulate({},windows=windows+additions+[sale])
+        if not protected(trial,current,buy,progress):
+            low,high=9,max_out
+            while low<high:
+                middle=(low+high+1)//2
+                probe,probe_progress=model.simulate({},windows=windows+additions+[replace(sale,power_kw=middle/100)])
+                if protected(probe,current,buy,probe_progress):
+                    low=middle
+                else:
+                    high=middle-1
+            if low<10:
+                continue
+            sale=replace(sale,power_kw=low/100)
+            trial,progress=model.simulate({},windows=windows+additions+[sale])
+        # Reserve/capacity clipping must be resolved by reducing the setpoint,
+        # not by accepting an optional export pulse that stops early.
+        delivered_output=trial[sell]["discharge_to_home_kwh"]+trial[sell]["discharge_to_grid_trade_kwh"]
+        complete_hours=(sale.end-sale.power_start).total_seconds()/3600
+        deliverable_step=int((delivered_output/complete_hours*100+_EPS)//1)
+        if deliverable_step < sale.power_kw*100-1e-7:
+            if deliverable_step<10:
+                continue
+            sale=replace(sale,power_kw=deliverable_step/100)
+            trial,progress=model.simulate({},windows=windows+additions+[sale])
+        if purchase:
+            sale_energy=trial[sell]["discharge_to_grid_trade_kwh"]
+            low,high=10,max_in
+            while low<high:
+                middle=(low+high)//2
+                probe,probe_progress=model.simulate({},windows=windows+[replace(purchase,power_kw=middle/100),sale])
+                if (protected(probe,current,buy,probe_progress)
+                        and probe[sell]["discharge_to_grid_trade_kwh"]>=sale_energy-_TOL):
+                    high=middle
+                else:
+                    low=middle+1
+            purchase=replace(purchase,power_kw=high/100)
+            additions=[purchase]
+            trial,progress=model.simulate({},windows=windows+additions+[sale])
+        exported=sum(r["discharge_to_grid_trade_kwh"] for r in trial)-sum(r["discharge_to_grid_trade_kwh"] for r in current)
+        saving=sum(r["cost"] for r in current)-sum(r["cost"] for r in trial)
+        if exported<=_TOL or not protected(trial,current,buy,progress) or saving<exported*minimum_margin-_EPS:
+            continue
+        # Reject optional trades which hit their target before their complete
+        # planned power phase; reduce power rather than create a tiny pulse.
+        detailed,_=model.simulate({},windows=windows+additions+[sale],detail=True)
+        if any(sum(s["duration_hours"] for r in detailed for s in r["segments"]
+                   if s.get("window_id")==w.id and s["action"] in {"safety_charge","trade_charge","trade_discharge"})
+               < (w.end-w.power_start).total_seconds()/3600-1e-7 for w in windows+additions+[sale]):
+            continue
+        windows=sorted(windows+additions+[sale],key=lambda w:w.start)
+        current,current_manual=trial,progress
+        if buy is not None:
+            import_reference[buy]=current[buy]["grid_import_for_home_kwh"]
+        actual=saving/exported
+        if diagnostic["expected_margin"] is None or actual>diagnostic["expected_margin"]+_EPS:
+            diagnostic.update(expected_margin=actual,effective_charge_cost=model.prices[buy][0]/rt if buy is not None else None,
+                best_charge_time=model.stamps[buy].isoformat() if buy is not None else None,
+                best_discharge_time=model.stamps[sell].isoformat(),best_charge_price=model.prices[buy][0] if buy is not None else None,
+                best_discharge_price=model.prices[sell][1])
+        diagnostic.update(profitable=True,reason="safe_profitable_route_improvement")
+        diagnostic["accepted_count"]+=1
+        diagnostic["total_horizon_cost_saving"]+=saving
+        diagnostic["total_traded_export_kwh"]+=exported
+        diagnostic["aggregate_expected_margin"]=diagnostic["total_horizon_cost_saving"]/diagnostic["total_traded_export_kwh"]
+    windows,current = _compact_windows(model,windows,current,trading=True)
+    if diagnostic["profitable"]:
+        diagnostic["total_horizon_cost_saving"] = sum(r["cost"] for r in baseline)-sum(r["cost"] for r in current)
+        diagnostic["total_traded_export_kwh"] = sum(r["discharge_to_grid_trade_kwh"] for r in current)-sum(r["discharge_to_grid_trade_kwh"] for r in baseline)
+        diagnostic["aggregate_expected_margin"] = diagnostic["total_horizon_cost_saving"]/diagnostic["total_traded_export_kwh"]
+    return windows,diagnostic
+
+
+def _compact_windows(model,windows,trace,trading=False):
+    """Merge actual adjacent commands only after a complete route replay.
+
+    Strict comparisons against the current route prevent spending another
+    numerical-tolerance budget. No merge across a manual or passive gap.
+    """
+    windows=sorted(windows,key=lambda w:w.start)
+    _,manual_before=model.simulate({},windows=windows)
+    i=0
+    attempts=0
+    while i+1<len(windows) and attempts<288:
+        first,second=windows[i:i+2]
+        if (first.end!=second.start or first.action!=second.action or first.origin!=second.origin
+                or (second.end-first.start)>timedelta(hours=12)):
+            i+=1
+            continue
+        if trading and first.origin!="trade":
+            i+=1
+            continue
+        attempts+=1
+        energy=sum(w.power_kw*(w.end-w.power_start).total_seconds()/3600 for w in (first,second))
+        duration=(second.end-first.power_start).total_seconds()/3600
+        step=max(10,int((energy/duration*100-1e-9)//1)+1)
+        limit=int((model.b.charge_kw if first.action=="charge" else model.b.discharge_kw)*100)
+        others=windows[:i]+windows[i+2:]
+        merged=replace(first,end=second.end,power_kw=min(step,limit)/100)
+        if merged.action=="charge":
+            initial=trace[int((merged.start-model.stamps[0]).total_seconds()/900)]["stored_start_kwh"]
+            if initial+merged.power_kw*duration*model.b.charge_eff>model.b.capacity+_TOL:
+                i+=1
+                continue
+        trial,manual_trial=model.simulate({},windows=others+[merged],detail=trading)
+        safe=all(_need(r,model.b)<=_need(old,model.b)+_EPS for r,old in zip(trial,trace))
+        safe &= all((not old["target_reached"] or manual_trial[key]["target_reached"])
+                    and (manual_trial[key]["remaining_target_kwh"] or 0)<= (old["remaining_target_kwh"] or 0)+_EPS
+                    and (manual_trial[key]["battery_energy_kwh"] >= old["battery_energy_kwh"]-_EPS
+                         if next(p.action for p in model.manual if p.id==key)=="discharge" else True)
+                    for key,old in manual_before.items())
+        if trading:
+            safe &= all(sum(s["duration_hours"] for r in trial for s in r["segments"]
+                         if s.get("window_id")==w.id and s["action"] in {"safety_charge","trade_charge","trade_discharge"})
+                        >=(w.end-w.power_start).total_seconds()/3600-1e-7 for w in others+[merged])
+            # Optional exports must keep the complete commanded power phase.
+            if merged.action=="discharge":
+                endpoint=int((merged.end-model.stamps[0]).total_seconds()/900)-1
+                initial=trace[int((merged.start-model.stamps[0]).total_seconds()/900)]["stored_start_kwh"]
+                if initial-merged.power_kw*duration/model.b.discharge_eff < model.b.reserve-_EPS:
+                    safe=False
+            safe &= sum(r["cost"] for r in trial)<=sum(r["cost"] for r in trace)+_EPS
+            safe &= all(r["charge_from_solar_kwh"]>=old["charge_from_solar_kwh"]-_EPS for r,old in zip(trial,trace))
+            safe &= sum(r["discharge_to_grid_trade_kwh"] for r in trial)>=sum(r["discharge_to_grid_trade_kwh"] for r in trace)-_EPS
+            allowed={j for j,t in enumerate(model.stamps) if merged.action=="charge" and merged.start<=t<merged.end}
+            safe &= all(j in allowed or r["grid_import_for_home_kwh"]<=old["grid_import_for_home_kwh"]+_EPS for j,(r,old) in enumerate(zip(trial,trace)))
+        if safe:
+            windows=sorted(others+[merged],key=lambda w:w.start)
+            trace,manual_before=trial,manual_trial
+        else:
+            i+=1
+    return windows,trace
+
+
+def _describe_windows(model,windows,timeline):
+    """Serialize the EXACT commands used for the published route, not a replan."""
+    result=[]
+    for w in windows:
+        parts=[s for r in timeline for s in r["segments"] if s.get("window_id")==w.id]
+        powered=[s for s in parts if s["action"] in {"safety_charge","trade_charge","trade_discharge"}]
+        if not powered:
+            continue
+        actual_hours=sum(s["duration_hours"] for s in powered)
+        requested_hours=(w.end-w.power_start).total_seconds()/3600
+        flows={key:sum(s[key] for s in powered) for key in _FLOWS}
+        delivered=(sum(flows[f"charge_from_grid_{x}_kwh"] for x in ("safety","trade","manual"))+flows["charge_from_solar_kwh"]
+                   if w.action=="charge" else flows["discharge_to_home_kwh"]+flows["discharge_to_grid_kwh"])
+        requested=w.power_kw*requested_hours
+        shortfall=max(0.,requested-delivered)
+        result.append({"id":w.id,"action":w.action,"purpose":w.origin+"_"+w.action,
+            "origin":"automatic_72h_planner","start_time":w.start.isoformat(),"power_start_time":w.power_start.isoformat(),
+            "planned_end_time":w.end.isoformat(),"preparation_minutes":2,
+            "power_w":w.power_kw*1000,"max_runtime_h":(w.end-w.start).total_seconds()/3600,
+            "planned_power_duration_h":requested_hours,"projected_power_duration_h":actual_hours,
+            "start_soc":parts[0]["stored_start_kwh"]/model.b.capacity*100,
+            "target_soc":powered[-1]["stored_end_kwh"]/model.b.capacity*100,
+            "command_target_soc":w.target/model.b.capacity*100,
+            "projected_end_soc":next(r["soc_end"] for r in timeline if r["end"]==w.end.isoformat()),
+            "requested_energy_kwh":requested,"planned_energy_kwh":delivered,
+            "energy_shortfall_kwh":shortfall,"flow_energy_basis":"ac","flows":flows,
+            "limited":shortfall>_TOL,"reason":"target_or_capacity_limited" if shortfall>_TOL else "complete_window",
+            "source_quarters":[r["start"] for r in timeline if any(s.get("window_id")==w.id for s in r["segments"])],
+            "observational_only":True,"physical_execution_authority":False})
+    for window in result:
+        window["planner_identity"] = window["id"]
+        window["planner_signature"] = sha256(json.dumps(window,sort_keys=True,
+            separators=(",",":"),allow_nan=False).encode()).hexdigest()
+    return result
+
+
 def calculate_plan72(home_slots, solar_slots, price_slots, *, now, soc_percent,
                      capacity_kwh, min_soc_percent, reserve_percent,
                      charge_efficiency=0.92, discharge_efficiency=0.92,
                      max_charge_power_w, max_discharge_power_w,
-                     minimum_trade_margin=0.10, trade_enabled=True, manual_plans=()):
+                     minimum_trade_margin=0.10, trade_enabled=True, manual_plans=(), practical_windows=False):
     """Return a complete observational plan or a structured invalid result.
 
     Forecast rows use timezone-aware ``start`` and ``energy_kwh``; prices use
@@ -615,7 +1019,7 @@ def calculate_plan72(home_slots, solar_slots, price_slots, *, now, soc_percent,
             charge_efficiency, discharge_efficiency, max_charge_power_w,
             max_discharge_power_w, minimum_trade_margin,
         ))
-        if (not 0 <= soc <= 100 or capacity <= 0 or not 0 <= minimum < 100
+        if (not isinstance(practical_windows, bool) or not 0 <= soc <= 100 or capacity <= 0 or not 0 <= minimum < 100
                 or not 0 <= reserve <= 100 - minimum or not 0 < eta_in <= 1
                 or not 0 < eta_out <= 1 or charge_w < 0 or discharge_w < 0 or margin < 0
                 or not isinstance(trade_enabled, bool)):
@@ -632,9 +1036,18 @@ def calculate_plan72(home_slots, solar_slots, price_slots, *, now, soc_percent,
     except (ValueError, TypeError, OverflowError) as err:
         return _empty(str(err) or "invalid_input")
     model = _Model(stamps, home, solar, prices, battery, manual)
-    safety, baseline = _safety_schedule(model)
-    trade_charge, trade_discharge, trade = _trade_schedule(model, safety, baseline, margin, trade_enabled)
-    timeline, manual_progress = model.simulate(safety, trade_charge, trade_discharge, detail=True)
+    windows = []
+    window_search = {}
+    if practical_windows:
+        windows, baseline, window_search = _safety_windows(model)
+        windows, trade = _trade_windows(model, windows, baseline, margin, trade_enabled)
+        timeline, manual_progress = model.simulate({}, windows=windows, detail=True)
+    else:
+        # Retained pure Alpha52 API for numeric regression/oracle comparisons.
+        # The HA runtime explicitly selects the practical window contract.
+        safety, baseline = _safety_schedule(model)
+        trade_charge, trade_discharge, trade = _trade_schedule(model, safety, baseline, margin, trade_enabled)
+        timeline, manual_progress = model.simulate(safety, trade_charge, trade_discharge, detail=True)
     for item in manual_diagnostic["plans"]:
         if item.get("status") == "accepted" and isinstance(item["id"], str) and item["id"] in manual_progress:
             item.update(manual_progress[item["id"]])
@@ -648,10 +1061,13 @@ def calculate_plan72(home_slots, solar_slots, price_slots, *, now, soc_percent,
     # charging efficiency once when publishing the AC energy and its tolerance.
     remaining = remaining_battery / eta_in
     manual_limited = any(item.get("limited") for item in manual_diagnostic["plans"])
-    limited = reserve_breaches > 0 or physical_shortfall or manual_limited
+    window_details = _describe_windows(model, windows, timeline) if practical_windows else []
+    window_limited = any(w["limited"] for w in window_details) or window_search.get("search_limited", False)
+    limited = reserve_breaches > 0 or physical_shortfall or manual_limited or window_limited
     reason = ("remaining_physical_shortfall" if physical_shortfall else
               "manual_plan_limited" if manual_limited else
-              "reserve_breach_in_projection" if reserve_breaches else "sequential_plan_ready")
+              "reserve_breach_in_projection" if reserve_breaches else
+              "action_window_limited" if window_limited else "sequential_plan_ready")
     return {
         "status": "limited" if limited else "ready", "valid": True,
         "reason": reason,
@@ -673,6 +1089,9 @@ def calculate_plan72(home_slots, solar_slots, price_slots, *, now, soc_percent,
         "remaining_charge_need_tolerance_kwh": _TOL / eta_in,
         "remaining_charge_need_basis": "maximum_reserve_gap_plus_uncovered_household_ac_energy",
         "totals": totals, "trade": trade, "manual": manual_diagnostic,
+        "action_windows": window_details, "action_window_count": len(window_details),
+        "action_window_contract": "quarter_windows_v1" if practical_windows else "legacy_segments",
+        "action_window_search": window_search,
         "projection_count": model.calls,
         "model": "deterministic_segmented_self_consumption",
         "globally_optimal": False,

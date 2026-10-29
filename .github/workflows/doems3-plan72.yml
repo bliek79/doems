@@ -6,6 +6,8 @@ on:
       - doems3-plan72-alpha43
       - doems3-plan72-diagnostics
       - doems3-publish-alpha-5-2
+      - doems3-plan72-action-windows
+      - doems3-publish-alpha-5-3
 
 permissions:
   contents: read
@@ -37,7 +39,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    if: github.ref == 'refs/heads/doems3-publish-alpha-5-2'
+    if: github.ref == 'refs/heads/doems3-publish-alpha-5-3'
     needs: validate
     runs-on: ubuntu-latest
     permissions:

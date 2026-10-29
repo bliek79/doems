@@ -120,6 +120,7 @@ def _evaluate(inputs: Plan72Inputs) -> dict[str, Any]:
             prices,
             now=inputs.now,
             manual_plans=(),
+            practical_windows=True,
             **parameters,
         )
     # Retain the price provider's native resolution alongside its source kind.
@@ -132,6 +133,7 @@ def _evaluate(inputs: Plan72Inputs) -> dict[str, Any]:
     # The old chapter-4 entities remain untouched. This is its unchanged pure
     # calculation evaluated against exactly the input used by this plan.
     result["energy_need"] = need
+    result["battery_parameters"] = dict(parameters)
     return result
 
 
@@ -517,7 +519,7 @@ class _Plan72Entity:
 
 
 class Plan72Sensor(_Plan72Entity, SensorEntity):
-    _unrecorded_attributes = frozenset({"timeline", "energy_need", "sources", "trade", "manual"})
+    _unrecorded_attributes = frozenset({"timeline", "energy_need", "sources", "trade", "manual", "action_windows"})
 
     def __init__(self, runtime: Plan72Runtime, field: Plan72Field) -> None:
         self.field = field
@@ -570,6 +572,11 @@ class Plan72Sensor(_Plan72Entity, SensorEntity):
                 "flow_energy_basis": "ac",
                 "stored_energy_basis": "battery",
                 "timeline": snapshot.get("timeline", []),
+                "action_windows": snapshot.get("action_windows", []),
+                "action_window_count": snapshot.get("action_window_count", 0),
+                "action_window_contract": snapshot.get("action_window_contract"),
+                "action_window_search": snapshot.get("action_window_search", {}),
+                "battery_parameters": snapshot.get("battery_parameters", {}),
                 "energy_need": snapshot.get("energy_need", {}),
                 "sources": snapshot.get("sources", {}),
                 "trade": snapshot.get("trade", {}),

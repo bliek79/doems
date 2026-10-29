@@ -244,3 +244,79 @@ Na installatie in Home Assistant moeten afzonderlijk worden gecontroleerd:
 - Forecasts blijven verwachtingen. Plan72 kan de kwaliteit van toekomstige vraag, zon of prijs niet afdwingen en introduceert geen aansturing of garantie voorbij de horizon.
 - De ingestelde vermogensgrenzen zijn scenario-invoer. Latere uitvoeringsonderdelen moeten actuele toestelgrenzen en exclusieve besturingsbevoegdheid opnieuw controleren.
 - Fysieke uitvoering, slotbeheer, startvertraging, onafhankelijke veiligheidslagen en livevalidatie daarvan zijn met hoofdstuk 5 niet gerealiseerd of goedgekeurd.
+
+## Alpha 5.3 practical automatic windows
+
+This extension supersedes the runtime's Alpha5.2 pulse scheduling, while retaining
+its pure API as a dormant numerical regression/reference path. The HA runtime
+passes `practical_windows=True`; the same `_Model.simulate` engine evaluates
+both candidate edits and the final published route. Forecasts, Energy Need,
+configuration and the 35 public Plan72 IDs remain intact. No chapter6 components
+are present in this chapter5 release.
+
+`_Window` holds identity, direction, safety/trade origin, UTC start/end, total
+battery AC setpoint and stop target. Start/end align with the 288-quarter axis;
+window duration is 15 minutes to 12 hours. The first two minutes are conservatively
+modelled as fixed-zero battery power. Every quarter remains energy-conserving,
+including a preparation boundary inside it. Manual intervals have priority;
+automatic windows may not overlap any portion of a manual interval.
+
+`_safety_windows` resolves chronological reserve/coverage needs by replaying
+existing-power increases, checked extensions and new price-ranked quarters.
+Candidates always include recent deadline quarters, preventing a finite cheap
+candidate set from starving a physically feasible late recovery. Power is an
+integer number of 10 W steps, between 100 W and the floored configured limit.
+The full power phase must fit the available battery capacity. Power search may
+not rely on charging to capacity early and then invisibly reverting to a pulse.
+There is no arbitrary three-window or daily-action cap. A finite replay budget
+is reported separately and cannot silently yield ready with an unfinished search.
+
+`_compact_windows` merges only contiguous equal-purpose/direction windows, up to
+12 hours. Each edit is replayed through the complete route. Reserve/coverage
+needs and existing manual feasibility must not worsen. Optional-trade compaction
+also preserves route cost, PV storage, home imports outside allowed purchases,
+export energy and complete command duration for ALL windows. A merge must not
+turn a later individually valid export into a clipped early-stop pulse.
+
+`_trade_windows` uses actual incremental route cost per extra exported AC kWh.
+It retains a fixed pre-trade reference and the Alpha5.2 single numerical tolerance
+budget; it cannot repeatedly spend tolerance against the last accepted result.
+It preserves manual goals and prior PV-storage opportunities, prevents negative
+price export, reduces purchase/sale power to fit a complete phase and rejects
+an optional trade if any command would become a short target-clipped pulse.
+
+The final simulator run produces both Timeline and `action_windows`:
+- id, planner_identity, planner_signature, action, purpose and origin;
+- start_time, power_start_time, planned_end_time, preparation_minutes;
+- power_w, max_runtime_h, planned/projected_power_duration_h;
+- start_soc, target_soc, command_target_soc, projected_end_soc;
+- requested/planned_energy_kwh, energy_shortfall_kwh, AC flows and source_quarters;
+- limited, reason, observational_only and physical_execution_authority=false.
+
+`target_soc` is the reached SOC of the final powered segment. It can be replayed
+as the physical stop target with the same window route. `command_target_soc`
+retains the internal simulator ceiling/floor, allowing limitations to remain
+explicit. Parent Plan72 generation/fingerprint/calculated-at identify the source
+calculation; the full-content window signature changes when actionable content
+changes. Identity is stable for the same origin/direction/nominal start.
+
+The existing Timeline entity adds the complete windows and search diagnostics.
+No extra sensor or binary sensor is registered. Invalid/calculating source
+snapshots expose no stale windows via entity attribute defaults. Large window
+lists are excluded from recorder history.
+
+Safety caveats: this remains observer-only. The two-minute fixed-zero model is
+conservative modelling, not verified physical preparation. Setpoint minimum and
+step are reference planning assumptions. Dynamic live Anker limits, actual
+handoff timing, start-time permission and external-authority fencing remain
+responsibilities of the later safety/execution chapters.
+
+Development base: af6a893fe2b85003d030525e9f60ee031fa800ce (Alpha5.2).
+Development branch: doems3-plan72-action-windows.
+Planned release: v0.3.0-alpha.5.3, subject to successful validation/publication.
+Tests include the three previously failed old-window replay scenarios, zero-power
+preparation, exact command replay, invariant energy conservation, capacity and
+power extremes, manual overlap, impossible deadlines, purchase/export trading,
+PV protection, deterministic inputs and unchanged Energy Need blobs. Existing
+Alpha5.2 tests remain; version assertions advance with the actual release only.
+Live installation and validation have not yet been performed.
