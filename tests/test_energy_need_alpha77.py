@@ -1,6 +1,12 @@
 """Energy Need Alpha7.7 read-only calculation tests."""
 from datetime import datetime, timedelta, timezone
-from custom_components.doems.energy_need import calculate_energy_need
+import importlib.util
+from pathlib import Path
+_module_path = Path(__file__).resolve().parents[1] / "custom_components/doems/energy_need.py"
+_spec = importlib.util.spec_from_file_location("doems_energy_need_pure", _module_path)
+_module = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_module)
+calculate_energy_need = _module.calculate_energy_need
 
 NOW = datetime(2026, 10, 29, 12, tzinfo=timezone.utc)
 
