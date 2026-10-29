@@ -3,7 +3,7 @@ name: DOEMS CI and Alpha7.7 Solar Freeze Cleanup Release
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, doems3-energy-need-alpha77]
   workflow_dispatch:
 
 permissions:
