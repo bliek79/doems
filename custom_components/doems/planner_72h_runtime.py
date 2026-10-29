@@ -132,6 +132,8 @@ def _evaluate(inputs: Plan72Inputs) -> dict[str, Any]:
     # The old chapter-4 entities remain untouched. This is its unchanged pure
     # calculation evaluated against exactly the input used by this plan.
     result["energy_need"] = need
+    # Chapter 6 provenance only: the exact frozen parameters of this route.
+    result["battery_parameters"] = dict(parameters)
     return result
 
 

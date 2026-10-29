@@ -1,0 +1,26 @@
+name: DOEMS 3.0 Chapter 6 - development validation
+on:
+  push:
+    branches: [doems3-action-bridge-alpha52]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install -r requirements-test.txt
+      - run: python -m compileall -q custom_components/doems scripts
+      - run: python -m pytest -q --junitxml=build/test-results.xml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bridge-development-tests-${{ matrix.python-version }}-${{ github.sha }}
+          path: build/test-results.xml
+          if-no-files-found: error
