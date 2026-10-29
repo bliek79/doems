@@ -73,6 +73,12 @@ from .const import (
     SOLAR_MAX_ARRAYS,
     SOLAR_MAX_INVERTER_GROUPS,
 )
+from .const import (
+    CONF_ENERGY_NEED_ENABLED, CONF_ENERGY_NEED_SOC_ENTITY,
+    CONF_ENERGY_NEED_CAPACITY_KWH, CONF_ENERGY_NEED_MIN_SOC_PERCENT,
+    CONF_ENERGY_NEED_RESERVE_PERCENT, CONF_ENERGY_NEED_CHARGE_EFFICIENCY,
+    CONF_ENERGY_NEED_DISCHARGE_EFFICIENCY,
+)
 from .energy_sources import normalize_power_w
 from .solar_foundation_model import validate_solar_foundation
 
@@ -197,11 +203,41 @@ class DOEMSOptionsFlow(OptionsFlow):
         return self.async_create_entry(title="", data=self._pending)
 
     async def _continue_after_energy(self) -> ConfigFlowResult:
+        if self._pending.get(CONF_ENERGY_NEED_ENABLED, False):
+            return await self.async_step_energy_need()
+        return await self._continue_after_energy_need()
+        if self._pending.get(CONF_PRICES_ENABLED, False):
+            return await self.async_step_prices()
+        return self._save()
+
+    async def _continue_after_energy_need(self) -> ConfigFlowResult:
         if self._pending.get(CONF_SOLAR_FOUNDATION_ENABLED, False):
             return await self.async_step_solar_system()
         if self._pending.get(CONF_PRICES_ENABLED, False):
             return await self.async_step_prices()
         return self._save()
+
+    async def async_step_energy_need(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            soc_entity = user_input.get(CONF_ENERGY_NEED_SOC_ENTITY)
+            state = self.hass.states.get(soc_entity) if soc_entity else None
+            if not soc_entity or state is None or state.attributes.get("unit_of_measurement") != "%":
+                errors[CONF_ENERGY_NEED_SOC_ENTITY] = "source_required"
+            elif soc_entity.startswith("sensor.doems_"):
+                errors[CONF_ENERGY_NEED_SOC_ENTITY] = "doems_source_not_allowed"
+            if not errors:
+                self._pending.update(user_input)
+                return await self._continue_after_energy_need()
+        schema = {
+            _required_entity(CONF_ENERGY_NEED_SOC_ENTITY, self._current(CONF_ENERGY_NEED_SOC_ENTITY)): _sensor_selector(),
+            vol.Required(CONF_ENERGY_NEED_CAPACITY_KWH, default=float(self._current(CONF_ENERGY_NEED_CAPACITY_KWH, 7.2))): _number(0.1, 100, "any", "kWh"),
+            vol.Required(CONF_ENERGY_NEED_MIN_SOC_PERCENT, default=float(self._current(CONF_ENERGY_NEED_MIN_SOC_PERCENT, 5))): _number(0, 100, "any", "%"),
+            vol.Required(CONF_ENERGY_NEED_RESERVE_PERCENT, default=float(self._current(CONF_ENERGY_NEED_RESERVE_PERCENT, 0))): _number(0, 100, "any", "%"),
+            vol.Required(CONF_ENERGY_NEED_CHARGE_EFFICIENCY, default=float(self._current(CONF_ENERGY_NEED_CHARGE_EFFICIENCY, 0.92))): _number(0.01, 1, "any"),
+            vol.Required(CONF_ENERGY_NEED_DISCHARGE_EFFICIENCY, default=float(self._current(CONF_ENERGY_NEED_DISCHARGE_EFFICIENCY, 0.92))): _number(0.01, 1, "any"),
+        }
+        return self.async_show_form(step_id="energy_need", data_schema=vol.Schema(schema), errors=errors)
 
     async def _continue_after_solar(self) -> ConfigFlowResult:
         if self._pending.get(CONF_PRICES_ENABLED, False):
@@ -213,6 +249,8 @@ class DOEMSOptionsFlow(OptionsFlow):
             self._pending.update(user_input)
             if self._pending.get(CONF_ENERGY_FORECAST_ENABLED, False):
                 return await self.async_step_energy_forecast()
+            if self._pending.get(CONF_ENERGY_NEED_ENABLED, False):
+                return await self.async_step_energy_need()
             if self._pending.get(CONF_SOLAR_FOUNDATION_ENABLED, False):
                 return await self.async_step_solar_system()
             if self._pending.get(CONF_PRICES_ENABLED, False):
@@ -226,6 +264,7 @@ class DOEMSOptionsFlow(OptionsFlow):
                 vol.Required(CONF_ENERGY_FORECAST_ENABLED, default=bool(self._current(CONF_ENERGY_FORECAST_ENABLED, False))): bool,
                 vol.Required(CONF_SOLAR_FOUNDATION_ENABLED, default=bool(self._current(CONF_SOLAR_FOUNDATION_ENABLED, False))): bool,
                 vol.Required(CONF_PRICES_ENABLED, default=bool(self._current(CONF_PRICES_ENABLED, False))): bool,
+                vol.Required(CONF_ENERGY_NEED_ENABLED, default=bool(self._current(CONF_ENERGY_NEED_ENABLED, False))): bool,
             }),
         )
 
