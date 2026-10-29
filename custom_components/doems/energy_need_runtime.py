@@ -5,7 +5,6 @@ from typing import Any
 
 from homeassistant.components.sensor import SensorEntity, SensorDeviceClass
 from homeassistant.components.binary_sensor import BinarySensorEntity
-from homeassistant.const import UnitOfEnergy
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -17,7 +16,7 @@ from .const import (
     CONF_ENERGY_NEED_CAPACITY_KWH, CONF_ENERGY_NEED_MIN_SOC_PERCENT,
     CONF_ENERGY_NEED_RESERVE_PERCENT, CONF_ENERGY_NEED_CHARGE_EFFICIENCY,
     CONF_ENERGY_NEED_DISCHARGE_EFFICIENCY, DOMAIN, DEVICE_IDENTIFIER, NAME,
-    VERSION, FORECAST_SLOTS,
+    VERSION,
 )
 from .energy_need import calculate_energy_need
 
@@ -67,6 +66,11 @@ class EnergyNeedRuntime:
         # Both managers expose native quarter data directly, without history/recorder reads.
         home = self.coordinator.forecast(now=now)
         solar = self.solar.points
+        if self.solar.source_status != "ok":
+            self.snapshot = {"status": "waiting_for_complete_forecast", "valid": False, "reason": "solar_source_" + self.solar.source_status}
+            for listener in tuple(self.listeners):
+                listener()
+            return
         self.snapshot = calculate_energy_need(
             [{"start": slot.start, "energy_kwh": slot.energy_kwh} for slot in home],
             [{"start": slot.start, "energy_kwh": slot.total_kwh} for slot in solar],
