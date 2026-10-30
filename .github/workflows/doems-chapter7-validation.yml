@@ -1,0 +1,26 @@
+name: DOEMS 3.0 Chapter 7 development checks
+
+on:
+  push:
+    branches:
+      - doems3-ch7-plan-store-implementation
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install -r requirements-test.txt
+      - run: python -m compileall -q custom_components/doems scripts
+      - run: python -m pytest -q
