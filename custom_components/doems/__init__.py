@@ -13,6 +13,7 @@ from .const import CONF_ENERGY_FORECAST_ENABLED, CONF_PRICES_ENABLED, CONF_ENERG
 from .energy_need_runtime import EnergyNeedRuntime
 from .energy_coordinator import DOEMSEnergyCoordinator
 from .prices_runtime import DOEMSRegisteredPricesManager
+from .planner_action_bridge_runtime import ActionBridgeRuntime
 from .planner_72h_runtime import Plan72Runtime
 from .solar_forecast import SolarForecastManager
 from .solar_foundation import SolarFoundationManager
@@ -67,11 +68,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
         plan72 = Plan72Runtime(hass, entry, coordinator, solar_forecast, prices, energy_need)
         await plan72.async_setup()
 
+    action_bridge = None
+    if plan72 is not None:
+        action_bridge = ActionBridgeRuntime(plan72)
+        await action_bridge.async_setup()
+
     entry.runtime_data = coordinator
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "energy_forecast_enabled": coordinator is not None,
         "energy_need": energy_need,
         "plan72": plan72,
+        "action_bridge": action_bridge,
         "solar_foundation": foundation,
         "solar_forecast": solar_forecast,
         "prices": prices,
@@ -113,6 +120,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
 
 async def async_unload_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> bool:
     entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    action_bridge = entry_data.get("action_bridge")
+    if isinstance(action_bridge, ActionBridgeRuntime):
+        await action_bridge.async_shutdown()
     plan72 = entry_data.get("plan72")
     if isinstance(plan72, Plan72Runtime):
         await plan72.async_shutdown()

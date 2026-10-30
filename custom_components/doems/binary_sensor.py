@@ -20,6 +20,7 @@ from .const import (
     VERSION,
 )
 from .energy_need_runtime import EnergyNeedRuntime, EnergyNeedValid
+from .planner_action_bridge_runtime import ActionBridgeRuntime, ActionBridgeValid
 from .planner_72h_runtime import Plan72Runtime, build_plan72_binary_sensors
 from .solar_foundation import SolarFoundationManager
 def _foundation_manager(hass: HomeAssistant, entry: ConfigEntry) -> SolarFoundationManager:
@@ -48,6 +49,9 @@ async def async_setup_entry(
     plan72 = hass.data.get(DOMAIN, {}).get(entry.entry_id, {}).get("plan72")
     if isinstance(plan72, Plan72Runtime):
         entities.extend(build_plan72_binary_sensors(plan72))
+    action_bridge = hass.data.get(DOMAIN, {}).get(entry.entry_id, {}).get("action_bridge")
+    if isinstance(action_bridge, ActionBridgeRuntime):
+        entities.append(ActionBridgeValid(action_bridge))
     async_add_entities(entities)
 
 

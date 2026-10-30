@@ -1,0 +1,7 @@
+type: entities
+title: DOEMS hoofdstuk 6 — Action Bridge
+entities:
+  - entity: sensor.doems_ems_action_bridge_status
+  - entity: binary_sensor.doems_ems_action_bridge_valid
+  - entity: sensor.doems_ems_action_candidates
+  - entity: sensor.doems_ems_action_slot_preview

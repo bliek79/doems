@@ -1,0 +1,56 @@
+name: DOEMS 3.0 Chapter 6 - Action Bridge validation and publication
+
+on:
+  push:
+    branches:
+      - doems3-action-bridge-alpha53
+      - doems3-publish-alpha-6-1
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install -r requirements-test.txt
+      - run: python -m compileall -q custom_components/doems scripts
+      - run: python -m pytest -q --junitxml=build/test-results.xml
+      - run: python scripts/validate_action_bridge_release.py
+      - name: Package exact checked source
+        if: matrix.python-version == '3.13'
+        run: python scripts/build_action_bridge_release.py
+      - uses: actions/upload-artifact@v4
+        if: matrix.python-version == '3.13'
+        with:
+          name: action-bridge-${{ github.sha }}
+          path: build/
+          if-no-files-found: error
+
+  publish:
+    if: github.ref == 'refs/heads/doems3-publish-alpha-6-1'
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/download-artifact@v4
+        with:
+          name: action-bridge-${{ github.sha }}
+          path: build/
+      - name: Publish new tag and pre-release on the tested commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/publish_action_bridge_release.py
