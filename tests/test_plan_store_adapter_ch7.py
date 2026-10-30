@@ -1,0 +1,65 @@
+"""Chapter 7 conservative manual slot adapter contract tests."""
+from __future__ import annotations
+
+import importlib.util
+from pathlib import Path
+
+PATH = Path(__file__).resolve().parents[1] / "custom_components" / "doems" / "plan_store_adapter.py"
+SPEC = importlib.util.spec_from_file_location("doems_ch7_adapter_test", PATH)
+MODULE = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(MODULE)
+
+
+class Store:
+    def __init__(self, plans):
+        self.plans = plans
+
+    def get_plan(self, slot):
+        return self.plans.get(slot, {})
+
+
+def planned(**changes):
+    data = {
+        "origin": "manual",
+        "execution_mode": "gepland",
+        "action": "laden",
+        "lifecycle_status": "concept",
+        "start_time": "2026-11-01T12:00:00+01:00",
+        "power_w": 1000,
+        "target_soc": 80,
+        "max_runtime_h": 1,
+    }
+    data.update(changes)
+    return data
+
+
+def test_scheduled_manual_concept_constrains_soc_projection():
+    result = MODULE.manual_constraints(Store({1: planned()}))
+    assert len(result) == 1
+    assert result[0]["id"] == "slot_1"
+    assert result[0]["action"] == "charge"
+    assert result[0]["start_time"] == "2026-11-01T11:00:00+00:00"
+    assert result[0]["lifecycle_status"] == "pending"
+
+
+def test_automatic_and_active_slots_are_not_silently_recast_manual():
+    result = MODULE.manual_constraints(Store({
+        1: planned(origin="automatic_72h_planner"),
+        2: planned(lifecycle_status="actief"),
+        3: planned(execution_mode="direct"),
+    }))
+    assert result == []
+
+
+def test_manual_discharge_pending_is_preserved():
+    result = MODULE.manual_constraints(Store({2: planned(
+        action="ontladen", lifecycle_status="pending", target_soc=30
+    )}))
+    assert result[0]["action"] == "discharge"
+    assert result[0]["target_soc"] == 30.0
+
+
+def test_invalid_naive_date_is_excluded():
+    assert MODULE.manual_constraints(Store({
+        1: planned(start_time="2026-11-01T12:00:00")
+    })) == []
