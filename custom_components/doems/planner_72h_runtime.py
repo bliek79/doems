@@ -75,6 +75,7 @@ class Plan72Inputs:
     solar: tuple[tuple[datetime, Any], ...]
     prices: tuple[tuple[datetime, Any, Any, str, Any], ...]
     parameters: tuple[tuple[str, Any], ...]
+    manual_plans: tuple[tuple[str, Any], ...]
     source_metadata: tuple[tuple[str, Any], ...]
     fingerprint: str
     replan_reason: str
@@ -119,7 +120,7 @@ def _evaluate(inputs: Plan72Inputs) -> dict[str, Any]:
             solar,
             prices,
             now=inputs.now,
-            manual_plans=(),
+            manual_plans=[dict(item) for item in inputs.manual_plans],
             practical_windows=True,
             **parameters,
         )
@@ -148,6 +149,7 @@ class Plan72Runtime:
         solar: Any,
         prices: Any,
         energy_need: Any,
+        plan_store: Any = None,
     ) -> None:
         self.hass = hass
         self.entry = entry
@@ -155,6 +157,7 @@ class Plan72Runtime:
         self.solar = solar
         self.prices = prices
         self.energy_need = energy_need
+        self.plan_store = plan_store
         self.snapshot = _unavailable("initializing")
         self.listeners: list[Callable[[], None]] = []
         self._unsubs: list[Callable[[], None]] = []
@@ -183,6 +186,8 @@ class Plan72Runtime:
                 self._unsubs.append(
                     source.async_add_listener(lambda reason=reason: self.refresh(reason))
                 )
+        if self.plan_store is not None:
+            self._unsubs.append(self.plan_store.add_listener(lambda: self.refresh("plan_store_changed")))
         entities = [
             self.entry.options.get(key)
             for key in (
@@ -319,11 +324,15 @@ class Plan72Runtime:
             (slot.start, slot.import_all_in, slot.export_all_in, slot.kind, slot.source_resolution_minutes)
             for slot in price_points
         )
+        manual_plans = ()
+        if self.plan_store is not None:
+            from .plan_store_adapter import manual_constraints
+            manual_plans = tuple(tuple(sorted(item.items())) for item in manual_constraints(self.plan_store))
         # Time within the same untouched quarter and gas-only events are not
         # planner inputs. New prices, power limits, SOC or UTC window are.
         try:
             encoded = json.dumps(
-                (start, home, solar, prices, parameters),
+                (start, home, solar, prices, parameters, manual_plans),
                 default=lambda value: value.isoformat(),
                 sort_keys=True,
                 separators=(",", ":"),
@@ -337,12 +346,13 @@ class Plan72Runtime:
             solar=solar,
             prices=prices,
             parameters=tuple(parameters.items()),
+            manual_plans=manual_plans,
             source_metadata=(
                 ("solar_status", solar_status),
                 ("prices_status", price_status),
                 ("prices_freshness", price_freshness),
                 ("home_profile", str(getattr(self.coordinator, "profile", "unknown"))),
-                ("manual_input", "not_connected_until_plan_store"),
+                ("manual_input", "plan_store" if self.plan_store is not None else "not_connected_until_plan_store"),
                 ("soc_observed_at", soc_observed_at),
                 ("horizon_start_assumption", "latest_measured_soc_at_next_complete_quarter"),
                 ("unmodelled_start_minutes", round((start - now).total_seconds() / 60.0, 6)),
