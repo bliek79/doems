@@ -16,6 +16,7 @@ from .prices_runtime import DOEMSRegisteredPricesManager
 from .planner_action_bridge_runtime import ActionBridgeRuntime
 from .planner_72h_runtime import Plan72Runtime
 from .plan_store import AnkerEmsPlanStore
+from .plan_store_writer import PlanStoreWriter
 from .solar_forecast import SolarForecastManager
 from .solar_foundation import SolarFoundationManager
 
@@ -77,12 +78,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
         action_bridge = ActionBridgeRuntime(plan72)
         await action_bridge.async_setup()
 
+    plan_store_writer = None
+    if action_bridge is not None:
+        plan_store_writer = PlanStoreWriter(hass, plan_store, plan72, action_bridge)
+        await plan_store_writer.async_setup()
+
     entry.runtime_data = coordinator
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "energy_forecast_enabled": coordinator is not None,
         "energy_need": energy_need,
         "plan72": plan72,
         "plan_store": plan_store,
+        "plan_store_writer": plan_store_writer,
         "action_bridge": action_bridge,
         "solar_foundation": foundation,
         "solar_forecast": solar_forecast,
@@ -125,6 +132,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
 
 async def async_unload_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> bool:
     entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    plan_store_writer = entry_data.get("plan_store_writer")
+    if isinstance(plan_store_writer, PlanStoreWriter):
+        await plan_store_writer.async_shutdown()
     action_bridge = entry_data.get("action_bridge")
     if isinstance(action_bridge, ActionBridgeRuntime):
         await action_bridge.async_shutdown()
