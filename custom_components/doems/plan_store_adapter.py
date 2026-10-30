@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 def manual_constraints(store):
     """Only configured, prospective, manual scheduled actions affect Plan72.
 
-    Drafts are not physical commitments. Do not convert current active plans
+    Complete scheduled concepts are projected, not granted execution authority.\n    Do not convert current active plans
     until a validated execution-state handoff exists.
     """
     rows = []
@@ -16,7 +16,7 @@ def manual_constraints(store):
             continue
         if plan.get("action") not in {"laden", "ontladen"}:
             continue
-        if plan.get("lifecycle_status") not in {"pending"}:
+        if plan.get("lifecycle_status") not in {"concept", "pending"}:
             continue
         start = plan.get("start_time")
         if not start:
