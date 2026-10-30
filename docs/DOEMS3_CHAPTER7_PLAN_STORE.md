@@ -1,6 +1,6 @@
 # DOEMS 3.0 — Hoofdstuk 7: Persistent Plan Store
 
-Status: ontwikkelbranch; entiteitenregister wacht op goedkeuring. Geen release gepubliceerd.
+Status: entiteitenregister door de gebruiker goedgekeurd op 30 oktober 2026. Releasekandidaat `v0.3.0-alpha.7.1`; publicatie uitsluitend na volledige groene verificatie.
 
 ## Referentie en scope
 
@@ -27,7 +27,7 @@ Alle dertien bestaande hoofdstuk-7-commits van `f15bad0` tot en met `4932998` zi
 `doems.plan_store_schedule` en `doems.plan_store_cancel` ontvangen `config_entry_id` en `slot` (1–3).
 Schedule markeert een geldig handmatig slot pending; bij modus direct wordt het opslagmoment de starttijd. Cancel annuleert een inactief slot. Geen van beide acties roept apparaatservices aan. Een actieve uitvoering annuleren vereist de latere uitvoeringshoofdstukken en wordt hier geweigerd.
 
-## Definitief voorgesteld entiteitenregister — ter goedkeuring
+## Goedgekeurd definitief entiteitenregister
 
 `<entry_id>` is de bestaande Home Assistant-configuratie-entry-ID; deze wordt letterlijk ingevuld in de unique-ID. De object-ID's hieronder zijn de voorgestelde eerste entity-ID's. Home Assistant behoudt bestaande registry-toewijzingen en kan bij een reeds bezette naam een suffix toevoegen; deze implementatie hernoemt geen bestaande registry-entiteiten.
 
@@ -74,4 +74,4 @@ De blobcontroles blijven bestaan. De twee hoofdstuk-7-wijzigingen aan runtime en
 
 Nieuwe uitvoeringstests gebruiken de echte opslag-, schrijver-, adapter-, entiteit- en runtimecode, met afgeschermde Home Assistant-randen. Ze oefenen slotvulling, reconciliatie, overflow, handmatige overname, herstart, opslagfalen, bron/revisieraces, voorbereiding en gedeelde energietelling. Dit is geen live verificatie op de Home Assistant-installatie of fysieke batterij.
 
-Publicatie blijft geblokkeerd totdat beide volledige Python-suites en de GitHub Actions-jobs groen zijn én dit register is goedgekeurd. Bestaande release-tags blijven ongewijzigd.
+Publicatie blijft geblokkeerd totdat beide volledige Python-suites en de GitHub Actions-jobs groen zijn én de geregistreerde goedkeuring van dit register aanwezig is. Bestaande release-tags blijven ongewijzigd.

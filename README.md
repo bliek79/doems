@@ -4,7 +4,9 @@ DOEMS is a Home Assistant Energy Management System integration built component b
 
 ## Current stage
 
-`0.3.0-alpha.5.2` corrects numerical tolerance handling in **DOEMS 3.0 chapter 5: Plan72**, the observational 72-hour battery-energy planner introduced in Alpha 5.1. Development continues from the functionally validated chapter-4 release `v0.3.0-alpha.4.3`, commit `75516b5aa99282b03b91c1f5b534c02b7b07ce82`. Chapter-4 Energy Need and the existing forecast interfaces remain in place. The full local suite passes 171 tests. Publication is gated by automated checks; the Alpha 5.2 live recheck in Home Assistant is still pending.
+`0.3.0-alpha.7.1` implements **DOEMS 3.0 chapter 7: Persistent Plan Store**. The Alpha84-derived three-slot store is connected to the existing Plan72 SOC route and Action Bridge. Manual ownership, exact quarter windows, restart persistence, automatic reconciliation and overflow are retained. The 24 slot entities and six diagnostics have been approved by the user. Publication requires successful Python 3.12 and 3.13 checks; no physical execution authority is added.
+
+See the [chapter 7 contract and approved entity register](docs/DOEMS3_CHAPTER7_PLAN_STORE.md) and [release notes](RELEASE_NOTES_v0.3.0-alpha.7.1.md).
 
 The current integration provides:
 
@@ -23,7 +25,7 @@ The current integration provides:
 
 ## Installation and upgrade
 
-1. Select the intended DOEMS release through HACS or install it manually. For chapter-5 validation, select `v0.3.0-alpha.5.2` explicitly after that pre-release is published.
+1. Select the intended DOEMS release through HACS or install it manually. For chapter-7 validation, select `v0.3.0-alpha.7.1` explicitly after that pre-release is published.
 2. Restart Home Assistant.
 3. Open **DOEMS -> Configure / Options**.
 4. Enable only the components you want to configure. Plan72 requires **Energy Forecast, Solar Foundation, Prices Forecast and Energy Need**.
