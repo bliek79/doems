@@ -15,6 +15,7 @@ from .energy_coordinator import DOEMSEnergyCoordinator
 from .prices_runtime import DOEMSRegisteredPricesManager
 from .planner_action_bridge_runtime import ActionBridgeRuntime
 from .planner_72h_runtime import Plan72Runtime
+from .plan_store import AnkerEmsPlanStore
 from .solar_forecast import SolarForecastManager
 from .solar_foundation import SolarFoundationManager
 
@@ -63,9 +64,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
         energy_need = EnergyNeedRuntime(hass, entry, coordinator, solar_forecast)
         await energy_need.async_setup()
 
+    plan_store = AnkerEmsPlanStore(hass, entry.entry_id)
+    await plan_store.async_load()
+
     plan72 = None
     if entry.options.get(CONF_PLAN72_ENABLED, False):
-        plan72 = Plan72Runtime(hass, entry, coordinator, solar_forecast, prices, energy_need)
+        plan72 = Plan72Runtime(hass, entry, coordinator, solar_forecast, prices, energy_need, plan_store)
         await plan72.async_setup()
 
     action_bridge = None
@@ -78,6 +82,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
         "energy_forecast_enabled": coordinator is not None,
         "energy_need": energy_need,
         "plan72": plan72,
+        "plan_store": plan_store,
         "action_bridge": action_bridge,
         "solar_foundation": foundation,
         "solar_forecast": solar_forecast,
