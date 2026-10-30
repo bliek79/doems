@@ -59,7 +59,15 @@ def test_manual_discharge_pending_is_preserved():
     assert result[0]["target_soc"] == 30.0
 
 
-def test_invalid_naive_date_is_excluded():
-    assert MODULE.manual_constraints(Store({
-        1: planned(start_time="2026-11-01T12:00:00")
-    })) == []
+def test_invalid_naive_date_fails_closed():
+    import pytest
+    with pytest.raises(ValueError, match="invalid_manual_slot_1"):
+        MODULE.manual_constraints(Store({
+            1: planned(start_time="2026-11-01T12:00:00")
+        }))
+
+
+def test_invalid_power_fails_closed():
+    import pytest
+    with pytest.raises(ValueError, match="invalid_manual_slot_1"):
+        MODULE.manual_constraints(Store({1: planned(power_w=0)}))
