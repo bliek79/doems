@@ -45,7 +45,7 @@ def test_scheduled_manual_concept_constrains_soc_projection():
 def test_automatic_and_active_slots_are_not_silently_recast_manual():
     result = MODULE.manual_constraints(Store({
         1: planned(origin="automatic_72h_planner"),
-        2: planned(lifecycle_status="actief"),
+        2: planned(lifecycle_status="voltooid"),
         3: planned(execution_mode="direct"),
     }))
     assert result == []
@@ -71,3 +71,24 @@ def test_invalid_power_fails_closed():
     import pytest
     with pytest.raises(ValueError, match="invalid_manual_slot_1"):
         MODULE.manual_constraints(Store({1: planned(power_w=0)}))
+
+
+def test_active_automatic_retains_origin_preparation_end_and_command_target():
+    from datetime import datetime, timezone
+    result = MODULE.manual_constraints(Store({1: planned(
+        origin='automatic_72h_planner', lifecycle_status='actief', purpose='safety_charge',
+        power_start_time='2026-11-01T11:02:00+00:00', planned_end_time='2026-11-01T11:15:00+00:00',
+        command_target_soc=90, target_soc=75)}), now=datetime(2026,11,1,11,5,tzinfo=timezone.utc))
+    assert result[0]['origin'] == 'safety'
+    assert result[0]['target_soc'] == 90
+    assert result[0]['max_runtime_h'] == .25
+    assert result[0]['power_start_time'] == '2026-11-01T11:02:00+00:00'
+    assert result[0]['lifecycle_status'] == 'active'
+
+
+def test_future_revisable_automatic_does_not_double_count_generated_route():
+    from datetime import datetime, timezone
+    result = MODULE.manual_constraints(Store({1: planned(
+        origin='automatic_72h_planner', lifecycle_status='pending')}),
+        now=datetime(2026,10,30,12,tzinfo=timezone.utc))
+    assert result == []

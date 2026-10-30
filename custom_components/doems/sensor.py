@@ -77,6 +77,11 @@ async def async_setup_entry(
         )
 
     entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    from .plan_slot_entities import SlotStatus, StoreDiagnostic, DIAGNOSTICS
+    store = entry_data.get("plan_store")
+    if store is not None:
+        entities.extend(SlotStatus(entry, store, slot, "status") for slot in range(1, 4))
+        entities.extend(StoreDiagnostic(entry, store, entry_data.get("plan_store_writer"), field) for field in DIAGNOSTICS)
     energy_need = entry_data.get("energy_need")
     if isinstance(energy_need, EnergyNeedRuntime):
         entities.extend(EnergyNeedSensor(energy_need, field) for field in FIELDS)

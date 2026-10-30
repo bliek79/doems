@@ -100,6 +100,8 @@ class _Manual:
     end: datetime
     power_kw: float
     target: float
+    origin: str = "manual"
+    power_start: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -188,7 +190,13 @@ def _manual_inputs(plans, now, start, end, battery):
                 ))
                 diagnostic["skipped_count"] += 1
                 continue
-            plan = _Manual(identifier, action, max(start, begin), finish, power / 1000, battery.capacity * target / 100)
+            origin = raw.get("origin", "manual")
+            if origin not in {"manual", "safety", "trade"}:
+                raise ValueError("invalid_constraint_origin")
+            power_start = _time(raw["power_start_time"]) if raw.get("power_start_time") else begin
+            if not begin <= power_start < finish:
+                raise ValueError("invalid_constraint_power_start")
+            plan = _Manual(identifier, action, max(start, begin), finish, power / 1000, battery.capacity * target / 100, origin, power_start)
             accepted.append(plan)
             item.update(status="accepted", reason="projected", action=action,
                         start=plan.start.isoformat(), end=plan.end.isoformat())
@@ -351,14 +359,17 @@ class _Model:
 
             slot_manual = self.by_slot[index]
             if slot_manual:
-                boundaries = sorted({stamp, finish, *(max(stamp, p.start) for p in slot_manual), *(min(finish, p.end) for p in slot_manual)})
+                boundaries = sorted({stamp, finish, *(max(stamp, p.start) for p in slot_manual), *(min(finish, p.end) for p in slot_manual),
+                                     *(p.power_start for p in slot_manual if p.power_start is not None and stamp < p.power_start < finish)})
                 for begin, end in zip(boundaries, boundaries[1:]):
                     current = next((p for p in slot_manual if p.start <= begin < p.end), None)
                     duration = (end - begin).total_seconds() / 3600
                     if current is None or current.id in finished:
                         piece(begin, duration)
+                    elif current.power_start is not None and begin < current.power_start:
+                        piece(begin, duration, "preparation", current.origin)
                     else:
-                        piece(begin, duration, current.action, "manual", current.power_kw, current.target, current.id)
+                        piece(begin, duration, current.action, current.origin, current.power_kw, current.target, current.id)
             elif windows:
                 current_windows = [w for w in windows if w.start < finish and w.end > stamp]
                 boundaries = sorted({stamp, finish,

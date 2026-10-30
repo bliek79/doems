@@ -327,7 +327,7 @@ class Plan72Runtime:
         manual_plans = ()
         if self.plan_store is not None:
             from .plan_store_adapter import manual_constraints
-            manual_plans = tuple(tuple(sorted(item.items())) for item in manual_constraints(self.plan_store))
+            manual_plans = tuple(tuple(sorted(item.items())) for item in manual_constraints(self.plan_store, now=now))
         # Time within the same untouched quarter and gas-only events are not
         # planner inputs. New prices, power limits, SOC or UTC window are.
         try:

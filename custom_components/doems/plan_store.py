@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+import asyncio
+from functools import wraps
+from math import isfinite
+import logging
+
+_LOGGER = logging.getLogger(__name__)
 from collections.abc import Callable
 from copy import deepcopy
 from datetime import datetime, timedelta
@@ -56,6 +62,23 @@ DEFAULT_PLAN: dict[str, Any] = {
 }
 
 
+def serialized_mutation(method):
+    """Serialize durable revisions and restore memory when persistence fails."""
+    @wraps(method)
+    async def mutate(self, *args, **kwargs):
+        async with self._lock:
+            previous, revision = deepcopy(self._plans), self.revision
+            self._visible_plans = previous
+            try:
+                return await method(self, *args, **kwargs)
+            except BaseException:
+                self._plans, self.revision = previous, revision
+                raise
+            finally:
+                self._visible_plans = None
+    return mutate
+
+
 class AnkerEmsPlanStore:
     """Persistent storage for the three independent EMS plan slots."""
 
@@ -70,16 +93,23 @@ class AnkerEmsPlanStore:
         self._plans: dict[int, dict[str, Any]] = {
             slot: deepcopy(DEFAULT_PLAN) for slot in range(1, PLAN_SLOT_COUNT + 1)
         }
+        self._visible_plans = None
         self._listeners: set[Callable[[], None]] = set()
+        self._lock = asyncio.Lock()
+        self.revision = 0
 
     async def async_load(self) -> None:
         stored = await self._store.async_load()
         if not isinstance(stored, dict):
             return
 
+        revision = stored.get("revision", 0)
+        if isinstance(revision, bool) or not isinstance(revision, int) or revision < 0:
+            raise ValueError("invalid_storage_revision")
+        self.revision = revision
         raw_plans = stored.get("plans", {})
         if not isinstance(raw_plans, dict):
-            return
+            raise ValueError("invalid_stored_plans")
 
         for slot in range(1, PLAN_SLOT_COUNT + 1):
             raw = raw_plans.get(str(slot))
@@ -100,17 +130,32 @@ class AnkerEmsPlanStore:
         return remove_listener
 
     def get_plan(self, slot: int) -> dict[str, Any]:
-        return deepcopy(self._plans[slot])
+        return deepcopy((self._visible_plans if self._visible_plans is not None else self._plans)[slot])
 
     def get_value(self, slot: int, key: str) -> Any:
-        return self._plans[slot].get(key)
+        return (self._visible_plans if self._visible_plans is not None else self._plans)[slot].get(key)
 
+    @serialized_mutation
     async def async_set_value(self, slot: int, key: str, value: Any) -> None:
         if slot not in self._plans:
             raise ValueError(f"Unknown plan slot: {slot}")
         if key not in CONTROL_FIELDS:
             raise ValueError(f"Unknown plan field: {key}")
 
+        if key == "action" and value not in {"geen", "laden", "ontladen"}:
+            raise ValueError("invalid_action")
+        if key == "execution_mode" and value not in {"direct", "gepland"}:
+            raise ValueError("invalid_execution_mode")
+        limits = {"power_w": (100, 3500), "target_soc": (5, 100),
+                  "max_runtime_h": (.25, 12), "max_start_delay_min": (1, 120)}
+        if key in limits:
+            low, high = limits[key]
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value) or not low <= value <= high:
+                raise ValueError("invalid_" + key)
+        if key == "start_time" and value is not None and not isinstance(value, datetime):
+            value = dt_util.parse_datetime(str(value))
+            if value is None:
+                raise ValueError("invalid_start_time")
         if isinstance(value, datetime):
             if value.tzinfo is None:
                 value = value.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
@@ -123,6 +168,12 @@ class AnkerEmsPlanStore:
         # from the automatic planner so a later rolling refresh cannot overwrite
         # a value the user has just changed.
         self._plans[slot]["origin"] = "manual"
+        for field in ("planned_energy_kwh", "planned_end_time", "power_start_time",
+                      "command_target_soc", "projected_end_soc", "requested_energy_kwh",
+                      "energy_shortfall_kwh", "source_plan_generation", "source_input_fingerprint", "source_window_id"):
+            self._plans[slot][field] = None
+        self._plans[slot]["price_sources"] = []
+        self._plans[slot]["all_prices_known"] = False
         self._plans[slot]["purpose"] = None
         self._plans[slot]["planner_generated_at"] = None
         self._plans[slot]["planner_identity"] = None
@@ -138,6 +189,7 @@ class AnkerEmsPlanStore:
 
 
 
+    @serialized_mutation
     async def async_release_expired_automatic_plans(
         self, scheduler_expired_slots: set[int] | None = None
     ) -> dict[str, Any]:
@@ -191,8 +243,10 @@ class AnkerEmsPlanStore:
             "scheduler_expired_slots": sorted(scheduler_expired_slots),
         }
 
+    @serialized_mutation
     async def async_sync_automatic_plans(
-        self, desired: dict[int, dict[str, Any]]
+        self, desired: dict[int, dict[str, Any]], *, expected_revision: int | None = None,
+        source_is_current: Callable[[], bool] | None = None
     ) -> dict[str, Any]:
         """Atomically sync observer-approved planner proposals into free slots.
 
@@ -201,6 +255,10 @@ class AnkerEmsPlanStore:
         belongs to the same action; the revision signature may then change.
         Manual plans and automatic plans that are already due are never rewritten.
         """
+        if expected_revision is not None and expected_revision != self.revision:
+            raise ValueError("stale_store_revision")
+        if source_is_current is not None and not source_is_current():
+            raise ValueError("superseded_source")
         changed_slots: list[int] = []
         written_slots: list[int] = []
         cleared_slots: list[int] = []
@@ -281,6 +339,9 @@ class AnkerEmsPlanStore:
             current_origin = str(current.get("origin") or "manual")
             current_lifecycle = str(current.get("lifecycle_status") or "").lower()
             reusable = (
+                (current_origin == "manual" and current.get("action") in (None, "geen")
+                 and current_lifecycle == "concept")
+                or
                 (current_origin == "automatic_72h_planner" and current_lifecycle == "concept")
                 or pending_revisable(current)
                 or expired_automatic_pending(current)
@@ -391,8 +452,9 @@ class AnkerEmsPlanStore:
             "skipped_slots": skipped_slots,
         }
 
+    @serialized_mutation
     async def async_handoff_automatic_plans(
-        self, allowed: dict[int, str]
+        self, allowed: dict[int, str], *, source_is_current: Callable[[], bool] | None = None
     ) -> dict[str, Any]:
         """Promote matching concepts, or validate reconciled pending revisions.
 
@@ -401,6 +463,8 @@ class AnkerEmsPlanStore:
         persistent revision signature matches the bridge proposal. Physical
         execution remains disabled elsewhere.
         """
+        if source_is_current is not None and not source_is_current():
+            raise ValueError("superseded_source")
         handed_off: list[int] = []
         skipped: list[int] = []
         now_iso = dt_util.now().isoformat()
@@ -439,7 +503,7 @@ class AnkerEmsPlanStore:
 
             if lifecycle == "concept":
                 plan["lifecycle_status"] = "pending"
-                plan["lifecycle_reason"] = "automatic_scheduler_handoff"
+                plan["lifecycle_reason"] = "automatic_store_ready_no_execution"
                 plan["lifecycle_updated_at"] = now_iso
                 handed_off.append(slot)
 
@@ -453,6 +517,58 @@ class AnkerEmsPlanStore:
             "skipped_slots": skipped,
         }
 
+    @serialized_mutation
+    async def async_schedule_manual_plan(self, slot: int) -> None:
+        """Persist readiness only; this chapter never starts physical execution."""
+        plan = self._plans[slot]
+        if plan.get("origin") != "manual" or plan.get("lifecycle_status") == "actief":
+            raise ValueError("manual_inactive_slot_required")
+        if plan.get("action") not in {"laden", "ontladen"}:
+            raise ValueError("manual_action_required")
+        if plan.get("execution_mode") == "direct":
+            plan["start_time"] = dt_util.now().isoformat()
+        plan["lifecycle_status"] = "pending"
+        status = self.plan_status(slot, _uncommitted=True)
+        if status not in {"gepland", "direct_klaar"}:
+            raise ValueError(status)
+        plan["lifecycle_reason"] = "manual_store_ready_no_execution"
+        plan["lifecycle_updated_at"] = dt_util.now().isoformat()
+        await self._async_save()
+        self._notify_listeners()
+
+    @serialized_mutation
+    async def async_cancel_plan(self, slot: int) -> None:
+        plan = self._plans[slot]
+        if plan.get("lifecycle_status") == "actief":
+            raise ValueError("active_execution_requires_later_execution_chapter")
+        plan["lifecycle_status"] = "geannuleerd"
+        plan["lifecycle_reason"] = "manual_cancelled"
+        plan["lifecycle_updated_at"] = dt_util.now().isoformat()
+        await self._async_save()
+        self._notify_listeners()
+
+    @serialized_mutation
+    async def async_expire_manual_plans(self) -> None:
+        changed = False
+        now = dt_util.now()
+        for plan in self._plans.values():
+            if (plan.get("origin") != "manual" or plan.get("lifecycle_status") != "pending"
+                    or plan.get("execution_mode") not in {"gepland", "direct"}):
+                continue
+            start = dt_util.parse_datetime(str(plan.get("start_time")))
+            if start is None:
+                continue
+            if start.tzinfo is None:
+                start = start.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
+            if now > start + timedelta(minutes=float(plan.get("max_start_delay_min", 5))):
+                plan.update(lifecycle_status="fout", lifecycle_reason="manual_start_window_expired",
+                            lifecycle_updated_at=now.isoformat())
+                changed = True
+        if changed:
+            await self._async_save()
+            self._notify_listeners()
+
+    @serialized_mutation
     async def async_mark_lifecycle(
         self, slot: int, status: str, reason: str | None = None
     ) -> None:
@@ -475,8 +591,10 @@ class AnkerEmsPlanStore:
         self._notify_listeners()
 
     async def _async_save(self) -> None:
+        revision = self.revision + 1
         await self._store.async_save(
             {
+                "revision": revision,
                 "plans": {
                     str(slot): deepcopy(plan)
                     for slot, plan in self._plans.items()
@@ -484,12 +602,18 @@ class AnkerEmsPlanStore:
             }
         )
 
+        self.revision = revision
+        self._visible_plans = None
+
     def _notify_listeners(self) -> None:
         for callback in tuple(self._listeners):
-            callback()
+            try:
+                callback()
+            except Exception:
+                _LOGGER.exception("Plan store listener failed after durable commit")
 
-    def plan_status(self, slot: int) -> str:
-        plan = self._plans[slot]
+    def plan_status(self, slot: int, *, _uncommitted: bool = False) -> str:
+        plan = self._plans[slot] if _uncommitted else self.get_plan(slot)
         action = plan.get("action")
         execution_mode = plan.get("execution_mode")
         lifecycle_status = plan.get("lifecycle_status", "pending")
@@ -516,7 +640,7 @@ class AnkerEmsPlanStore:
             return "ongeldig"
         if not isinstance(runtime, (int, float)) or not 0.25 <= float(runtime) <= 12:
             return "ongeldig"
-        if not isinstance(delay, (int, float)) or not 1 <= float(delay) <= 120:
+        if not isinstance(delay, (int, float)) or not 0 <= float(delay) <= 120:
             return "ongeldig"
 
         if execution_mode == "direct":

@@ -70,3 +70,29 @@ def test_manual_terminal_not_automatically_reused():
                    3: plan()})
     result = module.slot_assignment(store, bridge("a"), now=NOW)
     assert list(result["desired"]) == [3]
+
+
+def test_new_earlier_candidate_cannot_steal_surviving_identity_slot():
+    store = Store({1: plan(origin="automatic_72h_planner", action="laden", identity="b"),
+                   2: plan(), 3: plan()})
+    result = module.slot_assignment(store, bridge("a", "b"), now=NOW)
+    assert result["desired"][1]["planner_identity"] == "b"
+    assert result["desired"][2]["planner_identity"] == "a"
+
+
+def test_protected_identity_is_not_duplicated_in_free_slot():
+    store = Store({1: plan(origin="automatic_72h_planner", action="laden", lifecycle="actief", identity="b"),
+                   2: plan(), 3: plan()})
+    result = module.slot_assignment(store, bridge("b", "c"), now=NOW)
+    assert [p["planner_identity"] for p in result["desired"].values()] == ["c"]
+
+
+def test_surviving_overflow_must_not_displace_earlier_new_action():
+    store = Store({1: plan(origin='automatic_72h_planner', action='laden', identity='b'),
+                   2: plan(origin='automatic_72h_planner', action='laden', identity='c'),
+                   3: plan(origin='automatic_72h_planner', action='laden', identity='d')})
+    result = module.slot_assignment(store, bridge('a', 'b', 'c', 'd'), now=NOW)
+    assert result['desired'][1]['planner_identity'] == 'b'
+    assert result['desired'][2]['planner_identity'] == 'c'
+    assert result['desired'][3]['planner_identity'] == 'a'
+    assert result['unassigned'] == [{'identity': 'd', 'reason': 'no_free_slot'}]

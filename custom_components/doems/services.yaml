@@ -1,0 +1,30 @@
+plan_store_schedule:
+  name: Schedule persistent plan
+  description: Marks a manual slot pending in storage. Does not command the battery.
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        text:
+    slot:
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 3
+          step: 1
+plan_store_cancel:
+  name: Cancel persistent plan
+  description: Cancels an inactive stored plan. Active device execution belongs to a later chapter.
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        text:
+    slot:
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 3
+          step: 1

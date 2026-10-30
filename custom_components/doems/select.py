@@ -29,6 +29,10 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up DOEMS selects only for enabled components."""
+    from .plan_slot_entities import SELECTS, SlotSelect
+    store = hass.data[DOMAIN][entry.entry_id]["plan_store"]
+    async_add_entities([SlotSelect(entry, store, slot, field)
+                        for slot in range(1, 4) for field in SELECTS])
     coordinator = entry.runtime_data
     if isinstance(coordinator, DOEMSEnergyCoordinator):
         async_add_entities([DOEMSEnergyProfileSelect(entry, coordinator)])

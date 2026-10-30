@@ -457,3 +457,45 @@ def test_entity_ids_units_timestamps_and_invalid_values(environment):
     assert indexed["reserve"].native_value is None
     assert indexed["best_charge_time"].native_value is None
     assert binaries[0].is_on is False and binaries[2].is_on is None
+
+
+def test_store_change_during_worker_discards_old_manual_generation(environment, monkeypatch):
+    class Plans:
+        def __init__(self):
+            self.listeners = []
+            self.plans = {1: dict(origin='manual', execution_mode='gepland', action='laden',
+                lifecycle_status='concept', start_time='2026-10-29T11:00:00+00:00',
+                power_w=1000, target_soc=80, max_runtime_h=.25)}
+        def get_plan(self, slot): return dict(self.plans.get(slot, {}))
+        def add_listener(self, listener):
+            self.listeners.append(listener)
+            return lambda: self.listeners.remove(listener)
+        def emit(self):
+            for listener in tuple(self.listeners): listener()
+    received = []
+    def engine(home, solar, prices, **parameters):
+        received.append(parameters['manual_plans'])
+        return fake_engine(home, solar, prices, **parameters)
+    monkeypatch.setattr(environment.runtime, 'calculate_plan72', engine)
+    async def scenario():
+        runtime, hass = setup_runtime(environment, gated=True)
+        store = Plans()
+        runtime.plan_store = store
+        await runtime.async_setup()
+        await wait_until(lambda: len(hass.jobs) == 1)
+        old_fingerprint = hass.jobs[0].inputs.fingerprint
+        store.plans[1]['power_w'] = 2000
+        store.emit()
+        hass.jobs[0].gate.set_result(None)
+        await wait_until(lambda: len(hass.jobs) == 2)
+        assert runtime.snapshot['status'] == 'calculating'
+        hass.jobs[1].gate.set_result(None)
+        await finish(runtime)
+        assert received[0][0]['power_w'] == 1000
+        assert received[1][0]['power_w'] == 2000
+        assert runtime.snapshot['input_fingerprint'] != old_fingerprint
+        assert runtime.snapshot['sources']['manual_input'] == 'plan_store'
+        assert runtime.snapshot['physical_execution_authority'] is False
+        await runtime.async_shutdown()
+        assert not store.listeners
+    asyncio.run(scenario())

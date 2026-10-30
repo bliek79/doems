@@ -208,11 +208,15 @@ def test_equivalent_timezone_timestamps_keep_identity_and_exact_utc_instants():
     assert b==a
 
 
-def test_chapters_four_and_five_calculators_and_runtimes_are_frozen_alpha53_blobs():
+def test_calculators_and_runtimes_are_frozen_reviewed_ch7_blobs():
+    # Chapter 7 must connect persistent constraints to the existing route. The
+    # calculator change adds their origin/preparation metadata, not a second
+    # planner. test_ch7_preserves_unmodified_alpha53_algorithms separately freezes
+    # every unaffected AST node to the original Alpha53 implementation.
     expected={'energy_need.py':'bc10cbb18dd531735e390fe5369466ab4f466087',
         'energy_need_runtime.py':'3ab25d81615429f51264beb69d4d0064a34f5863',
-        'planner_72h.py':'47dabc7a034476805badd36bba86d72b22341cc2'}
-    expected['planner_72h_runtime.py']='8b7fe10b12b62647f12aaa4b3b111e3e92da34e8'
+        'planner_72h.py':'1835ae08a0d47decf32373cf02afbf194227cec3'}
+    expected['planner_72h_runtime.py']='eeabe8a7455984ecaa9dba704f027b2f6fd41d95'
     for name,sha in expected.items():
         data=(ROOT/'custom_components/doems'/name).read_bytes()
         assert hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()==sha

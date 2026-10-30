@@ -21,7 +21,7 @@ def _can_revise(plan, now):
     if plan.get("origin") != "automatic_72h_planner":
         return False
     status = plan.get("lifecycle_status")
-    if status == "concept":
+    if status in {"concept", "voltooid", "geannuleerd", "fout"}:
         return True
     if status != "pending":
         return False
@@ -48,10 +48,13 @@ def slot_assignment(store, bridge, *, now):
                  or existing[i].get("action") in (None, "geen")
                  and existing[i].get("lifecycle_status") not in {"actief", "pending"}]
     available = [i for i in available if existing[i].get("origin") == "automatic_72h_planner"
-                 or existing[i].get("origin") == "manual" and existing[i].get("action") in (None, "geen")]
+                 or existing[i].get("origin") == "manual" and existing[i].get("action") in (None, "geen")
+                 and existing[i].get("lifecycle_status") == "concept"]
     candidates = bridge.get("eligible_candidates") or []
     desired, unassigned, used = {}, [], set()
-    seen = set()
+    protected = {p.get("planner_identity") for i, p in existing.items()
+                 if i not in available and p.get("planner_identity")}
+    seen, eligible = set(), []
     for item in candidates:
         if not item.get("valid") or item.get("selection_status") != "eligible":
             continue
@@ -60,6 +63,8 @@ def slot_assignment(store, bridge, *, now):
             unassigned.append({"identity": identity, "reason": "invalid_or_duplicate_identity"})
             continue
         seen.add(identity)
+        if identity in protected:
+            continue
         try:
             start = _utc(item["start_time"])
         except (KeyError, TypeError, ValueError, OverflowError):
@@ -68,16 +73,20 @@ def slot_assignment(store, bridge, *, now):
         if start <= now:
             unassigned.append({"identity": identity, "reason": "start_due"})
             continue
-        preferred = next((slot for slot in available if slot not in used
-                          and existing[slot].get("planner_identity") == identity), None)
-        slot = preferred if preferred is not None else next(
-            (slot for slot in available if slot not in used
-             and existing[slot].get("action") in (None, "geen")), None)
+        eligible.append((start, item))
+    eligible.sort(key=lambda pair: (pair[0], pair[1]["planner_identity"]))
+    selected = [item for _, item in eligible[:len(available)]]
+    unassigned.extend({"identity": item["planner_identity"], "reason": "no_free_slot"}
+                      for _, item in eligible[len(available):])
+    # Reserve surviving identities only within the chronological selected prefix.
+    # Reserving overflow would let a later action displace an earlier candidate.
+    reserved = {item["planner_identity"]: slot for item in selected for slot in available
+                if item["planner_identity"] == existing[slot].get("planner_identity")}
+    for item in selected:
+        identity = item["planner_identity"]
+        slot = reserved.get(identity)
         if slot is None:
-            slot = next((slot for slot in available if slot not in used), None)
-        if slot is None:
-            unassigned.append({"identity": identity, "reason": "no_free_slot"})
-            continue
+            slot = next(i for i in available if i not in used and i not in reserved.values())
         desired[slot] = item
         used.add(slot)
     return {"valid": True, "reason": "preview_only", "desired": desired,

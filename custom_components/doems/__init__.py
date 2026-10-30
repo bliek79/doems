@@ -95,6 +95,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> boo
         "solar_forecast": solar_forecast,
         "prices": prices,
     }
+    from .plan_store_services import register_plan_store_services
+    register_plan_store_services(hass)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 

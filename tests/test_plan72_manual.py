@@ -130,3 +130,35 @@ def test_within_quarter_reserve_dip_is_visible_after_manual_recovery():
     assert not result["reserve_satisfied"]
     assert result["reserve_breach_count"] == 1
     assert_conserved(result)
+
+
+def test_protected_automatic_uses_shared_route_and_original_energy_origin():
+    protected = plan(id="slot_2", origin="safety")
+    result = run(manual_plans=(protected,))
+    assert result["valid"]
+    assert result["totals"]["charge_from_grid_safety_kwh"] == pytest.approx(.25)
+    assert result["totals"]["charge_from_grid_manual_kwh"] == 0
+    assert result["timeline"][0]["segments"][0]["origin"] == "safety"
+    assert_conserved(result)
+
+
+def test_protected_trade_and_manual_share_disjoint_partial_quarters():
+    protected = plan(id="slot_2", origin="trade", max_runtime_h=.125)
+    manual = plan(id="slot_1", start_time=NOW + timedelta(minutes=7, seconds=30), max_runtime_h=.125)
+    result = run(manual_plans=(protected, manual))
+    assert result["valid"]
+    assert result["totals"]["charge_from_grid_trade_kwh"] == pytest.approx(.125)
+    assert result["totals"]["charge_from_grid_manual_kwh"] == pytest.approx(.125)
+    assert_conserved(result)
+
+
+def test_protected_automatic_preserves_two_minute_preparation_and_hard_end():
+    protected = plan(id='slot_2', origin='trade',
+                     power_start_time=NOW + timedelta(minutes=2))
+    result = run(manual_plans=(protected,))
+    assert result['valid']
+    assert result['totals']['charge_from_grid_trade_kwh'] == pytest.approx(13 / 60)
+    segments = result['timeline'][0]['segments']
+    assert segments[0]['action'] == 'trade_preparation'
+    assert segments[0]['duration_hours'] == pytest.approx(2 / 60)
+    assert_conserved(result)
