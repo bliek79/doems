@@ -17,7 +17,7 @@ def validator(monkeypatch):
 
 def test_approved_release_contract_and_register_are_exact(validator):
     result = validator.validate()
-    assert result['version'] == '0.3.0-alpha.7.2'
+    assert result['version'] == '0.3.0-alpha.7.3'
     assert result['entity_register_approved'] is True
     assert result['slot_entity_count'] + result['diagnostic_entity_count'] == 30
 
@@ -25,7 +25,7 @@ def test_approved_release_contract_and_register_are_exact(validator):
 def test_release_rejects_changed_approved_entity_implementation(validator, tmp_path, monkeypatch):
     paths = set(validator.PRESERVED_BLOBS) | {
         'custom_components/doems/manifest.json', 'custom_components/doems/const.py',
-        'docs/DOEMS3_CHAPTER7_PLAN_STORE.md', 'RELEASE_NOTES_v0.3.0-alpha.7.2.md'}
+        'docs/DOEMS3_CHAPTER7_PLAN_STORE.md', 'RELEASE_NOTES_v0.3.0-alpha.7.3.md'}
     for name in paths:
         target = tmp_path / name
         target.parent.mkdir(parents=True, exist_ok=True)

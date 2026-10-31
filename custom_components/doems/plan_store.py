@@ -68,14 +68,18 @@ def serialized_mutation(method):
     async def mutate(self, *args, **kwargs):
         async with self._lock:
             previous, revision = deepcopy(self._plans), self.revision
+            history = deepcopy(self._last_closed)
+            self._visible_history = history
             self._visible_plans = previous
             try:
                 return await method(self, *args, **kwargs)
             except BaseException:
                 self._plans, self.revision = previous, revision
+                self._last_closed = history
                 raise
             finally:
                 self._visible_plans = None
+                self._visible_history = None
     return mutate
 
 
@@ -93,6 +97,8 @@ class AnkerEmsPlanStore:
         self._plans: dict[int, dict[str, Any]] = {
             slot: deepcopy(DEFAULT_PLAN) for slot in range(1, PLAN_SLOT_COUNT + 1)
         }
+        self._last_closed = {}
+        self._visible_history = None
         self._visible_plans = None
         self._listeners: set[Callable[[], None]] = set()
         self._lock = asyncio.Lock()
@@ -107,6 +113,11 @@ class AnkerEmsPlanStore:
         if isinstance(revision, bool) or not isinstance(revision, int) or revision < 0:
             raise ValueError("invalid_storage_revision")
         self.revision = revision
+        history = stored.get("last_closed", {})
+        if not isinstance(history, dict):
+            raise ValueError("invalid_closed_plan_history")
+        self._last_closed = {str(i): deepcopy(history[str(i)]) for i in range(1, 4)
+                             if isinstance(history.get(str(i)), dict)}
         raw_plans = stored.get("plans", {})
         if not isinstance(raw_plans, dict):
             raise ValueError("invalid_stored_plans")
@@ -131,6 +142,10 @@ class AnkerEmsPlanStore:
 
     def get_plan(self, slot: int) -> dict[str, Any]:
         return deepcopy((self._visible_plans if self._visible_plans is not None else self._plans)[slot])
+
+    def last_closed_plan(self, slot: int) -> dict | None:
+        history = self._visible_history if self._visible_history is not None else self._last_closed
+        return deepcopy(history.get(str(slot)))
 
     def get_value(self, slot: int, key: str) -> Any:
         return (self._visible_plans if self._visible_plans is not None else self._plans)[slot].get(key)
@@ -549,10 +564,14 @@ class AnkerEmsPlanStore:
 
     @serialized_mutation
     async def async_expire_manual_plans(self) -> None:
+        """Archive missed manual starts and free their slots, including old faults."""
         changed = False
         now = dt_util.now()
-        for plan in self._plans.values():
-            if (plan.get("origin") != "manual" or plan.get("lifecycle_status") != "pending"
+        for slot, plan in self._plans.items():
+            status = plan.get("lifecycle_status")
+            expired_fault = (status == "fout" and
+                             plan.get("lifecycle_reason") == "manual_start_window_expired")
+            if (plan.get("origin") != "manual" or not (status == "pending" or expired_fault)
                     or plan.get("execution_mode") not in {"gepland", "direct"}):
                 continue
             start = dt_util.parse_datetime(str(plan.get("start_time")))
@@ -560,10 +579,22 @@ class AnkerEmsPlanStore:
                 continue
             if start.tzinfo is None:
                 start = start.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
-            if now > start + timedelta(minutes=float(plan.get("max_start_delay_min", 5))):
-                plan.update(lifecycle_status="fout", lifecycle_reason="manual_start_window_expired",
-                            lifecycle_updated_at=now.isoformat())
-                changed = True
+            delay = float(plan.get("max_start_delay_min", 5))
+            if not isfinite(delay) or delay < 0:
+                continue
+            if now <= start + timedelta(minutes=delay):
+                continue
+            closed = deepcopy(plan)
+            closed.update(lifecycle_status="fout", lifecycle_reason="manual_start_window_expired")
+            self._last_closed[str(slot)] = {
+                "plan": closed, "closed_at": now.isoformat(),
+                "reason": "manual_start_window_expired",
+            }
+            empty = deepcopy(DEFAULT_PLAN)
+            empty.update(lifecycle_reason="manual_start_window_expired_released",
+                         lifecycle_updated_at=now.isoformat())
+            self._plans[slot] = empty
+            changed = True
         if changed:
             await self._async_save()
             self._notify_listeners()
@@ -595,6 +626,7 @@ class AnkerEmsPlanStore:
         await self._store.async_save(
             {
                 "revision": revision,
+                "last_closed": deepcopy(self._last_closed),
                 "plans": {
                     str(slot): deepcopy(plan)
                     for slot, plan in self._plans.items()
@@ -604,6 +636,7 @@ class AnkerEmsPlanStore:
 
         self.revision = revision
         self._visible_plans = None
+        self._visible_history = None
 
     def _notify_listeners(self) -> None:
         for callback in tuple(self._listeners):

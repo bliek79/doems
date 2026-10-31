@@ -1,6 +1,6 @@
 # DOEMS 3.0 — Hoofdstuk 7: Persistent Plan Store
 
-Status: entiteitenregister door de gebruiker goedgekeurd op 30 oktober 2026. Releasekandidaat `v0.3.0-alpha.7.1`; publicatie uitsluitend na volledige groene verificatie.
+Status: entiteitenregister door de gebruiker goedgekeurd op 30 oktober 2026. Releasekandidaat `v0.3.0-alpha.7.3`; publicatie uitsluitend na volledige groene verificatie.
 
 ## Referentie en scope
 
@@ -75,3 +75,7 @@ De blobcontroles blijven bestaan. De twee hoofdstuk-7-wijzigingen aan runtime en
 Nieuwe uitvoeringstests gebruiken de echte opslag-, schrijver-, adapter-, entiteit- en runtimecode, met afgeschermde Home Assistant-randen. Ze oefenen slotvulling, reconciliatie, overflow, handmatige overname, herstart, opslagfalen, bron/revisieraces, voorbereiding en gedeelde energietelling. Dit is geen live verificatie op de Home Assistant-installatie of fysieke batterij.
 
 Publicatie blijft geblokkeerd totdat beide volledige Python-suites en de GitHub Actions-jobs groen zijn én de geregistreerde goedkeuring van dit register aanwezig is. Bestaande release-tags blijven ongewijzigd.
+
+## Correctie Alpha 7.3 — verlopen handmatige startvensters
+
+Verlopen handmatige pending-plannen worden afgesloten en geven hun slot vrij. Bestaande foutplannen met exact `manual_start_window_expired` worden eveneens vrijgegeven zodra hun startvenster aantoonbaar voorbij is. Toekomstige plannen, actieve plannen, concepten en andere foutredenen blijven beschermd. De laatste afgesloten handmatige actie per slot wordt apart persistent bewaard en is zichtbaar als `last_closed_plan`, ook na automatische hervulling en herstart. Opslagfalen draait zowel de vrijgave als het archief terug. De oorspronkelijke herkomst van de door de gebruiker getoonde actie van 6 oktober is hiermee niet vastgesteld.

@@ -258,7 +258,7 @@ def test_readers_only_see_committed_plan_while_save_is_pending(store_module):
     asyncio.run(run())
 
 
-def test_manual_five_minute_expiry_preserves_terminal_slot_ownership(store_module, monkeypatch):
+def test_manual_five_minute_expiry_releases_slot_and_retains_reason(store_module, monkeypatch):
     async def run():
         store = store_module.AnkerEmsPlanStore(None, 'id')
         await store.async_set_value(1, 'action', 'laden')
@@ -269,9 +269,10 @@ def test_manual_five_minute_expiry_preserves_terminal_slot_ownership(store_modul
         assert store.get_value(1, 'lifecycle_status') == 'pending'
         monkeypatch.setattr(store_module.dt_util, 'now', lambda: datetime(2026,10,30,12,0,1,tzinfo=timezone.utc))
         await store.async_expire_manual_plans()
-        assert store.get_value(1, 'lifecycle_status') == 'fout'
-        assert store.get_value(1, 'origin') == 'manual'
-        assert (await store.async_sync_automatic_plans({1: proposal()}))['skipped_slots'] == [1]
+        assert store.get_value(1, 'action') == 'geen'
+        assert store.last_closed_plan(1)['reason'] == 'manual_start_window_expired'
+        assert (await store.async_sync_automatic_plans({1: proposal()}))['written_slots'] == [1]
+        assert store.last_closed_plan(1)['plan']['action'] == 'laden'
     asyncio.run(run())
 
 
@@ -331,4 +332,58 @@ def test_timer_is_registered_as_event_loop_callback(store_module, monkeypatch):
         await writer._task
         assert calls == ['event-loop', 'event-loop']
         await writer.async_shutdown()
+    asyncio.run(run())
+
+
+def test_old_expired_fault_is_released_with_history_surviving_restart(store_module):
+    async def run():
+        store = store_module.AnkerEmsPlanStore(None, 'id')
+        raw = dict(store_module.DEFAULT_PLAN, action='ontladen', execution_mode='gepland',
+                   start_time='2026-10-06T17:00:00+00:00', lifecycle_status='fout',
+                   lifecycle_reason='manual_start_window_expired',
+                   planned_end_time='2026-10-05T23:15:00+00:00', power_w=2500)
+        store._store.data = {'plans': {'3': raw}, 'revision': 253}
+        await store.async_load()
+        await store.async_expire_manual_plans()
+        assert store.get_value(3, 'action') == 'geen'
+        assert store.get_value(3, 'planned_end_time') is None
+        assert store.revision == 254
+        history = store.last_closed_plan(3)
+        assert history['plan'] == raw
+        await store.async_sync_automatic_plans({3: proposal()})
+        restored = store_module.AnkerEmsPlanStore(None, 'id')
+        restored._store.data = store._store.data
+        await restored.async_load()
+        assert restored.get_value(3, 'origin') == 'automatic_72h_planner'
+        assert restored.last_closed_plan(3) == history
+    asyncio.run(run())
+
+
+def test_expiry_preserves_future_active_and_other_faults(store_module):
+    async def run():
+        store = store_module.AnkerEmsPlanStore(None, 'id')
+        for i, status in [(1, 'pending'), (2, 'actief'), (3, 'fout')]:
+            await store.async_set_value(i, 'action', 'laden')
+            await store.async_set_value(i, 'execution_mode', 'gepland')
+            await store.async_set_value(i, 'start_time', '2026-10-31T12:00:00+00:00' if i == 1 else '2026-10-06T12:00:00+00:00')
+            await store.async_mark_lifecycle(i, status, 'other_reason')
+        before = [store.get_plan(i) for i in range(1,4)]
+        await store.async_expire_manual_plans()
+        assert [store.get_plan(i) for i in range(1,4)] == before
+    asyncio.run(run())
+
+
+def test_expiry_storage_failure_restores_plan_and_history(store_module):
+    async def run():
+        store = store_module.AnkerEmsPlanStore(None, 'id')
+        await store.async_set_value(1, 'action', 'laden')
+        await store.async_set_value(1, 'start_time', '2026-10-06T12:00:00+00:00')
+        await store.async_mark_lifecycle(1, 'pending')
+        before = store.get_plan(1)
+        revision = store.revision
+        store._store.fail = True
+        with pytest.raises(OSError): await store.async_expire_manual_plans()
+        assert store.get_plan(1) == before
+        assert store.last_closed_plan(1) is None
+        assert store.revision == revision
     asyncio.run(run())

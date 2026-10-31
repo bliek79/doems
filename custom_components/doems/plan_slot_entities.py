@@ -60,6 +60,7 @@ class SlotEntity:
     def extra_state_attributes(self):
         plan = self.store.get_plan(self.slot)
         return {**plan, 'storage_revision': self.store.revision,
+                'last_closed_plan': self.store.last_closed_plan(self.slot),
                 'physical_execution_authority': False, 'execution_enabled': False}
 
 
