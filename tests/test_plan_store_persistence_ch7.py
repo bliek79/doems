@@ -29,7 +29,14 @@ def store_module(monkeypatch):
             if self.fail: raise OSError('disk_failure')
             self.data = deepcopy(value)
     module('homeassistant')
-    module('homeassistant.core', HomeAssistant=object)
+    def callback(fn):
+        fn._hass_callback = True
+        return fn
+    module('homeassistant.core', HomeAssistant=object, callback=callback)
+    from enum import StrEnum
+    class EntityCategory(StrEnum):
+        DIAGNOSTIC = 'diagnostic'
+    module('homeassistant.const', EntityCategory=EntityCategory)
     module('homeassistant.helpers')
     module('homeassistant.helpers.storage', Store=Storage)
     module("homeassistant.helpers.event", async_track_time_interval=lambda *a, **kw: lambda: None)
@@ -211,6 +218,10 @@ def test_entities_edit_and_restore_actual_store_and_have_exact_register(store_mo
         assert len(rows) == len(set(x[0] for x in rows)) == len(set(x[1] for x in rows)) == 30
         assert rows[0] == ('select.doems_slot_1_action', 'id_slot_1_action')
         assert rows[-1] == ('sensor.doems_plan_store_overflow', 'id_plan_store_overflow')
+        from homeassistant.const import EntityCategory
+        for field in module.DIAGNOSTICS:
+            diagnostic = module.StoreDiagnostic(entry, store, None, field)
+            assert isinstance(diagnostic._attr_entity_category, EntityCategory)
     asyncio.run(run())
 
 
@@ -294,4 +305,30 @@ def test_overflow_rolls_into_expired_slot_with_survivors_unchanged(store_module,
         assert store.get_value(1, 'planner_identity') == 'd'
         assert [store.get_plan(i) for i in (2,3)] == survivors
         assert writer.diagnostics['overflow'] == 0
+    asyncio.run(run())
+
+
+def test_timer_is_registered_as_event_loop_callback(store_module, monkeypatch):
+    async def run():
+        module = importlib.import_module('store_ch7_test.plan_store_writer')
+        registered = []
+        def track(hass, action, interval):
+            assert getattr(action, '_hass_callback', False), 'HA would run unmarked sync timer in executor'
+            registered.append(action)
+            return lambda: None
+        monkeypatch.setattr(module, 'async_track_time_interval', track)
+        store = store_module.AnkerEmsPlanStore(None, 'id')
+        class Hass:
+            def async_create_task(self, coro): return asyncio.create_task(coro)
+        bridge = types.SimpleNamespace(async_add_listener=lambda fn: lambda: None)
+        writer = module.PlanStoreWriter(Hass(), store, None, bridge)
+        calls = []
+        async def sync(): calls.append('event-loop')
+        monkeypatch.setattr(writer, '_sync', sync)
+        await writer.async_setup()
+        await writer._task
+        registered[0](None)
+        await writer._task
+        assert calls == ['event-loop', 'event-loop']
+        await writer.async_shutdown()
     asyncio.run(run())

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone
+from homeassistant.core import callback
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
@@ -67,9 +68,14 @@ class PlanStoreWriter:
         self._unsubscribe = self.bridge.async_add_listener(self.schedule)
         self._store_unsubscribe = self.store.add_listener(self.schedule)
         self._timer_unsubscribe = async_track_time_interval(
-            self.hass, lambda now: self.schedule(), timedelta(seconds=30))
+            self.hass, self._timer_tick, timedelta(seconds=30))
         self.schedule()
 
+    @callback
+    def _timer_tick(self, now):
+        self.schedule()
+
+    @callback
     def schedule(self):
         if self._closed:
             return

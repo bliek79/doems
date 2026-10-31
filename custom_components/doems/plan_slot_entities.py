@@ -2,6 +2,7 @@
 from datetime import datetime
 from math import isfinite
 
+from homeassistant.const import EntityCategory
 from homeassistant.components.datetime import DateTimeEntity
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.components.select import SelectEntity
@@ -121,7 +122,7 @@ class StoreDiagnostic(SlotEntity, SensorEntity):
         self._attr_suggested_object_id = f'doems_plan_store_{field}'
         self._attr_name = f'DOEMS Plan Store {field}'
         self._attr_should_poll = True
-        self._attr_entity_category = 'diagnostic'
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
 
     @property
     def native_value(self):
