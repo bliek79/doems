@@ -79,3 +79,27 @@ Publicatie blijft geblokkeerd totdat beide volledige Python-suites en de GitHub 
 ## Correctie Alpha 7.3 — verlopen handmatige startvensters
 
 Verlopen handmatige pending-plannen worden afgesloten en geven hun slot vrij. Bestaande foutplannen met exact `manual_start_window_expired` worden eveneens vrijgegeven zodra hun startvenster aantoonbaar voorbij is. Toekomstige plannen, actieve plannen, concepten en andere foutredenen blijven beschermd. De laatste afgesloten handmatige actie per slot wordt apart persistent bewaard en is zichtbaar als `last_closed_plan`, ook na automatische hervulling en herstart. Opslagfalen draait zowel de vrijgave als het archief terug. De oorspronkelijke herkomst van de door de gebruiker getoonde actie van 6 oktober is hiermee niet vastgesteld.
+
+## Herstel prijsselectie alpha.7.4
+
+De praktische veiligheidsvensters volgden de Alpha84-prijsvolgorde niet volledig:
+een bestaand venster kon worden verlengd vóór een goedkoper haalbaar kwartier.
+Samenvoegen kon bovendien energie naar een ander importtarief verplaatsen.
+Alpha.7.4 herstelt selectie op importprijs en, bij gelijke prijs, het laatste
+haalbare kwartier vóór de energiedeadline. Goedkopere eerdere toewijzingen
+herbegrenzen achterhaalde latere laadcommando's binnen dezelfde SOC-berekening.
+Samenvoegen mag geen prijsgrens overschrijden, routekosten verhogen, zonnelading
+verdringen of latere laadcommando's aan de capaciteitsgrens laten afkappen.
+
+De ongewijzigde Alpha84-preview staat uitsluitend als gecontroleerde testbron in
+`tests/fixtures/alpha84`; deze wordt niet in de integratie meegeleverd. De tests
+vergelijken de strategische prijskeuzes, met behoud van de DOEMS-architectuur
+van 288 kwartieren, de voorbereiding en de fysieke energiebalans. De bron-SHA
+van de planner en de AST-digests van uitsluitend de twee herstelde functies
+zijn opnieuw vastgelegd. Alle overige algoritme-digests blijven behouden.
+
+Een eerdere testgrens van minder dan twintig acties over de volledige horizon
+was geen strategiespecificatie en beloonde het onjuiste langgerekte venster.
+Deze is vervangen door de 288-kwartiergrens; elk gepubliceerd venster wordt nu
+ook gecontroleerd op een volledig geleverde vermogensfase. De drie persistente
+slots, het goedgekeurde entiteitenregister en de overflowwerking veranderen niet.

@@ -37,6 +37,7 @@ def assert_windows(plan):
         assert all(s['battery_power_w']==0 and s['stored_start_kwh']==s['stored_end_kwh'] for s in preparation)
         powered=[s for s in matching if s['action'] in {'safety_charge','trade_charge','trade_discharge'}]
         assert w['projected_power_duration_h']==pytest.approx(sum(s['duration_hours'] for s in powered))
+        assert w['projected_power_duration_h']==pytest.approx(w['planned_power_duration_h'], abs=1e-7)
         assert w['target_soc']==pytest.approx(powered[-1]['stored_end_kwh']/7.2*100)
         assert w['planned_energy_kwh']==pytest.approx(sum(abs(s['battery_power_w'])*s['duration_hours']/1000 for s in powered))
 
@@ -52,8 +53,10 @@ def test_three_original_route_conflicts_now_have_complete_consistent_windows(cas
     assert plan['status']=='ready'
     assert plan['reserve_satisfied'] and plan['reserve_breach_count']==0
     assert plan['remaining_charge_need_kwh']<=plan['remaining_charge_need_tolerance_kwh']
-    # Fewer physical windows, without a three-slot/full-horizon action cap.
-    assert 0<plan['action_window_count']<20
+    # Distinct tariff windows must stay distinct. A global <20 cap rewarded
+    # the former long-window extension across expensive quarters. Capacity is
+    # bounded by the native 288 quarters; only three live slots are exposed.
+    assert 0<plan['action_window_count']<=288
     assert all(w['projected_power_duration_h']>=13/60-1e-6 for w in plan['action_windows'])
     assert not plan['action_window_search']['search_limited']
 

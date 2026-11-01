@@ -655,21 +655,44 @@ def _window_free(model, window, others):
 def _safety_windows(model):
     """Resolve chronological needs using complete quarter-aligned commands.
 
-    Extend an existing charge first, then open a price-ranked earlier window.
-    Power is searched in hardware-bounded 10 W steps, not in pulse seconds.
+    Alpha84 strategy: allocate to the cheapest feasible quarter before each
+    reserve deadline, preferring the latest quarter when prices are equal.
+    An existing command has no priority over a cheaper new command. Power is
+    searched in hardware-bounded 10 W steps, not in pulse seconds.
     Every accepted edit is replayed through the SAME causal simulator.
     """
     windows = []
     trace, _ = model.simulate({})
     blocked = set()
-    diagnostics = {"search_limited": False, "replay_budget": 4096,
+    diagnostics = {"search_limited": False, "replay_budget": 8192,
                    "minimum_window_minutes": 15, "maximum_window_hours": 12,
                    "preparation_minutes": 2, "minimum_power_w": 100,
-                   "power_step_w": 10, "method": "bounded_chronological_window_replay"}
+                   "power_step_w": 10, "method": "alpha84_cheapest_feasible_quarter_replay"}
     max_step = int(model.b.charge_kw*1000//10)
     if max_step < 10:
         diagnostics["reason"] = "no_representable_charge_power"
         return windows, trace, diagnostics
+    def replay(candidate, others):
+        selected = sorted(others + [candidate], key=lambda w: w.start)
+        trial, _ = model.simulate({}, windows=selected)
+        adjusted = []
+        for window in selected:
+            index = int((window.start - model.stamps[0]).total_seconds() / 900)
+            hours = (window.end - window.power_start).total_seconds() / 3600
+            bound = int(max(0., model.b.capacity - trial[index]["stored_start_kwh"])
+                        / model.b.charge_eff / hours * 100 + _EPS)
+            if window.id != candidate.id and window.power_kw > bound / 100 + _EPS:
+                # A cheaper earlier allocation can supersede energy already
+                # assigned later. Reconcile those commands in the same replay;
+                # never leave a stale setpoint that would clip at capacity.
+                if bound >= 10:
+                    adjusted.append(replace(window, power_kw=bound / 100))
+            else:
+                adjusted.append(window)
+        if adjusted != selected:
+            trial, _ = model.simulate({}, windows=adjusted)
+        return trial, [w for w in adjusted if w.id != candidate.id]
+
     for _ in range(QUARTERS*3):
         if model.calls >= diagnostics["replay_budget"]:
             diagnostics["search_limited"] = True
@@ -677,40 +700,37 @@ def _safety_windows(model):
         deadline = next((i for i,r in enumerate(trace) if i not in blocked and _need(r,model.b)>_TOL),None)
         if deadline is None:
             break
-        finish = model.stamps[deadline]+timedelta(minutes=15)
         edits = []
-        # Reuse/extend the most recent existing safety window when possible.
-        for old in reversed(windows):
-            if old.origin != "safety" or old.start > model.stamps[deadline]:
-                continue
-            others = [w for w in windows if w.id != old.id]
-            # Increase an existing cheap charge before extending its time
-            # into later prices: more useful stored energy, fewer switches.
-            stronger = replace(old,power_kw=max_step/100)
-            if _window_free(model,stronger,others):
-                edits.append((stronger,others))
-            candidate = replace(old, end=max(finish,old.end),power_kw=max_step/100)
-            if candidate.end != old.end and _window_free(model,candidate,others):
-                edits.append((candidate,others))
-            if len(edits)>=4:
-                break
-        # No fixed daily action-count limit. Search a bounded set of the
-        # cheapest unoccupied full quarters that precede this actual deadline.
-        cheap = sorted(range(deadline+1),key=lambda i:(model.prices[i][0],-i))
-        # The cheapest earlier quarters may be unusable due to capacity.
-        # Always reserve candidate coverage for the latest deadline quarters.
-        available = list(dict.fromkeys(cheap[:32]+list(range(deadline,max(-1,deadline-16),-1))))
-        added = 0
+        # Alpha84 allocates each deficit by (import price, latest time),
+        # replaying the whole route after every accepted allocation. Extending
+        # an old command first bypasses that ordering and buys expensive energy.
+        # Keep allocation quarters independent; compaction is a separate,
+        # price-preserving operation after all deadlines have been resolved.
+        last_full = max((i for i in range(deadline)
+                         if trace[i]["max_soc"] >= 100 - _TOL), default=-1)
+        available = sorted(range(last_full + 1, deadline + 1),
+                           key=lambda i: (model.prices[i][0], -i))
         for i in available:
-            candidate = _Window("safety_"+model.stamps[i].isoformat(),"charge","safety",
-                                model.stamps[i],model.stamps[i]+timedelta(minutes=15),
-                                max_step/100,model.b.capacity)
-            if not _window_free(model,candidate,windows):
-                continue
-            edits.append((candidate,list(windows)))
-            added+=1
-            if added>=48:
-                break
+            start = model.stamps[i]
+            old = next((w for w in windows if w.start == start), None)
+            if old is not None:
+                # The same capacity bound is used below for a new allocation.
+                # A capacity-bound command cannot improve by retrying the
+                # hardware maximum on every later deadline.
+                hours = (old.end - old.power_start).total_seconds() / 3600
+                available_step = min(max_step, int(max(0., model.b.capacity - trace[i]["stored_start_kwh"])
+                                                   / model.b.charge_eff / hours * 100 + _EPS))
+                if old.origin != "safety" or old.power_kw >= available_step / 100 - _EPS:
+                    continue
+                candidate = replace(old, power_kw=max_step / 100)
+                others = [w for w in windows if w.id != old.id]
+            else:
+                candidate = _Window("safety_" + start.isoformat(), "charge", "safety",
+                                    start, start + timedelta(minutes=15),
+                                    max_step / 100, model.b.capacity)
+                others = list(windows)
+            if _window_free(model, candidate, others):
+                edits.append((candidate, others))
         improved = False
         for candidate,others in edits:
             if model.calls+12 >= diagnostics["replay_budget"]:
@@ -727,26 +747,44 @@ def _safety_windows(model):
             if local_max_step < 10:
                 continue
             candidate = replace(candidate,power_kw=local_max_step/100)
-            trial,_ = model.simulate({},windows=others+[candidate])
+            trial, adjusted_others = replay(candidate, others)
             before_need = _need(trace[deadline],model.b)
             if before_need-_need(trial[deadline],model.b)<=_TOL:
                 continue
             if any(_need(trial[i],model.b)>_need(trace[i],model.b)+_TOL for i in range(deadline)):
                 continue
             if _need(trial[deadline],model.b)<=_TOL:
-                low,high=10,local_max_step
-                # Integer search prevents accumulated rounding outside limits.
-                while low<high:
-                    middle=(low+high)//2
-                    probe,_=model.simulate({},windows=others+[replace(candidate,power_kw=middle/100)])
-                    if (_need(probe[deadline],model.b)<=_TOL/4
-                            and not any(_need(probe[i],model.b)>_need(trace[i],model.b)+_TOL for i in range(deadline))):
-                        high=middle
-                    else:
-                        low=middle+1
-                candidate=replace(candidate,power_kw=high/100)
-                trial,_=model.simulate({},windows=others+[candidate])
-            windows=sorted(others+[candidate],key=lambda w:w.start)
+                low, high = 9, local_max_step
+                # Check the minimum representable command first. Many small
+                # deficits need only 100 W; do not binary-search the complete
+                # hardware range for every chronological deadline.
+                minimum_trace, minimum_others = replay(replace(candidate, power_kw=.1), others)
+                if (_need(minimum_trace[deadline], model.b) <= _TOL / 4
+                        and not any(_need(minimum_trace[i], model.b) > _need(trace[i], model.b) + _TOL
+                                    for i in range(deadline))):
+                    high = 10
+                    trial, adjusted_others = minimum_trace, minimum_others
+                else:
+                    low = 10
+                    def balance(row):
+                        return row["stored_end_kwh"] - model.b.reserve - row["uncovered_home_kwh"] / model.b.discharge_eff
+                    low_value, high_value = balance(minimum_trace[deadline]), balance(trial[deadline])
+                    while high - low > 1:
+                        # Checked interpolation on the causal route, with an
+                        # integer bracket across capacity/target transitions.
+                        ratio = -low_value / (high_value - low_value) if high_value > low_value + _EPS else .5
+                        middle = min(high - 1, max(low + 1, low + int((high - low) * min(.9, max(.1, ratio)))))
+                        probe, probe_others = replay(replace(candidate, power_kw=middle / 100), others)
+                        value = balance(probe[deadline])
+                        if (value >= -_TOL / 4
+                                and not any(_need(probe[i], model.b) > _need(trace[i], model.b) + _TOL
+                                            for i in range(deadline))):
+                            high, high_value = middle, value
+                            trial, adjusted_others = probe, probe_others
+                        else:
+                            low, low_value = middle, value
+                candidate = replace(candidate, power_kw=high / 100)
+            windows=sorted(adjusted_others+[candidate],key=lambda w:w.start)
             trace=trial
             improved=True
             break
@@ -928,6 +966,14 @@ def _compact_windows(model,windows,trace,trading=False):
         if trading and first.origin!="trade":
             i+=1
             continue
+        # Never average safety energy across different import tariffs: that
+        # would undo the cheapest-feasible allocation selected above.
+        if first.origin == "safety":
+            begin = int((first.start - model.stamps[0]).total_seconds() / 900)
+            end = int((second.end - model.stamps[0]).total_seconds() / 900)
+            if len({model.prices[j][0] for j in range(begin, end)}) != 1:
+                i += 1
+                continue
         attempts+=1
         energy=sum(w.power_kw*(w.end-w.power_start).total_seconds()/3600 for w in (first,second))
         duration=(second.end-first.power_start).total_seconds()/3600
@@ -947,6 +993,17 @@ def _compact_windows(model,windows,trace,trading=False):
                     and (manual_trial[key]["battery_energy_kwh"] >= old["battery_energy_kwh"]-_EPS
                          if next(p.action for p in model.manual if p.id==key)=="discharge" else True)
                     for key,old in manual_before.items())
+        # Compaction may reduce switching, never increase route costs or
+        # displace free solar. Apply this to safety as well as trading.
+        safe &= sum(r["cost"] for r in trial) <= sum(r["cost"] for r in trace) + _EPS
+        safe &= all(r["charge_from_solar_kwh"] >= old["charge_from_solar_kwh"] - _EPS
+                    for r, old in zip(trial, trace))
+        # Removing a preparation interval changes downstream SOC too. A merge
+        # must not make a later, previously complete charge stop at capacity.
+        safe &= all(w.action != "charge" or
+                    trial[int((w.start - model.stamps[0]).total_seconds() / 900)]["stored_start_kwh"]
+                    + w.power_kw * (w.end - w.power_start).total_seconds() / 3600 * model.b.charge_eff
+                    <= model.b.capacity + _EPS for w in others + [merged])
         if trading:
             safe &= all(sum(s["duration_hours"] for r in trial for s in r["segments"]
                          if s.get("window_id")==w.id and s["action"] in {"safety_charge","trade_charge","trade_discharge"})
