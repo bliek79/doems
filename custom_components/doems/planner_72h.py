@@ -664,6 +664,8 @@ def _safety_windows(model):
     windows = []
     trace, _ = model.simulate({})
     blocked = set()
+    excluded_hours = set()
+    suppressed = []
     diagnostics = {"search_limited": False, "replay_budget": 8192,
                    "minimum_window_minutes": 15, "maximum_window_hours": 12,
                    "preparation_minutes": 2, "minimum_power_w": 100,
@@ -699,7 +701,26 @@ def _safety_windows(model):
             break
         deadline = next((i for i,r in enumerate(trace) if i not in blocked and _need(r,model.b)>_TOL),None)
         if deadline is None:
-            break
+            hourly = {}
+            for index, row in enumerate(trace):
+                hour = model.stamps[index].replace(minute=0, second=0, microsecond=0)
+                hourly[hour] = hourly.get(hour, 0.) + row['charge_from_grid_safety_kwh']
+            removed = [w for w in windows if w.origin == 'safety'
+                       and hourly[w.start.replace(minute=0, second=0, microsecond=0)] < .10]
+            if not removed:
+                break
+            for w in removed:
+                hour = w.start.replace(minute=0, second=0, microsecond=0)
+                excluded_hours.add(hour)
+                suppressed.append({'id': w.id, 'source_hour': hour.isoformat(),
+                                   'source_hour_energy_kwh': hourly[hour]})
+            windows = [w for w in windows if w not in removed]
+            trace, _ = model.simulate({}, windows=windows)
+            # Repair the actual remaining route using the SAME allocator and
+            # only other feasible source hours. If no safe alternative exists,
+            # retain the honest shortfall/limited status; never credit removed energy.
+            blocked.clear()
+            continue
         edits = []
         # Alpha84 allocates each deficit by (import price, latest time),
         # replaying the whole route after every accepted allocation. Extending
@@ -712,6 +733,8 @@ def _safety_windows(model):
                            key=lambda i: (model.prices[i][0], -i))
         for i in available:
             start = model.stamps[i]
+            if start.replace(minute=0, second=0, microsecond=0) in excluded_hours:
+                continue
             old = next((w for w in windows if w.start == start), None)
             if old is not None:
                 # The same capacity bound is used below for a new allocation.
@@ -754,29 +777,43 @@ def _safety_windows(model):
             if any(_need(trial[i],model.b)>_need(trace[i],model.b)+_TOL for i in range(deadline)):
                 continue
             if _need(trial[deadline],model.b)<=_TOL:
+                # A forced charge also moves household demand to the grid.
+                # Do not count that avoided discharge as purchased safety energy:
+                # Alpha84 buys the actual stored-energy deficit. Otherwise a
+                # 100 W command can masquerade as a reserve-hold instruction.
+                needed_grid = min(before_need / model.b.charge_eff, max(0.,
+                    trial[begin_index]['charge_from_grid_safety_kwh']
+                    - trace[begin_index]['charge_from_grid_safety_kwh']))
+                def supplied(probe):
+                    return (probe[begin_index]['charge_from_grid_safety_kwh']
+                            - trace[begin_index]['charge_from_grid_safety_kwh']) >= needed_grid - _TOL / 4
                 low, high = 9, local_max_step
                 # Check the minimum representable command first. Many small
                 # deficits need only 100 W; do not binary-search the complete
                 # hardware range for every chronological deadline.
                 minimum_trace, minimum_others = replay(replace(candidate, power_kw=.1), others)
-                if (_need(minimum_trace[deadline], model.b) <= _TOL / 4
+                if (_need(minimum_trace[deadline], model.b) <= _TOL / 4 and supplied(minimum_trace)
                         and not any(_need(minimum_trace[i], model.b) > _need(trace[i], model.b) + _TOL
                                     for i in range(deadline))):
                     high = 10
                     trial, adjusted_others = minimum_trace, minimum_others
                 else:
                     low = 10
-                    def balance(row):
-                        return row["stored_end_kwh"] - model.b.reserve - row["uncovered_home_kwh"] / model.b.discharge_eff
-                    low_value, high_value = balance(minimum_trace[deadline]), balance(trial[deadline])
+                    def balance(route):
+                        row = route[deadline]
+                        deficit = row['stored_end_kwh'] - model.b.reserve - row['uncovered_home_kwh'] / model.b.discharge_eff
+                        purchased = (route[begin_index]['charge_from_grid_safety_kwh']
+                                     - trace[begin_index]['charge_from_grid_safety_kwh'] - needed_grid) * model.b.charge_eff
+                        return min(deficit, purchased)
+                    low_value, high_value = balance(minimum_trace), balance(trial)
                     while high - low > 1:
                         # Checked interpolation on the causal route, with an
                         # integer bracket across capacity/target transitions.
                         ratio = -low_value / (high_value - low_value) if high_value > low_value + _EPS else .5
                         middle = min(high - 1, max(low + 1, low + int((high - low) * min(.9, max(.1, ratio)))))
                         probe, probe_others = replay(replace(candidate, power_kw=middle / 100), others)
-                        value = balance(probe[deadline])
-                        if (value >= -_TOL / 4
+                        value = balance(probe)
+                        if (value >= -_TOL / 4 and supplied(probe)
                                 and not any(_need(probe[i], model.b) > _need(trace[i], model.b) + _TOL
                                             for i in range(deadline))):
                             high, high_value = middle, value
@@ -793,6 +830,8 @@ def _safety_windows(model):
         if diagnostics["search_limited"]:
             break
     windows,trace = _compact_windows(model,windows,trace)
+    diagnostics['minimum_actionable_safety_hour_kwh'] = .10
+    diagnostics['suppressed_safety_windows'] = suppressed
     diagnostics["replays_used"] = model.calls
     diagnostics["unresolved_deadlines"] = len(blocked)
     return windows,trace,diagnostics
@@ -969,6 +1008,9 @@ def _compact_windows(model,windows,trace,trading=False):
         # Never average safety energy across different import tariffs: that
         # would undo the cheapest-feasible allocation selected above.
         if first.origin == "safety":
+            if first.start.replace(minute=0, second=0, microsecond=0) != (second.end - timedelta(microseconds=1)).replace(minute=0, second=0, microsecond=0):
+                i += 1
+                continue
             begin = int((first.start - model.stamps[0]).total_seconds() / 900)
             end = int((second.end - model.stamps[0]).total_seconds() / 900)
             if len({model.prices[j][0] for j in range(begin, end)}) != 1:

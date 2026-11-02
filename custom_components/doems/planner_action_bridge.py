@@ -347,6 +347,18 @@ def build_action_bridge(plan: dict, *, now: datetime) -> dict:
     for w in windows:
         c = _candidate(w, by_id[w["id"]], p, source,
                        (_time(plan["start"]), _time(plan["end"])), previous_end, plan["timeline"])
+        if c['valid'] and c.get('purpose') == 'safety_charge':
+            hours = {_time(row['start']).replace(minute=0, second=0, microsecond=0)
+                     for row, _, _ in by_id[w['id']]}
+            totals = {hour: sum(_number(row['charge_from_grid_safety_kwh'])
+                               for row in plan['timeline']
+                               if _time(row['start']).replace(minute=0, second=0, microsecond=0) == hour)
+                      for hour in hours}
+            if any(energy < .10 for energy in totals.values()):
+                # Do not merely hide a command still credited by its source SOC.
+                # A non-conforming source must be replanned before allocation.
+                c['valid'] = False
+                c['validation_reasons'].append('small_safety_hour_requires_replanning')
         try:
             end = _time(w["planned_end_time"])
             previous_end = max(previous_end, end) if previous_end else end

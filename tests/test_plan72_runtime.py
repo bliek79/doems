@@ -269,7 +269,7 @@ def test_same_inputs_and_gas_only_notification_do_not_recompute(environment, mon
     asyncio.run(scenario())
 
 
-def test_pending_changes_coalesce_and_superseded_result_is_never_published(environment, monkeypatch):
+def test_critical_changes_coalesce_and_superseded_result_is_never_published(environment, monkeypatch):
     monkeypatch.setattr(environment.runtime, "calculate_plan72", fake_engine)
     async def scenario():
         runtime, hass = setup_runtime(environment, gated=True)
@@ -278,8 +278,10 @@ def test_pending_changes_coalesce_and_superseded_result_is_never_published(envir
         await runtime.async_setup()
         await wait_until(lambda: len(hass.jobs) == 1)
         hass.states.values["sensor.battery_soc"].state = "50"
+        runtime.entry.options["energy_need_reserve_percent"] = 6
         runtime.refresh("battery_changed")
         hass.states.values["sensor.battery_soc"].state = "40"
+        runtime.entry.options["energy_need_reserve_percent"] = 7
         runtime.refresh("battery_changed")
         assert runtime.snapshot["valid"] is False
         assert runtime.snapshot["timeline"] == []
@@ -316,6 +318,58 @@ def test_lost_source_invalidates_running_generation_and_recovers(environment, mo
         hass.jobs[1].gate.set_result(None)
         await finish(runtime)
         assert runtime.snapshot["valid"] is True
+        await runtime.async_shutdown()
+    asyncio.run(scenario())
+
+
+def test_normal_updates_wait_for_quarter_and_latest_inputs_are_used(environment, monkeypatch):
+    monkeypatch.setattr(environment.runtime, 'calculate_plan72', fake_engine)
+    async def scenario():
+        runtime, hass = setup_runtime(environment)
+        await runtime.async_setup()
+        await finish(runtime)
+        generation = runtime.snapshot['plan_generation']
+        for soc in range(59, 39, -1):
+            hass.states.values['sensor.battery_soc'].state = str(soc)
+            runtime._battery_changed(None)
+            runtime.coordinator.emit()
+            runtime.prices._notify()
+        await asyncio.sleep(0)
+        assert len(hass.jobs) == 1
+        assert runtime.snapshot['plan_generation'] == generation
+        assert runtime.snapshot['valid']
+        assert runtime.deferred_refresh_count == 60
+        environment.clock.now = NOW.replace(minute=30, second=3)
+        runtime._quarter_changed(environment.clock.now)
+        await finish(runtime)
+        assert len(hass.jobs) == 2
+        assert runtime.snapshot['start_soc'] == 40
+        runtime.energy_need.emit()
+        await finish(runtime)
+        assert len(hass.jobs) == 2
+        await runtime.async_shutdown()
+    asyncio.run(scenario())
+
+
+def test_soc_crossing_below_reserve_is_an_immediate_safety_exception(environment, monkeypatch):
+    monkeypatch.setattr(environment.runtime, 'calculate_plan72', fake_engine)
+    async def scenario():
+        runtime, hass = setup_runtime(environment)
+        await runtime.async_setup()
+        await finish(runtime)
+        hass.states.values['sensor.battery_soc'].state = '9'
+        runtime._battery_changed(None)
+        await finish(runtime)
+        assert len(hass.jobs) == 2
+        assert runtime.snapshot['start_soc'] == 9
+        hass.states.values['sensor.battery_soc'].state = '8'
+        runtime._battery_changed(None)
+        await finish(runtime)
+        assert len(hass.jobs) == 2
+        hass.states.values['sensor.battery_soc'].state = '4'
+        runtime._battery_changed(None)
+        await finish(runtime)
+        assert len(hass.jobs) == 3
         await runtime.async_shutdown()
     asyncio.run(scenario())
 

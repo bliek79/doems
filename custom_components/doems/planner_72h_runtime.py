@@ -167,6 +167,8 @@ class Plan72Runtime:
         self._requested_fingerprint: str | None = None
         self._closed = False
         self.calculation_count = 0
+        self._scheduled_inputs: Plan72Inputs | None = None
+        self.deferred_refresh_count = 0
         self.device = DeviceInfo(
             identifiers={(DOMAIN, DEVICE_IDENTIFIER)},
             name=entry.options.get(CONF_INSTANCE_NAME, DEFAULT_INSTANCE_NAME),
@@ -371,6 +373,7 @@ class Plan72Runtime:
             self._revision += 1
             self._pending = None
             self._requested_fingerprint = None
+            self._scheduled_inputs = None
             self.snapshot = _unavailable(str(error) or "invalid_input_snapshot")
             self.snapshot["replan_reason"] = reason
             self._notify()
@@ -380,12 +383,35 @@ class Plan72Runtime:
             self._revision += 1
             self._pending = None
             self._requested_fingerprint = None
+            self._scheduled_inputs = None
             self.snapshot = _unavailable("input_capture_failed")
             self.snapshot["replan_reason"] = reason
             self._notify()
             return
         if inputs.fingerprint == self._requested_fingerprint:
             return
+        previous = self._scheduled_inputs
+        if previous is not None and ceil_quarter(previous.now) == ceil_quarter(inputs.now):
+            current_limits = dict(inputs.parameters)
+            previous_limits = dict(previous.parameters)
+            current_limits.pop("soc_percent", None)
+            previous_limits.pop("soc_percent", None)
+            try:
+                current_soc = float(dict(inputs.parameters)["soc_percent"])
+                previous_soc = float(dict(previous.parameters)["soc_percent"])
+                minimum = float(current_limits["min_soc_percent"])
+                floor = minimum + float(current_limits["reserve_percent"])
+                safety_crossing = (any(current_soc < threshold <= previous_soc for threshold in (minimum, floor))
+                                   or not isfinite(current_soc))
+            except (ValueError, TypeError, KeyError):
+                safety_crossing = True
+            if (not safety_crossing and inputs.manual_plans == previous.manual_plans
+                    and current_limits == previous_limits):
+                # Normal SOC/forecast/price events are sampled next quarter.
+                # _capture above still invalidates missing or unsafe sources.
+                self.deferred_refresh_count += 1
+                return
+        self._scheduled_inputs = inputs
         self._revision += 1
         self._requested_fingerprint = inputs.fingerprint
         self._pending = (self._revision, inputs)
@@ -410,6 +436,8 @@ class Plan72Runtime:
                 self.calculation_count += 1
                 if self._closed or revision != self._revision:
                     continue
+                if result.get("valid") is not True:
+                    self._scheduled_inputs = None
                 if inputs.fingerprint != self._requested_fingerprint:
                     continue
                 if ceil_quarter(dt_util.utcnow()) != ceil_quarter(inputs.now):
@@ -525,6 +553,9 @@ class _Plan72Entity:
             "plan_generation": snapshot.get("plan_generation"),
             "calculated_at": snapshot.get("calculated_at"),
             "input_captured_at": snapshot.get("input_captured_at"),
+            "calculation_count": self.runtime.calculation_count,
+            "deferred_refresh_count": self.runtime.deferred_refresh_count,
+            "refresh_policy": "quarterly_normal_updates",
         }
 
 

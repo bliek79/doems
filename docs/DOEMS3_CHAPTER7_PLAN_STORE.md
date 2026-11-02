@@ -118,3 +118,22 @@ na herstart worden met de echte Bridge, schrijver en Store getest.
 Dit herstel wijzigt geen planningsstrategie, vermogens, SOC-route of filtering
 van kleine acties. Het staat los van de nog openstaande bronuurcontrole van
 kleine veiligheidslaadacties binnen live-test 2.
+
+## Kwartierbeleid en bruikbare veiligheidsuren alpha.7.6
+
+Normale SOC-, forecast- en prijswijzigingen worden op de volgende kwartierhorizon
+verwerkt. Ontbrekende/ongeldige bronnen blokkeren direct. Handmatige of beschermde
+planwijzigingen, gewijzigde veiligheids-/vermogensgrenzen en een SOC die onder
+reserve of hardwareminimum zakt, blijven directe uitzonderingen. De bestaande
+bescherming tegen achterhaalde workers en verkeerde kwartierhorizons blijft gelden.
+De attributen `calculation_count` en `deferred_refresh_count` onderscheiden echte
+berekeningen van uitgestelde meldingen; een generatie is geen rekenteller.
+
+Veiligheidslading onder 0,10 AC-kWh wordt per werkelijk bronuur onderdrukt, met
+behoud van aparte UTC-uren tijdens wintertijdomschakeling. Dezelfde simulator
+berekent de resterende commando's opnieuw en dezelfde allocator zoekt haalbare
+andere uren. Ingekochte batterijenergie wordt onderscheiden van vermeden ontlading
+naar de woning tijdens een laadcommando. Een resterend klein reservetekort blijft
+zichtbaar als `limited`; er wordt geen onderdrukte energie in SOC behouden.
+De Bridge weigert een niet-conforme bron die zulke energie nog wel meerekent.
+Dit geeft geen fysieke uitvoeringsbevoegdheid en verandert geen entiteitsnamen.
