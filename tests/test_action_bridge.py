@@ -24,7 +24,7 @@ def attach(plan):
     return plan
 
 
-def fixture_plan(*, limited=False, soc=50., kinds=None, home=0., solar=0.):
+def fixture_plan(*, limited=False, soc=50., kinds=None, home=0., solar=0., duration_minutes=15):
     """Exact windows serialized by the original Alpha5.3 model, no mock Bridge math."""
     kinds=kinds or ['safety_charge']*4
     windows=[]
@@ -33,7 +33,7 @@ def fixture_plan(*, limited=False, soc=50., kinds=None, home=0., solar=0.):
         origin='safety' if kind=='safety_charge' else 'trade'
         action='discharge' if kind=='trade_discharge' else 'charge'
         target=(soc/100*7.2+.1) if limited and i==0 else (.72 if action=='discharge' else 7.2)
-        windows.append(model._Window(str(i),action,origin,start,start+timedelta(minutes=15),1.,target))
+        windows.append(model._Window(str(i),action,origin,start,start+timedelta(minutes=duration_minutes),1.,target))
     stamps=[NOW+timedelta(minutes=15*i) for i in range(288)]
     battery=model._Battery(7.2,soc/100*7.2,.36,.72,.92,.92,3.2,3.2)
     m=model._Model(stamps,[home]*288,[solar]*288,[(.3,.6,'known')]*288,battery,[])

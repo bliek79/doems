@@ -287,7 +287,15 @@ def _candidate(w: dict, parts: list, p: dict, source: dict, horizon: tuple,
             raise ValueError("window_reason_mismatch")
         end_row = next(r for r in timeline if _time(r["end"]) == end)
         _equal(w.get("projected_end_soc"), end_row.get("soc_end"), "projected_end_soc_mismatch")
+        # Derive provenance from the validated source quarters, not a default
+        # or a neighbouring action. Preserve native price-resolution labels.
+        price_sources = list(dict.fromkeys(
+            row["kind"] if isinstance(row.get("kind"), str) and row["kind"] else "missing"
+            for row, _, _ in parts))
         c.update(valid=True, source_segments=refs, source_quarters=quarters,
+                 price_sources=price_sources,
+                 all_prices_known=bool(price_sources) and all(
+                     kind == "known" or kind.startswith("known_") for kind in price_sources),
                  capacity_limited=w["limited"], feasible_energy_kwh=delivered,
                  explicit_grid_energy_kwh=explicit, power_limit_w=limit,
                  battery_parameters=deepcopy(p), projected_start_soc=w["start_soc"],

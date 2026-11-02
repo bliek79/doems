@@ -103,3 +103,18 @@ was geen strategiespecificatie en beloonde het onjuiste langgerekte venster.
 Deze is vervangen door de 288-kwartiergrens; elk gepubliceerd venster wordt nu
 ook gecontroleerd op een volledig geleverde vermogensfase. De drie persistente
 slots, het goedgekeurde entiteitenregister en de overflowwerking veranderen niet.
+
+## Prijsherkomst alpha.7.5
+
+De Action Bridge leidt `price_sources` af uit de gevalideerde bronkwartieren van
+het actievenster, met behoud van oorspronkelijke labels en zonder duplicaten.
+`all_prices_known` is uitsluitend waar bij een niet-lege lijst van alleen
+`known`/`known_*`-bronnen. Ontbrekende labels worden `missing`, zonder een prijsbron
+te verzinnen. De schrijver geeft beide velden door aan de bestaande opslagvelden.
+De metadata is onderdeel van de Bridge-signatuur, zodat alleen een prijsbron-
+wijziging al een herzienbaar automatisch slot kan bijwerken. Opslag en herstel
+na herstart worden met de echte Bridge, schrijver en Store getest.
+
+Dit herstel wijzigt geen planningsstrategie, vermogens, SOC-route of filtering
+van kleine acties. Het staat los van de nog openstaande bronuurcontrole van
+kleine veiligheidslaadacties binnen live-test 2.
