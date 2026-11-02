@@ -4,7 +4,33 @@ from datetime import datetime
 
 import pytest
 from test_plan72_model import run, assert_conserved
-from test_action_bridge import fixture_plan, build
+from test_action_bridge import fixture_plan, build, attach
+from test_plan72_model import prices
+
+
+def test_suppressed_hour_reopens_when_replay_reveals_actionable_need():
+    # Derived 47%-SOC regression: pre-consumption leaves 0.04 stored kWh
+    # above reserve. Banning the next hour after suppressing a small command
+    # caused a 0.1928 AC-kWh shortfall and 7.536% minimum SOC in alpha.7.6.
+    loads = [.60352] * 4 + [.04] * 5
+    plan = run(home=lambda i: loads[i] if i < len(loads) else 0, soc_percent=47,
+               tariff=prices(lambda i: .4 if i < 4 else (.2 if i == 4 else .3) if i < 8 else .05),
+               practical_windows=True)
+    assert plan['status'] == 'ready'
+    assert plan['reserve_satisfied'] and plan['reserve_breach_count'] == 0
+    assert plan['min_soc'] >= 10
+    assert plan['remaining_charge_need_kwh'] <= plan['remaining_charge_need_tolerance_kwh']
+    assert plan['action_window_search']['suppressed_safety_windows']
+    reopened = plan['action_window_search']['reopened_safety_hours']
+    assert reopened and all(hour['source_hour_energy_kwh'] >= .10 for hour in reopened)
+    assert sum(row['charge_from_grid_safety_kwh'] for row in plan['timeline'][4:8]) >= .10
+    assert plan['timeline'][4]['charge_from_grid_safety_kwh'] >= .10
+    assert not plan['action_window_search']['search_limited']
+    result = build(attach(plan))
+    assert result['valid'] and result['status'] == 'ready'
+    assert result['eligible_candidates']
+    assert all(c['valid'] for c in result['candidates'])
+    assert_conserved(plan)
 
 
 def test_household_grid_import_is_not_credited_as_purchased_safety_energy():
@@ -17,8 +43,9 @@ def test_household_grid_import_is_not_credited_as_purchased_safety_energy():
     assert_conserved(plan)
 
 
-def test_suppressed_hour_is_removed_from_commands_flows_and_soc():
-    plan = run(home=lambda i: .005 if i < 4 else 0, soc_percent=10, practical_windows=True)
+def test_unactionable_hardware_limit_does_not_leave_fictitious_energy_in_soc():
+    plan = run(home=lambda i: .005 if i < 4 else 0, soc_percent=10,
+               max_charge_power_w=100, practical_windows=True)
     assert plan['action_window_search']['suppressed_safety_windows']
     assert plan['action_windows'] == []
     assert plan['totals']['charge_from_grid_safety_kwh'] == 0
@@ -56,4 +83,14 @@ def test_actionable_hour_survives_and_every_published_safety_hour_meets_threshol
     for window in safety:
         start = datetime.fromisoformat(window['start_time'])
         assert totals[start.replace(minute=0)] >= .10
+    assert_conserved(plan)
+
+
+def test_small_but_feasible_reserve_deficit_is_repaired_with_actionable_command():
+    plan = run(home=lambda i: .005 if i < 4 else 0, soc_percent=10, practical_windows=True)
+    assert plan['status'] == 'ready'
+    assert plan['reserve_satisfied'] and plan['reserve_breach_count'] == 0
+    assert plan['remaining_charge_need_kwh'] <= plan['remaining_charge_need_tolerance_kwh']
+    assert plan['action_window_search']['reopened_safety_hours']
+    assert plan['totals']['charge_from_grid_safety_kwh'] >= .10
     assert_conserved(plan)

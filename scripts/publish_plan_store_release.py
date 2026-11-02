@@ -44,7 +44,7 @@ def publish() -> None:
         "gh", "release", "create", tag,
         "build/doems.zip", "build/SHA256SUMS.txt", "build/RELEASE_PROVENANCE.json",
         "--target", commit, "--prerelease", "--latest=false",
-        "--title", "DOEMS 3.0 - v0.3.0-alpha.7.6 - Quarterly refresh and actionable safety hours",
+        "--title", "DOEMS 3.0 - v0.3.0-alpha.7.7 - Restore reserve after safety-hour suppression",
         "--notes-file", f"RELEASE_NOTES_v{VERSION}.md",
     ], cwd=ROOT, check=True)
 

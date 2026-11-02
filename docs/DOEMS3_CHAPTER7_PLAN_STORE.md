@@ -137,3 +137,14 @@ naar de woning tijdens een laadcommando. Een resterend klein reservetekort blijf
 zichtbaar als `limited`; er wordt geen onderdrukte energie in SOC behouden.
 De Bridge weigert een niet-conforme bron die zulke energie nog wel meerekent.
 Dit geeft geen fysieke uitvoeringsbevoegdheid en verandert geen entiteitsnamen.
+
+## Reserveherstel na onderdrukking alpha.7.7
+
+Een onderdrukt bronuur blijft niet permanent uitgesloten. Als de daadwerkelijke
+replay een nieuwe betekenisvolle laadbehoefte toont, wordt dat uur opnieuw
+prijsgestuurd beoordeeld. Het nieuwe commando moet de grens van 0,10 AC-kWh per
+bronuur daadwerkelijk halen en eerdere reservevoorwaarden behouden. Onmogelijke
+heropeningen worden vooraf uitgesloten op basis van hardwarevermogen en de
+verplichte voorbereiding. `reopened_safety_hours` toont hergebruikte uren en hun
+nieuwe werkelijke energie. De strikte reserveregressies zijn hersteld; een eerder
+vermijdbaar tekort wordt niet meer als acceptabele `limited` uitkomst goedgekeurd.

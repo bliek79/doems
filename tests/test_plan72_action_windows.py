@@ -50,18 +50,9 @@ def assert_windows(plan):
 def test_three_original_route_conflicts_now_have_complete_consistent_windows(case,home,solar):
     plan=practical(home=home,solar=solar,tariff=prices(lambda i:.1 if i%96<24 else .3))
     assert_windows(plan)
-    if plan['action_window_search']['suppressed_safety_windows'] and plan['status'] == 'limited':
-        # Alpha84 deliberately suppresses sub-0.10 kWh source hours. Any
-        # residual reserve gap must stay explicit, bounded and above hardware
-        # minimum, rather than pretending the suppressed charge was delivered.
-        assert plan['reason'] == 'remaining_physical_shortfall'
-        assert 0 < plan['remaining_charge_need_kwh'] < .10 / .92
-        assert plan['min_soc'] >= plan['hardware_min_soc']
-        assert not plan['reserve_satisfied']
-    else:
-        assert plan['status']=='ready'
-        assert plan['reserve_satisfied'] and plan['reserve_breach_count']==0
-        assert plan['remaining_charge_need_kwh']<=plan['remaining_charge_need_tolerance_kwh']
+    assert plan['status']=='ready'
+    assert plan['reserve_satisfied'] and plan['reserve_breach_count']==0
+    assert plan['remaining_charge_need_kwh']<=plan['remaining_charge_need_tolerance_kwh']
     # Distinct tariff windows must stay distinct. A global <20 cap rewarded
     # the former long-window extension across expensive quarters. Capacity is
     # bounded by the native 288 quarters; only three live slots are exposed.

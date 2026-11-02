@@ -76,11 +76,7 @@ def test_earlier_bridge_charge_is_required_when_cheaper_future_is_unreachable():
     plan = run(home=.25 / 4, soc_percent=25,
                tariff=prices(lambda i: .1 if 72 <= i < 76 else .2 if 24 <= i < 28 else .34),
                practical_windows=True)
-    if not plan['reserve_satisfied']:
-        assert plan['status'] == 'limited' and plan['reason'] == 'remaining_physical_shortfall'
-        assert plan['action_window_search']['suppressed_safety_windows']
-        assert 0 < plan['remaining_charge_need_kwh'] < .10 / .92
-        assert plan['min_soc'] >= plan['hardware_min_soc']
+    assert plan['reserve_satisfied']
     assert sum(r['charge_from_grid_safety_kwh'] for r in plan['timeline'][24:28]) > 0
     reference = alpha84_selected_hours(25, .25, lambda i: .1 if i == 18 else .2 if i == 6 else .34)
     assert 6 in reference

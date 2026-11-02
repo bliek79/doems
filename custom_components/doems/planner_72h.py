@@ -666,6 +666,11 @@ def _safety_windows(model):
     blocked = set()
     excluded_hours = set()
     suppressed = []
+    reopened = []
+    hour_indices = {}
+    for i, stamp in enumerate(model.stamps):
+        hour = stamp.replace(minute=0, second=0, microsecond=0)
+        hour_indices.setdefault(hour, []).append(i)
     diagnostics = {"search_limited": False, "replay_budget": 8192,
                    "minimum_window_minutes": 15, "maximum_window_hours": 12,
                    "preparation_minutes": 2, "minimum_power_w": 100,
@@ -716,9 +721,9 @@ def _safety_windows(model):
                                    'source_hour_energy_kwh': hourly[hour]})
             windows = [w for w in windows if w not in removed]
             trace, _ = model.simulate({}, windows=windows)
-            # Repair the actual remaining route using the SAME allocator and
-            # only other feasible source hours. If no safe alternative exists,
-            # retain the honest shortfall/limited status; never credit removed energy.
+            # Repair the actual route using the SAME allocator. Suppressed
+            # hours may reopen for a meaningful new need, provided their new
+            # command meets the source-hour threshold. Never credit removed energy.
             blocked.clear()
             continue
         edits = []
@@ -731,10 +736,17 @@ def _safety_windows(model):
                          if trace[i]["max_soc"] >= 100 - _TOL), default=-1)
         available = sorted(range(last_full + 1, deadline + 1),
                            key=lambda i: (model.prices[i][0], -i))
+        meaningful_repair = _remaining_battery_need(trace, model.b) > _TOL
         for i in available:
             start = model.stamps[i]
-            if start.replace(minute=0, second=0, microsecond=0) in excluded_hours:
-                continue
+            hour = start.replace(minute=0, second=0, microsecond=0)
+            if hour in excluded_hours:
+                # Even a single continuous command needs its preparation.
+                # Do not replay impossible repairs (e.g. 100 W cannot buy
+                # 0.10 kWh within one source hour after that preparation).
+                maximum_hours = len(hour_indices[hour]) * QUARTER_HOURS - 2 / 60
+                if not meaningful_repair or model.b.charge_kw * maximum_hours < .10:
+                    continue
             old = next((w for w in windows if w.start == start), None)
             if old is not None:
                 # The same capacity bound is used below for a new allocation.
@@ -771,6 +783,12 @@ def _safety_windows(model):
                 continue
             candidate = replace(candidate,power_kw=local_max_step/100)
             trial, adjusted_others = replay(candidate, others)
+            source_hour = candidate.start.replace(minute=0, second=0, microsecond=0)
+            repair_hour = source_hour in excluded_hours
+            def hour_energy(route):
+                return sum(route[j]['charge_from_grid_safety_kwh'] for j in hour_indices[source_hour])
+            if repair_hour and hour_energy(trial) < .10:
+                continue
             before_need = _need(trace[deadline],model.b)
             if before_need-_need(trial[deadline],model.b)<=_TOL:
                 continue
@@ -785,8 +803,9 @@ def _safety_windows(model):
                     trial[begin_index]['charge_from_grid_safety_kwh']
                     - trace[begin_index]['charge_from_grid_safety_kwh']))
                 def supplied(probe):
-                    return (probe[begin_index]['charge_from_grid_safety_kwh']
-                            - trace[begin_index]['charge_from_grid_safety_kwh']) >= needed_grid - _TOL / 4
+                    return ((probe[begin_index]['charge_from_grid_safety_kwh']
+                             - trace[begin_index]['charge_from_grid_safety_kwh']) >= needed_grid - _TOL / 4
+                            and (not repair_hour or hour_energy(probe) >= .10))
                 low, high = 9, local_max_step
                 # Check the minimum representable command first. Many small
                 # deficits need only 100 W; do not binary-search the complete
@@ -804,7 +823,8 @@ def _safety_windows(model):
                         deficit = row['stored_end_kwh'] - model.b.reserve - row['uncovered_home_kwh'] / model.b.discharge_eff
                         purchased = (route[begin_index]['charge_from_grid_safety_kwh']
                                      - trace[begin_index]['charge_from_grid_safety_kwh'] - needed_grid) * model.b.charge_eff
-                        return min(deficit, purchased)
+                        hourly = (hour_energy(route) - .10) * model.b.charge_eff if repair_hour else float('inf')
+                        return min(deficit, purchased, hourly)
                     low_value, high_value = balance(minimum_trace), balance(trial)
                     while high - low > 1:
                         # Checked interpolation on the causal route, with an
@@ -823,6 +843,13 @@ def _safety_windows(model):
                 candidate = replace(candidate, power_kw=high / 100)
             windows=sorted(adjusted_others+[candidate],key=lambda w:w.start)
             trace=trial
+            if repair_hour:
+                excluded_hours.discard(source_hour)
+                reopened.append({'source_hour': source_hour.isoformat(),
+                                 'source_hour_energy_kwh': hour_energy(trial)})
+                # The larger hour may now repair formerly subthreshold
+                # deadlines too. Reconsider those against the actual replay.
+                blocked.clear()
             improved=True
             break
         if not improved:
@@ -832,6 +859,7 @@ def _safety_windows(model):
     windows,trace = _compact_windows(model,windows,trace)
     diagnostics['minimum_actionable_safety_hour_kwh'] = .10
     diagnostics['suppressed_safety_windows'] = suppressed
+    diagnostics['reopened_safety_hours'] = reopened
     diagnostics["replays_used"] = model.calls
     diagnostics["unresolved_deadlines"] = len(blocked)
     return windows,trace,diagnostics
