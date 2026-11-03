@@ -387,3 +387,55 @@ def test_expiry_storage_failure_restores_plan_and_history(store_module):
         assert store.last_closed_plan(1) is None
         assert store.revision == revision
     asyncio.run(run())
+
+
+@pytest.mark.parametrize('terminal_status', ['geannuleerd', 'voltooid', 'fout'])
+def test_writer_refills_terminal_same_signature_without_touching_manual_or_survivor(store_module, terminal_status):
+    async def run():
+        store = store_module.AnkerEmsPlanStore(None, 'id')
+        module = importlib.import_module('store_ch7_test.plan_store_writer')
+        await store.async_set_value(1, 'action', 'ontladen')
+        await store.async_set_value(1, 'start_time', '2026-10-31T11:00:00+00:00')
+        await store.async_schedule_manual_plan(1)
+        manual = store.get_plan(1)
+        candidates = []
+        for identity in ('a', 'b', 'c', 'd'):
+            item = proposal(identity)
+            item.update(action='charge', valid=True, selection_status='eligible',
+                        power_start_time='2026-10-31T12:02:00+00:00',
+                        planned_end_time='2026-10-31T12:15:00+00:00',
+                        command_target_soc=80, projected_end_soc=65)
+            candidates.append(item)
+        source = types.SimpleNamespace(snapshot=dict(valid=True,
+            start='2026-10-30T12:00:00+00:00', plan_generation=1, input_fingerprint='f'))
+        bridge = types.SimpleNamespace(snapshot=dict(valid=True, status='ready',
+            source_plan_generation=1, source_input_fingerprint='f', eligible_candidates=candidates))
+        writer = module.PlanStoreWriter(None, store, source, bridge)
+        await writer._sync()
+        original = store.get_plan(2)
+        survivor = store.get_plan(3)
+        assert original['lifecycle_status'] == 'pending'
+        assert writer.diagnostics['overflow'] == 2
+        if terminal_status == 'geannuleerd':
+            await store.async_cancel_plan(2)
+        else:
+            await store.async_mark_lifecycle(2, terminal_status, 'test_terminal')
+        revision = store.revision
+        await writer._sync()
+        assert store.get_value(2, 'lifecycle_status') == 'pending'
+        assert store.get_value(2, 'planner_signature') == original['planner_signature']
+        assert store.revision > revision
+        assert store.get_plan(1) == manual
+        assert store.get_plan(3) == survivor
+        assert len({store.get_value(i, 'planner_identity') for i in (2, 3)}) == 2
+        assert writer.status == 'ready'
+        assert writer.diagnostics['overflow'] == 2
+        # A successful repair must remain durable and return to zero-write polling.
+        restored = store_module.AnkerEmsPlanStore(None, 'id')
+        restored._store.data = store._store.data
+        await restored.async_load()
+        assert [restored.get_plan(i) for i in (1, 2, 3)] == [store.get_plan(i) for i in (1, 2, 3)]
+        revision = store.revision
+        await writer._sync()
+        assert store.revision == revision
+    asyncio.run(run())

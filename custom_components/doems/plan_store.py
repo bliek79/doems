@@ -405,6 +405,9 @@ class AnkerEmsPlanStore:
                 if (
                     current_origin == "automatic_72h_planner"
                     and current.get("planner_signature") == new_plan.get("planner_signature")
+                    # An identical candidate must still reopen a reusable
+                    # terminal slot before the storage-only handoff can run.
+                    and current_lifecycle == new_plan["lifecycle_status"]
                 ):
                     continue
 

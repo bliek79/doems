@@ -148,3 +148,7 @@ heropeningen worden vooraf uitgesloten op basis van hardwarevermogen en de
 verplichte voorbereiding. `reopened_safety_hours` toont hergebruikte uren en hun
 nieuwe werkelijke energie. De strikte reserveregressies zijn hersteld; een eerder
 vermijdbaar tekort wordt niet meer als acceptabele `limited` uitkomst goedgekeurd.
+
+## Same-candidate terminal refill (alpha.7.8)
+
+An automatic terminal slot remains reusable under the existing assignment policy. If its candidate is selected again with the same signature, synchronization must restore the intended lifecycle before handoff. The equal-signature optimization therefore also requires equal lifecycle state. A successful refill returns to idempotent, zero-write synchronization. Manual and active slots remain protected. Cancellation does not blacklist a planner candidate.
