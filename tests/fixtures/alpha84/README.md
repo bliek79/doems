@@ -15,3 +15,11 @@ Compare decisions (solar priority, cheapest feasible charging, chronological
 reserve deadlines and inability to borrow energy from the future), not exact
 hourly/quarterly trajectories: DOEMS retains its required 288 quarters, disjoint
 physical flows, two-minute preparation and integer 10 W command setpoints.
+
+## Scheduler oracle (chapter 8)
+
+`scheduler.py` is also byte-for-byte from the same Alpha84 commit.
+Git blob: `e95a7354cab59464a573f20b154fbc63fbd9de11`.
+SHA-256: `d8b05058215667e33f721e2a3ee362318e9bd2ccfdbdddfcb5253422e500faf7`.
+Only HA time utilities and the Store/constant imports are supplied by test doubles.
+The entire evaluator is executed unchanged; its unused slot_status helper is not called.

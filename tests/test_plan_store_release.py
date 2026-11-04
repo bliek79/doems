@@ -12,20 +12,21 @@ ROOT = Path(__file__).resolve().parents[1]
 @pytest.fixture
 def validator(monkeypatch):
     monkeypatch.syspath_prepend(str(ROOT / 'scripts'))
-    return importlib.import_module('validate_plan_store_release')
+    return importlib.import_module('validate_scheduler_release')
 
 
 def test_approved_release_contract_and_register_are_exact(validator):
     result = validator.validate()
-    assert result['version'] == '0.3.0-alpha.7.8'
+    assert result['version'] == '0.3.0-alpha.8.1'
     assert result['entity_register_approved'] is True
+    assert result['scheduler_entity_count'] == 4
     assert result['slot_entity_count'] + result['diagnostic_entity_count'] == 30
 
 
 def test_release_rejects_changed_approved_entity_implementation(validator, tmp_path, monkeypatch):
     paths = set(validator.PRESERVED_BLOBS) | {
         'custom_components/doems/manifest.json', 'custom_components/doems/const.py',
-        'docs/DOEMS3_CHAPTER7_PLAN_STORE.md', 'RELEASE_NOTES_v0.3.0-alpha.7.8.md'}
+        'docs/DOEMS3_CHAPTER8_SCHEDULER.md', 'RELEASE_NOTES_v0.3.0-alpha.8.1.md'}
     for name in paths:
         target = tmp_path / name
         target.parent.mkdir(parents=True, exist_ok=True)

@@ -4,9 +4,9 @@ DOEMS is a Home Assistant Energy Management System integration built component b
 
 ## Current stage
 
-`0.3.0-alpha.7.8` implements **DOEMS 3.0 chapter 7: Persistent Plan Store**. The Alpha84-derived three-slot store is connected to the existing Plan72 SOC route and Action Bridge. Manual ownership, exact quarter windows, restart persistence, automatic reconciliation and overflow are retained. The 24 slot entities and six diagnostics have been approved by the user. Publication requires successful Python 3.12 and 3.13 checks; no physical execution authority is added.
+`0.3.0-alpha.8.1` adds **DOEMS 3.0 chapter 8: Scheduler** on the exact Alpha-7.8 base. It selects one candidate using Alpha84 ordering, exposes four approved diagnostic entities and performs lightweight time checks without recalculating Plan72. Physical execution remains disabled. Publication and live validation remain separate steps.
 
-See the [chapter 7 contract and approved entity register](docs/DOEMS3_CHAPTER7_PLAN_STORE.md) and [release notes](RELEASE_NOTES_v0.3.0-alpha.7.8.md).
+See the [chapter 8 contract and approved entity register](docs/DOEMS3_CHAPTER8_SCHEDULER.md) and [release notes](RELEASE_NOTES_v0.3.0-alpha.8.1.md).
 
 The current integration provides:
 

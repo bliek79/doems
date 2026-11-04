@@ -52,6 +52,10 @@ async def async_setup_entry(
     action_bridge = hass.data.get(DOMAIN, {}).get(entry.entry_id, {}).get("action_bridge")
     if isinstance(action_bridge, ActionBridgeRuntime):
         entities.append(ActionBridgeValid(action_bridge))
+    from .scheduler_entities import SchedulerReady
+    scheduler = hass.data.get(DOMAIN, {}).get(entry.entry_id, {}).get("scheduler")
+    if scheduler is not None:
+        entities.append(SchedulerReady(entry, scheduler))
     async_add_entities(entities)
 
 
