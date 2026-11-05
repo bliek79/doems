@@ -1,0 +1,59 @@
+name: Publish approved DOEMS Alpha 8.1
+on:
+  push:
+    branches: [doems3-publish-alpha-8-1]
+    paths: [.github/workflows/publish-approved-alpha81.yml]
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 67786036bb2b92f30f693dee1754db32bac5c028
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Verify tested source and retrieve exact CI package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/bliek79/doems/actions/runs/41859399591 > /tmp/run.json
+          python - <<'PY'
+          import json
+          r=json.load(open('/tmp/run.json'))
+          assert r['head_sha']=='67786036bb2b92f30f693dee1754db32bac5c028'
+          assert r['conclusion']=='success'
+          PY
+          gh run download 41859399591 --repo bliek79/doems --name scheduler-3.13-67786036bb2b92f30f693dee1754db32bac5c028 --dir build
+          python scripts/validate_scheduler_release.py
+      - name: Verify archive and publish new pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import sys,json,hashlib,zipfile,subprocess
+          from pathlib import Path
+          sys.path.insert(0,'scripts')
+          from publish_plan_store_release import require_absent
+          import os
+          m=json.loads(Path('build/RELEASE_PROVENANCE.json').read_text())
+          assert m['commit']=='67786036bb2b92f30f693dee1754db32bac5c028'
+          assert m['version']=='0.3.0-alpha.8.1'
+          digest=hashlib.sha256(Path('build/doems.zip').read_bytes()).hexdigest()
+          assert digest==m['archive_sha256']
+          assert Path('build/SHA256SUMS.txt').read_text().split()[0]==digest
+          with zipfile.ZipFile('build/doems.zip') as z:
+              assert z.testzip() is None
+              for n in z.namelist():
+                  assert z.read(n)==Path(n).read_bytes(), n
+          require_absent('bliek79/doems','git/ref/tags/v0.3.0-alpha.8.1',os.environ['GH_TOKEN'])
+          require_absent('bliek79/doems','releases/tags/v0.3.0-alpha.8.1',os.environ['GH_TOKEN'])
+          notes=Path('RELEASE_NOTES_v0.3.0-alpha.8.1.md').read_text()
+          notes=notes.replace('Dit bestand bereidt Alpha 8.1 voor; de aanwezigheid ervan bewijst geen publicatie.','Gepubliceerd na toestemming. CI: 865 tests geslaagd op Python 3.12 en 3.13. Livevalidatie staat nog open. Aaneengesloten laadvensters worden afzonderlijk onderzocht; deze release wijzigt die niet.')
+          Path('/tmp/release-notes.md').write_text(notes)
+          print('Verified SHA256:',digest)
+          PY
+          gh release create v0.3.0-alpha.8.1 build/doems.zip build/SHA256SUMS.txt build/RELEASE_PROVENANCE.json --repo bliek79/doems --target 67786036bb2b92f30f693dee1754db32bac5c028 --prerelease --latest=false --title "DOEMS 3.0 - v0.3.0-alpha.8.1 - Scheduler" --notes-file /tmp/release-notes.md
