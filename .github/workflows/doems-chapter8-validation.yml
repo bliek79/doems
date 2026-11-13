@@ -5,6 +5,7 @@ on:
     branches:
       - doems3-ch8-scheduler-implementation
       - doems3-ch8-alpha84-corrections
+      - doems3-ch8-compaction-rounding-fix
   workflow_dispatch:
 
 permissions:

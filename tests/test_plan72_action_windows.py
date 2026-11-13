@@ -212,3 +212,55 @@ def test_safety_compaction_crosses_hour_and_tariff_boundaries():
     assert merged[0].power_start == stamps[0] + timedelta(minutes=2)
     assert all(.355 <= row['stored_end_kwh'] <= 7.1 for row in after)
     assert sum(row['charge_from_grid_safety_kwh'] for row in after) >= sum(row['charge_from_grid_safety_kwh'] for row in before)
+
+
+def reported_near_full_route(*, drain_after=False):
+    # Isolated reproduction of the reported 13-Nov slots. Efficiency is
+    # inferred from their reported AC energy and SOC delta, not a live config.
+    start = datetime(2026, 11, 13, 10, 15, tzinfo=timezone.utc)
+    stamps = [start + timedelta(minutes=15*i) for i in range(288)]
+    capacity = 7.1
+    efficiency = (91.51995851046699 - 90.77245851046699) / 100 * capacity / .0585
+    initial = 90.77245851046699 / 100 * capacity - .6933333333333334 * efficiency
+    battery = model._Battery(capacity, initial, .355, .71, efficiency, efficiency, 3.2, 3.2)
+    home = [0.0]*288
+    if drain_after:
+        # Consume exactly the original usable stored energy, respecting power.
+        energy = (99.99162517713366 / 100 * capacity - battery.minimum) * efficiency
+        for i in range(4, 12):
+            home[i] = min(.8, energy)
+            energy -= home[i]
+    route = model._Model(stamps, home, [0.0]*288, [(.2,.05,'known')]*288, battery, [])
+    windows = [model._Window(str(i), 'charge', 'safety', stamps[i], stamps[i+1], power, capacity)
+               for i, power in enumerate((3.2, .27, 3.06))]
+    before, _ = route.simulate({}, windows=windows)
+    return route, windows, before
+
+
+def test_reported_three_near_full_charge_slots_merge_without_overfill():
+    route, windows, before = reported_near_full_route()
+    assert [row['soc_end'] for row in before[:3]] == pytest.approx(
+        [90.77245851046699, 91.51995851046699, 99.99162517713366])
+    merged, after = model._compact_windows(route, windows, before)
+    assert len(merged) == 1
+    assert merged[0].start == windows[0].start and merged[0].end == windows[-1].end
+    assert merged[0].power_kw == 1.97
+    detailed, _ = route.simulate({}, windows=merged, detail=True)
+    described = model._describe_windows(route, merged, detailed)[0]
+    assert described['max_runtime_h'] == .75
+    assert described['planned_energy_kwh'] == pytest.approx(1.97 * 43 / 60)
+    assert described['energy_shortfall_kwh'] == pytest.approx(0)
+    assert described['projected_power_duration_h'] == pytest.approx(43/60)
+    assert described['command_target_soc'] == 100
+    assert described['projected_end_soc'] < 100
+    preparations = [s for r in detailed for s in r['segments'] if s['action']=='safety_preparation']
+    assert sum(s['duration_hours'] for s in preparations) == pytest.approx(2/60)
+    assert all(r['stored_end_kwh'] <= route.b.capacity for r in after)
+    assert all(model._need(r,route.b) <= model._need(old,route.b)+1e-9 for r,old in zip(after,before))
+
+
+def test_lower_rounding_must_not_create_a_later_household_shortfall():
+    route, windows, before = reported_near_full_route(drain_after=True)
+    merged, after = model._compact_windows(route, windows, before)
+    assert len(merged) == 3
+    assert sum(r['uncovered_home_kwh'] for r in after) <= sum(r['uncovered_home_kwh'] for r in before)+1e-9

@@ -146,3 +146,23 @@ No public dashboard edits. The quarterly cadence has explicit content-change,
 source-recovery, effective manual/limit change, reserve-crossing and one-shot
 near/due automatic-start exceptions. Repeated unchanged store notifications and
 Scheduler time ticks do not initiate heavy recomputation.
+
+## Alpha 8.3 — afronding bij samenvoegen nabij volle accu
+
+De livecontrole van 13 november toonde drie aansluitende `safety_charge`-slots
+uit generatie 8: 3.200, 270 en 3.060 W, eindigend op 99,991625% SOC. Alpha 8.2
+kon deze niet samenvoegen: omhoog afronden voegde energie toe die niet meer paste.
+
+Omhoog afronden blijft de eerste keuze zoals bij Alpha84. Alleen bij
+safety-charge probeert Plan72 na afwijzing ook de aangrenzende lagere stap van
+10 W. Dit is een begrensde correctie in DOEMS' kwartiermodel; deze fallback staat
+niet letterlijk in Alpha84. Alle bestaande controles worden opnieuw uitgevoerd.
+Een grotere reserve-/huishoudelijke tekortkoming, schade aan handmatige plannen,
+verdringing van zonne-energie of een capaciteitsoverschrijding wijst de kandidaat af.
+Handelsvensters houden hun bestaande berekening.
+
+De geïsoleerde reproductie met de aangeleverde vermogens en SOC-stappen vormt nu
+één venster van 45 minuten met 1.970 W en één voorbereiding van twee minuten.
+De geplande energie is 1,411833 kWh; de verwachte eind-SOC wordt opnieuw berekend,
+terwijl het commandodoel 100% blijft. De volledige liveprognose was niet beschikbaar;
+de praktijktest staat dus nog open. Er zijn geen nieuwe entiteiten of unique-ID's.

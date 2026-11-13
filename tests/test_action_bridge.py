@@ -215,7 +215,7 @@ def test_calculators_and_runtimes_are_frozen_reviewed_ch7_blobs():
     # every unaffected AST node to the original Alpha53 implementation.
     expected={'energy_need.py':'bc10cbb18dd531735e390fe5369466ab4f466087',
         'energy_need_runtime.py':'3ab25d81615429f51264beb69d4d0064a34f5863',
-        'planner_72h.py':'62bedf24665832cf3a78bd2608f7b3b711e892c8'}
+        'planner_72h.py':'6cd89aef7d29a9dc1af6d752365564e41579922f'}
     expected['planner_72h_runtime.py']='2aefbc82546946af556f4740b2387a2dfbd88675'
     for name,sha in expected.items():
         data=(ROOT/'custom_components/doems'/name).read_bytes()
@@ -278,3 +278,30 @@ def test_horizon_crossing_autumn_dst_keeps_288_exact_quarters():
         now=start,soc_percent=50,trade_enabled=False,practical_windows=True,**P))
     p['calculated_at']=start.isoformat()
     assert bridge.build_action_bridge(p,now=start)['valid']
+
+
+def test_near_full_compacted_window_reaches_bridge_as_one_eligible_action():
+    from test_plan72_action_windows import reported_near_full_route
+    route, windows, trace = reported_near_full_route()
+    merged, _ = model._compact_windows(route, windows, trace)
+    trace, _ = route.simulate({}, windows=merged, detail=True)
+    details = model._describe_windows(route, merged, trace)
+    now = route.stamps[0]
+    p = dict(P, capacity_kwh=route.b.capacity, charge_efficiency=route.b.charge_eff,
+             discharge_efficiency=route.b.discharge_eff)
+    plan = dict(valid=True, status='ready', reason='sequential_plan_ready',
+                action_window_contract='quarter_windows_v1', action_window_count=len(details),
+                action_windows=details, timeline=trace, battery_parameters=p,
+                slot_count=288, horizon_hours=72, start=now.isoformat(),
+                end=(now+timedelta(hours=72)).isoformat(), calculated_at=now.isoformat(),
+                plan_generation=8, input_fingerprint='reported-slot-reproduction')
+    result = bridge.build_action_bridge(plan, now=now)
+    assert result['valid'], result
+    assert result['candidate_count'] == 1
+    assert result['invalid_candidate_count'] == 0
+    candidate = result['eligible_candidates'][0]
+    assert candidate['max_runtime_h'] == .75
+    assert candidate['power_w'] == 1970
+    assert candidate['command_target_soc'] == 100
+    assert candidate['projected_end_soc'] < 100
+    assert candidate['physical_execution_authority'] is False

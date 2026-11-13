@@ -1041,44 +1041,55 @@ def _compact_windows(model,windows,trace,trading=False):
         step=max(10,int((energy/duration*100-1e-9)//1)+1)
         limit=int((model.b.charge_kw if first.action=="charge" else model.b.discharge_kw)*100)
         others=windows[:i]+windows[i+2:]
-        merged=replace(first,end=second.end,power_kw=min(step,limit)/100)
-        if merged.action=="charge":
-            initial=trace[int((merged.start-model.stamps[0]).total_seconds()/900)]["stored_start_kwh"]
-            if initial+merged.power_kw*duration*model.b.charge_eff>model.b.capacity+_TOL:
-                i+=1
-                continue
-        trial,manual_trial=model.simulate({},windows=others+[merged],detail=trading)
-        safe=all(_need(r,model.b)<=_need(old,model.b)+_EPS for r,old in zip(trial,trace))
-        safe &= all((not old["target_reached"] or manual_trial[key]["target_reached"])
-                    and (manual_trial[key]["remaining_target_kwh"] or 0)<= (old["remaining_target_kwh"] or 0)+_EPS
-                    and (manual_trial[key]["battery_energy_kwh"] >= old["battery_energy_kwh"]-_EPS
-                         if next(p.action for p in model.manual if p.id==key)=="discharge" else True)
-                    for key,old in manual_before.items())
-        # Safety compaction follows Alpha84 contiguous commands; trading
-        # still checks profitability below. Never displace free solar.
-        safe &= all(r["charge_from_solar_kwh"] >= old["charge_from_solar_kwh"] - _EPS
-                    for r, old in zip(trial, trace))
-        # Removing a preparation interval changes downstream SOC too. A merge
-        # must not make a later, previously complete charge stop at capacity.
-        safe &= all(w.action != "charge" or
-                    trial[int((w.start - model.stamps[0]).total_seconds() / 900)]["stored_start_kwh"]
-                    + w.power_kw * (w.end - w.power_start).total_seconds() / 3600 * model.b.charge_eff
-                    <= model.b.capacity + _EPS for w in others + [merged])
-        if trading:
-            safe &= all(sum(s["duration_hours"] for r in trial for s in r["segments"]
-                         if s.get("window_id")==w.id and s["action"] in {"safety_charge","trade_charge","trade_discharge"})
-                        >=(w.end-w.power_start).total_seconds()/3600-1e-7 for w in others+[merged])
-            # Optional exports must keep the complete commanded power phase.
-            if merged.action=="discharge":
-                endpoint=int((merged.end-model.stamps[0]).total_seconds()/900)-1
+        # Prefer Alpha84's upward 10 W rounding. Near capacity it may add
+        # energy that the route cannot store. For safety charging only, also
+        # try the adjacent lower step; accept it only after the SAME complete
+        # replay proves no additional reserve, household or manual shortfall.
+        steps = [min(step, limit)]
+        lower = int((energy / duration * 100 + _EPS) // 1)
+        if not trading and first.origin == "safety" and first.action == "charge" and 10 <= lower < steps[0]:
+            steps.append(lower)
+        safe = False
+        for candidate_step in steps:
+            merged=replace(first,end=second.end,power_kw=candidate_step/100)
+            if merged.action=="charge":
                 initial=trace[int((merged.start-model.stamps[0]).total_seconds()/900)]["stored_start_kwh"]
-                if initial-merged.power_kw*duration/model.b.discharge_eff < model.b.reserve-_EPS:
-                    safe=False
-            safe &= sum(r["cost"] for r in trial)<=sum(r["cost"] for r in trace)+_EPS
-            safe &= all(r["charge_from_solar_kwh"]>=old["charge_from_solar_kwh"]-_EPS for r,old in zip(trial,trace))
-            safe &= sum(r["discharge_to_grid_trade_kwh"] for r in trial)>=sum(r["discharge_to_grid_trade_kwh"] for r in trace)-_EPS
-            allowed={j for j,t in enumerate(model.stamps) if merged.action=="charge" and merged.start<=t<merged.end}
-            safe &= all(j in allowed or r["grid_import_for_home_kwh"]<=old["grid_import_for_home_kwh"]+_EPS for j,(r,old) in enumerate(zip(trial,trace)))
+                if initial+merged.power_kw*duration*model.b.charge_eff>model.b.capacity+_TOL:
+                    continue
+            trial,manual_trial=model.simulate({},windows=others+[merged],detail=trading)
+            safe=all(_need(r,model.b)<=_need(old,model.b)+_EPS for r,old in zip(trial,trace))
+            safe &= all((not old["target_reached"] or manual_trial[key]["target_reached"])
+                        and (manual_trial[key]["remaining_target_kwh"] or 0)<= (old["remaining_target_kwh"] or 0)+_EPS
+                        and (manual_trial[key]["battery_energy_kwh"] >= old["battery_energy_kwh"]-_EPS
+                             if next(p.action for p in model.manual if p.id==key)=="discharge" else True)
+                        for key,old in manual_before.items())
+            # Safety compaction follows Alpha84 contiguous commands; trading
+            # still checks profitability below. Never displace free solar.
+            safe &= all(r["charge_from_solar_kwh"] >= old["charge_from_solar_kwh"] - _EPS
+                        for r, old in zip(trial, trace))
+            # Removing a preparation interval changes downstream SOC too. A merge
+            # must not make a later, previously complete charge stop at capacity.
+            safe &= all(w.action != "charge" or
+                        trial[int((w.start - model.stamps[0]).total_seconds() / 900)]["stored_start_kwh"]
+                        + w.power_kw * (w.end - w.power_start).total_seconds() / 3600 * model.b.charge_eff
+                        <= model.b.capacity + _EPS for w in others + [merged])
+            if trading:
+                safe &= all(sum(s["duration_hours"] for r in trial for s in r["segments"]
+                             if s.get("window_id")==w.id and s["action"] in {"safety_charge","trade_charge","trade_discharge"})
+                            >=(w.end-w.power_start).total_seconds()/3600-1e-7 for w in others+[merged])
+                # Optional exports must keep the complete commanded power phase.
+                if merged.action=="discharge":
+                    endpoint=int((merged.end-model.stamps[0]).total_seconds()/900)-1
+                    initial=trace[int((merged.start-model.stamps[0]).total_seconds()/900)]["stored_start_kwh"]
+                    if initial-merged.power_kw*duration/model.b.discharge_eff < model.b.reserve-_EPS:
+                        safe=False
+                safe &= sum(r["cost"] for r in trial)<=sum(r["cost"] for r in trace)+_EPS
+                safe &= all(r["charge_from_solar_kwh"]>=old["charge_from_solar_kwh"]-_EPS for r,old in zip(trial,trace))
+                safe &= sum(r["discharge_to_grid_trade_kwh"] for r in trial)>=sum(r["discharge_to_grid_trade_kwh"] for r in trace)-_EPS
+                allowed={j for j,t in enumerate(model.stamps) if merged.action=="charge" and merged.start<=t<merged.end}
+                safe &= all(j in allowed or r["grid_import_for_home_kwh"]<=old["grid_import_for_home_kwh"]+_EPS for j,(r,old) in enumerate(zip(trial,trace)))
+            if safe:
+                break
         if safe:
             windows=sorted(others+[merged],key=lambda w:w.start)
             trace,manual_before=trial,manual_trial
