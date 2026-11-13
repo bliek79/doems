@@ -1,0 +1,63 @@
+name: Publish verified DOEMS Alpha 8.2
+on:
+  push:
+    branches: [doems3-publish-alpha-8-2]
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: bliek79/doems
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 782736687976d09181c4704eff1dcd8ff7c2db0f
+      - name: Require successful exact-source validation and unused version
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request, urllib.error
+          base='https://api.github.com/repos/bliek79/doems/'
+          def get(path):
+              req=urllib.request.Request(base+path,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+              with urllib.request.urlopen(req) as response: return json.load(response)
+          run=get('actions/runs/43386225818')
+          assert run['conclusion']=='success' and run['head_sha']=='782736687976d09181c4704eff1dcd8ff7c2db0f'
+          jobs=get('actions/runs/43386225818/jobs')['jobs']
+          for version in ('3.12','3.13'):
+              assert any(version in j['name'] and j['conclusion']=='success' for j in jobs)
+          for path in ('releases/tags/v0.3.0-alpha.8.2','git/ref/tags/v0.3.0-alpha.8.2'):
+              try: get(path)
+              except urllib.error.HTTPError as exc:
+                  if exc.code!=404: raise
+              else: raise RuntimeError('Version already exists; refusing overwrite')
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          name: scheduler-3.13-782736687976d09181c4704eff1dcd8ff7c2db0f
+          run-id: 43386225818
+          github-token: ${{ github.token }}
+          path: release-assets
+      - name: Verify downloaded package
+        run: |
+          cd release-assets
+          sha256sum -c SHA256SUMS.txt
+          python - <<'PY'
+          import json, zipfile, xml.etree.ElementTree as ET
+          p=json.load(open('RELEASE_PROVENANCE.json'))
+          assert p['commit']=='782736687976d09181c4704eff1dcd8ff7c2db0f'
+          assert p['version']=='0.3.0-alpha.8.2'
+          assert p['physical_execution_enabled'] is False
+          with zipfile.ZipFile('doems.zip') as z:
+              assert z.testzip() is None
+              assert json.loads(z.read('custom_components/doems/manifest.json'))['version']==p['version']
+          suites=ET.parse('test-results.xml').getroot().iter('testsuite')
+          suites=list(suites)
+          assert sum(int(s.attrib['tests']) for s in suites)==870
+          assert all(int(s.attrib.get('failures',0))==0 and int(s.attrib.get('errors',0))==0 for s in suites)
+          PY
+      - name: Publish new prerelease on tested commit
+        run: |
+          gh release create v0.3.0-alpha.8.2 release-assets/doems.zip release-assets/SHA256SUMS.txt release-assets/RELEASE_PROVENANCE.json --target 782736687976d09181c4704eff1dcd8ff7c2db0f --title 'DOEMS 3.0 Alpha 8.2 — Alpha84 corrections' --notes-file RELEASE_NOTES_v0.3.0-alpha.8.2.md --prerelease --latest=false
