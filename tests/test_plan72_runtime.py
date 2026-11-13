@@ -374,7 +374,7 @@ def test_soc_crossing_below_reserve_is_an_immediate_safety_exception(environment
     asyncio.run(scenario())
 
 
-def test_quarter_change_during_worker_rejects_old_window_without_waiting_for_tick(environment, monkeypatch):
+def test_quarter_crossing_alone_does_not_discard_completed_generation(environment, monkeypatch):
     monkeypatch.setattr(environment.runtime, "calculate_plan72", fake_engine)
     async def scenario():
         runtime, hass = setup_runtime(environment, gated=True)
@@ -382,13 +382,11 @@ def test_quarter_change_during_worker_rejects_old_window_without_waiting_for_tic
         await wait_until(lambda: len(hass.jobs) == 1)
         environment.clock.now = NOW.replace(minute=31)
         hass.jobs[0].gate.set_result(None)
-        await wait_until(lambda: len(hass.jobs) == 2)
-        assert runtime.snapshot["valid"] is False
-        assert hass.jobs[1].inputs.home[0][0] == NOW.replace(minute=45)
-        hass.jobs[1].gate.set_result(None)
         await finish(runtime)
+        assert len(hass.jobs) == 1
         assert runtime.snapshot["valid"] is True
-        assert runtime.snapshot["input_captured_at"] == environment.clock.now.isoformat()
+        assert runtime.snapshot["input_captured_at"] == NOW.isoformat()
+        assert runtime.stale_discard_count == 0
         await runtime.async_shutdown()
     asyncio.run(scenario())
 
@@ -552,4 +550,71 @@ def test_store_change_during_worker_discards_old_manual_generation(environment, 
         assert runtime.snapshot['physical_execution_authority'] is False
         await runtime.async_shutdown()
         assert not store.listeners
+    asyncio.run(scenario())
+
+
+def test_background_refresh_keeps_published_generation_and_reports_progress(environment, monkeypatch):
+    monkeypatch.setattr(environment.runtime, 'calculate_plan72', fake_engine)
+    async def scenario():
+        runtime, hass = setup_runtime(environment)
+        await runtime.async_setup()
+        await finish(runtime)
+        published = runtime.snapshot
+        hass.gated = True
+        environment.clock.now = NOW.replace(minute=30, second=3)
+        runtime._quarter_changed(environment.clock.now)
+        await wait_until(lambda: len(hass.jobs) == 2)
+        assert runtime.snapshot is published
+        assert runtime.calculation_in_progress
+        assert runtime.pending_reason == 'quarter_changed'
+        hass.jobs[-1].gate.set_result(None)
+        await finish(runtime)
+        assert runtime.snapshot['valid']
+        assert runtime.snapshot['plan_generation'] > published['plan_generation']
+        assert not runtime.calculation_in_progress
+        assert runtime.calculation_duration_seconds >= 0
+        await runtime.async_shutdown()
+    asyncio.run(scenario())
+
+
+def test_content_change_replans_but_identical_store_notifications_do_not(environment, monkeypatch):
+    monkeypatch.setattr(environment.runtime, 'calculate_plan72', fake_engine)
+    async def scenario():
+        runtime, hass = setup_runtime(environment)
+        await runtime.async_setup()
+        await finish(runtime)
+        for _ in range(100):
+            runtime.refresh('plan_store_changed')
+        assert len(hass.jobs) == 1
+        previous = runtime.coordinator.forecast
+        def changed(*, now):
+            rows = previous(now=now)
+            rows[0].energy_kwh += .01
+            return rows
+        runtime.coordinator.forecast = changed
+        runtime.coordinator.emit()
+        await finish(runtime)
+        assert len(hass.jobs) == 2
+        await runtime.async_shutdown()
+    asyncio.run(scenario())
+
+
+def test_start_critical_near_and_due_are_one_shot(environment, monkeypatch):
+    monkeypatch.setattr(environment.runtime, 'calculate_plan72', fake_engine)
+    async def scenario():
+        runtime, hass = setup_runtime(environment)
+        await runtime.async_setup()
+        await finish(runtime)
+        start = NOW + timedelta(minutes=10)
+        row = dict(origin='automatic_72h_planner', lifecycle_status='pending',
+                   planner_identity='fixed-window', start_time=start.isoformat(), max_start_delay_min=10)
+        runtime.plan_store = types.SimpleNamespace(get_plan=lambda i: row if i == 1 else {})
+        calls = []
+        runtime.refresh = calls.append
+        for _ in range(100): runtime._start_critical_tick(None)
+        assert calls == ['start_critical']
+        environment.clock.now = start
+        for _ in range(100): runtime._start_critical_tick(None)
+        assert calls == ['start_critical', 'start_critical']
+        await runtime.async_shutdown()
     asyncio.run(scenario())

@@ -99,7 +99,7 @@ def _source(plan: dict, now: datetime) -> tuple[list[dict], dict]:
     start, end = _time(plan.get("start")), _time(plan.get("end"))
     floor = now.replace(minute=now.minute // 15 * 15, second=0, microsecond=0)
     next_quarter = floor if floor == now else floor + timedelta(minutes=15)
-    if start != next_quarter:
+    if start > next_quarter or end <= now:
         raise ValueError("stale_or_future_plan72_window")
     if end-start != timedelta(hours=72) or calculated < start-timedelta(minutes=15):
         raise ValueError("invalid_horizon_or_calculation_age")

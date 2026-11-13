@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - doems3-ch8-scheduler-implementation
+      - doems3-ch8-alpha84-corrections
   workflow_dispatch:
 
 permissions:

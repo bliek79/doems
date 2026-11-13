@@ -195,3 +195,20 @@ def test_optional_trade_preserves_pv_storage_opportunities_and_reserve():
         assert after['charge_from_solar_kwh']>=before['charge_from_solar_kwh']-1e-5
         assert after['reserve_min_gap_kwh']<=max(before['reserve_min_gap_kwh'],1e-5)
     assert traded['remaining_charge_need_kwh']<=max(base['remaining_charge_need_kwh'],traded['remaining_charge_need_tolerance_kwh'])
+
+
+def test_safety_compaction_crosses_hour_and_tariff_boundaries():
+    start = NOW.replace(minute=45)
+    stamps = [start + timedelta(minutes=15*i) for i in range(288)]
+    battery = model._Battery(7.1, 1.0, .355, .71, .92, .92, 3.2, 3.2)
+    route = model._Model(stamps, [0.0]*288, [0.0]*288,
+                         [(.10 if i == 0 else .20, .05, 'known') for i in range(288)], battery, [])
+    windows = [model._Window(str(i), 'charge', 'safety', stamps[i],
+                              stamps[i]+timedelta(minutes=15), 1.0, 7.1) for i in range(2)]
+    before, _ = route.simulate({}, windows=windows)
+    merged, after = model._compact_windows(route, windows, before)
+    assert len(merged) == 1
+    assert merged[0].start == stamps[0] and merged[0].end == stamps[2]
+    assert merged[0].power_start == stamps[0] + timedelta(minutes=2)
+    assert all(.355 <= row['stored_end_kwh'] <= 7.1 for row in after)
+    assert sum(row['charge_from_grid_safety_kwh'] for row in after) >= sum(row['charge_from_grid_safety_kwh'] for row in before)

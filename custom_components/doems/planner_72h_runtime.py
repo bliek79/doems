@@ -9,10 +9,11 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import json
 import logging
+from time import monotonic
 from math import isfinite, sqrt
 from typing import Any, Callable
 
@@ -21,7 +22,7 @@ from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.event import async_track_state_change_event, async_track_time_change
+from homeassistant.helpers.event import async_track_state_change_event, async_track_time_change, async_track_time_interval
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -169,6 +170,12 @@ class Plan72Runtime:
         self.calculation_count = 0
         self._scheduled_inputs: Plan72Inputs | None = None
         self.deferred_refresh_count = 0
+        self.stale_discard_count = 0
+        self.calculation_duration_seconds = None
+        self.calculation_started_at = None
+        self.calculation_in_progress = False
+        self.pending_reason = None
+        self._last_start_critical_key = None
         self.device = DeviceInfo(
             identifiers={(DOMAIN, DEVICE_IDENTIFIER)},
             name=entry.options.get(CONF_INSTANCE_NAME, DEFAULT_INSTANCE_NAME),
@@ -208,6 +215,8 @@ class Plan72Runtime:
                 self.hass, self._quarter_changed, minute=[0, 15, 30, 45], second=3
             )
         )
+        self._unsubs.append(async_track_time_interval(
+            self.hass, self._start_critical_tick, timedelta(seconds=10)))
         self.refresh("startup")
 
     async def async_shutdown(self) -> None:
@@ -250,6 +259,32 @@ class Plan72Runtime:
     @callback
     def _quarter_changed(self, _now: datetime) -> None:
         self.refresh("quarter_changed")
+
+    @callback
+    def _start_critical_tick(self, _now):
+        """Alpha84 one-shot near/due trigger, independent of Scheduler polling."""
+        if self._closed or self.plan_store is None:
+            return
+        now = dt_util.utcnow()
+        candidates = []
+        for slot in range(1, 4):
+            plan = self.plan_store.get_plan(slot)
+            if plan.get("origin") != "automatic_72h_planner" or plan.get("lifecycle_status") != "pending":
+                continue
+            try:
+                start = datetime.fromisoformat(str(plan.get("start_time")).replace("Z", "+00:00"))
+                if start.tzinfo is None:
+                    continue
+                seconds = (start - now).total_seconds()
+                delay = float(plan.get("max_start_delay_min", 0)) * 60
+                if -delay <= seconds <= 900:
+                    candidates.append((start, slot, ("near" if seconds > 0 else "due", plan.get("planner_identity") or slot)))
+            except (ValueError, TypeError):
+                continue
+        key = min(candidates)[2] if candidates else None
+        if key is not None and key != self._last_start_critical_key:
+            self._last_start_critical_key = key
+            self.refresh("start_critical")
 
     def _capture(self, reason: str) -> Plan72Inputs:
         """Read all managers and HA states once, before submitting any job."""
@@ -406,8 +441,10 @@ class Plan72Runtime:
             except (ValueError, TypeError, KeyError):
                 safety_crossing = True
             if (not safety_crossing and inputs.manual_plans == previous.manual_plans
-                    and current_limits == previous_limits):
-                # Normal SOC/forecast/price events are sampled next quarter.
+                    and current_limits == previous_limits
+                    and inputs.home == previous.home and inputs.solar == previous.solar
+                    and inputs.prices == previous.prices and reason != "start_critical"):
+                # Ordinary SOC and unchanged source notifications wait for the next quarter.
                 # _capture above still invalidates missing or unsafe sources.
                 self.deferred_refresh_count += 1
                 return
@@ -415,8 +452,12 @@ class Plan72Runtime:
         self._revision += 1
         self._requested_fingerprint = inputs.fingerprint
         self._pending = (self._revision, inputs)
-        self.snapshot = _unavailable("recalculation_pending", status="calculating")
-        self.snapshot["replan_reason"] = reason
+        # Keep the published generation intact while its replacement computes.
+        # Source loss above still invalidates it immediately.
+        self.pending_reason = reason
+        if not self.snapshot.get("valid"):
+            self.snapshot = _unavailable("recalculation_pending", status="calculating")
+            self.snapshot["replan_reason"] = reason
         self._notify()
         if self._worker_task is None:
             self._worker_task = self.hass.async_create_task(self._run_worker())
@@ -426,6 +467,10 @@ class Plan72Runtime:
             while not self._closed and self._pending is not None:
                 revision, inputs = self._pending
                 self._pending = None
+                started = monotonic()
+                self.calculation_in_progress = True
+                self.calculation_started_at = dt_util.utcnow().isoformat()
+                self._notify()
                 try:
                     result = await self.hass.async_add_executor_job(_evaluate, inputs)
                 except asyncio.CancelledError:
@@ -433,15 +478,15 @@ class Plan72Runtime:
                 except Exception:
                     _LOGGER.exception("DOEMS Plan72 calculation failed")
                     result = _unavailable("calculation_failed")
+                self.calculation_in_progress = False
+                self.calculation_duration_seconds = round(monotonic() - started, 3)
                 self.calculation_count += 1
                 if self._closed or revision != self._revision:
+                    self.stale_discard_count += 1
                     continue
                 if result.get("valid") is not True:
                     self._scheduled_inputs = None
                 if inputs.fingerprint != self._requested_fingerprint:
-                    continue
-                if ceil_quarter(dt_util.utcnow()) != ceil_quarter(inputs.now):
-                    self.refresh("quarter_changed_during_calculation")
                     continue
                 if (
                     self.solar.source_status != "ok"
@@ -450,6 +495,7 @@ class Plan72Runtime:
                 ):
                     self.refresh("source_validity_changed_during_calculation")
                     continue
+                self.pending_reason = None
                 self.snapshot = {
                     **result,
                     "observational_only": True,
@@ -464,6 +510,7 @@ class Plan72Runtime:
                 }
                 self._notify()
         finally:
+            self.calculation_in_progress = False
             self._worker_task = None
 
 
@@ -555,7 +602,13 @@ class _Plan72Entity:
             "input_captured_at": snapshot.get("input_captured_at"),
             "calculation_count": self.runtime.calculation_count,
             "deferred_refresh_count": self.runtime.deferred_refresh_count,
-            "refresh_policy": "quarterly_normal_updates",
+            "refresh_policy": "native_quarter_plus_events",
+            "calculation_in_progress": self.runtime.calculation_in_progress,
+            "calculation_started_at": self.runtime.calculation_started_at,
+            "calculation_duration_seconds": self.runtime.calculation_duration_seconds,
+            "pending_replan_reason": self.runtime.pending_reason,
+            "requested_generation": self.runtime._revision,
+            "stale_discard_count": self.runtime.stale_discard_count,
         }
 
 

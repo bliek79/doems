@@ -38,7 +38,7 @@ def bridge_plan(candidate):
         "command_target_soc": candidate["command_target_soc"],
         "projected_end_soc": candidate["projected_end_soc"],
         "max_runtime_h": candidate["max_runtime_h"],
-        "max_start_delay_min": 0,
+        "max_start_delay_min": 10,
         "purpose": candidate.get("purpose"),
         "planner_identity": candidate["planner_identity"],
         "planner_signature": candidate["planner_signature"],
@@ -104,7 +104,8 @@ class PlanStoreWriter:
         try:
             source_start = datetime.fromisoformat(str(source.get("start")).replace("Z", "+00:00"))
             current_window = (source_start.tzinfo is not None
-                              and source_start.astimezone(timezone.utc) == ceil_quarter(dt_util.utcnow()))
+                              and source_start.astimezone(timezone.utc) <= ceil_quarter(dt_util.utcnow())
+                              and dt_util.utcnow() < source_start + timedelta(hours=72))
         except (ValueError, TypeError):
             current_window = False
         if (not current_window or source.get("valid") is not True
@@ -146,13 +147,15 @@ class PlanStoreWriter:
             desired, expected_revision=revision,
             source_is_current=lambda: (self.plan72.snapshot is source
                                       and self.bridge.snapshot is bridge and not self._closed
-                                      and ceil_quarter(dt_util.utcnow()) == source_start),
+                                      and source_start <= ceil_quarter(dt_util.utcnow())
+                                      and dt_util.utcnow() < source_start + timedelta(hours=72)),
         )
         await self.store.async_handoff_automatic_plans(
             {slot: plan["planner_signature"] for slot, plan in desired.items()},
             source_is_current=lambda: (self.plan72.snapshot is source
                                       and self.bridge.snapshot is bridge and not self._closed
-                                      and ceil_quarter(dt_util.utcnow()) == source_start),
+                                      and source_start <= ceil_quarter(dt_util.utcnow())
+                                      and dt_util.utcnow() < source_start + timedelta(hours=72)),
         )
         self.status = "ready"
         self.last_reason = "changed" if result["changed"] else "unchanged"

@@ -408,6 +408,7 @@ class AnkerEmsPlanStore:
                     # An identical candidate must still reopen a reusable
                     # terminal slot before the storage-only handoff can run.
                     and current_lifecycle == new_plan["lifecycle_status"]
+                    and current.get("max_start_delay_min") == new_plan.get("max_start_delay_min")
                 ):
                     continue
 

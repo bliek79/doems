@@ -300,7 +300,7 @@ def test_overflow_rolls_into_expired_slot_with_survivors_unchanged(store_module,
         await writer._sync()
         survivors = [store.get_plan(i) for i in (2,3)]
         assert writer.diagnostics['overflow'] == 1
-        clock.now += timedelta(minutes=16)
+        clock.now += timedelta(minutes=26)
         source.snapshot = {**source.snapshot, 'start':'2026-10-30T12:30:00+00:00'}
         await writer._sync()
         assert store.get_value(1, 'planner_identity') == 'd'
@@ -437,5 +437,23 @@ def test_writer_refills_terminal_same_signature_without_touching_manual_or_survi
         assert [restored.get_plan(i) for i in (1, 2, 3)] == [store.get_plan(i) for i in (1, 2, 3)]
         revision = store.revision
         await writer._sync()
+        assert store.revision == revision
+    asyncio.run(run())
+
+
+def test_future_automatic_slot_adopts_corrected_margin_once(store_module):
+    async def run():
+        store = store_module.AnkerEmsPlanStore(None, 'id')
+        old = proposal()
+        await store.async_sync_automatic_plans({1: old})
+        await store.async_handoff_automatic_plans({1: old['planner_signature']})
+        assert store.get_value(1, 'lifecycle_status') == 'pending'
+        updated = dict(old, max_start_delay_min=10)
+        result = await store.async_sync_automatic_plans({1: updated})
+        assert result['written_slots'] == [1]
+        assert store.get_value(1, 'max_start_delay_min') == 10
+        assert store.get_value(1, 'lifecycle_status') == 'pending'
+        revision = store.revision
+        assert not (await store.async_sync_automatic_plans({1: updated}))['changed']
         assert store.revision == revision
     asyncio.run(run())

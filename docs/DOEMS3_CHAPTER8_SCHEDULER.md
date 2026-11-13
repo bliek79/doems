@@ -121,3 +121,28 @@ Na afzonderlijk vrijgegeven publicatie/installatie:
 Status: gebouwd en geautomatiseerd te verifiëren; livevalidatie en fysieke
 uitvoering zijn niet afgetekend. Dashboardkleuren, teksten, indeling en
 uurweergave zijn niet gewijzigd. De zichtbare plannernaam blijft DOEMS Planner.
+
+## Alpha 8.2 correction — supersedes Alpha 8.1 source gating and zero margin
+
+Reference: Alpha84 commit 6ff976ab8e0b3a9641c32372dc8d2fdafc55db7d.
+Base: DOEMS Alpha 8.1 commit 67786036bb2b92f30f693dee1754db32bac5c028.
+
+Plan72 retains its coherent published generation during a background replacement.
+Its source validity is still invalidated on real source loss. Scheduler selection
+is independent of source readiness; `source_blocker` and `source_consistent` are
+separate diagnostics for later validation. No execution authority is granted.
+Automatic writer margin is 10 minutes, with the original hard end time unchanged.
+Cached Bridge horizons survive a quarter boundary until superseded or expired;
+new assignments still exclude already-due windows and protect active plans.
+
+Existing entity register and unique IDs are unchanged. Additional attributes on
+`sensor.doems_ems_plan72_status` (and the other Plan72 entities):
+`calculation_in_progress`, `calculation_started_at`,
+`calculation_duration_seconds`, `pending_replan_reason`,
+`requested_generation`, `stale_discard_count`.
+Published timestamps/generation remain those of the published result.
+
+No public dashboard edits. The quarterly cadence has explicit content-change,
+source-recovery, effective manual/limit change, reserve-crossing and one-shot
+near/due automatic-start exceptions. Repeated unchanged store notifications and
+Scheduler time ticks do not initiate heavy recomputation.

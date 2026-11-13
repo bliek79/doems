@@ -73,12 +73,13 @@ class SchedulerRuntime:
               or source.get("plan_generation") != bridge.get("source_plan_generation")):
             blocker = "source_generation_or_fingerprint_mismatch"
         options = self.entry.options
-        result = evaluate(plans, now=now, storage_revision=revision, source_blocker=blocker,
+        result = evaluate(plans, now=now, storage_revision=revision, source_blocker=None,
                           max_charge_power_w=options.get(CONF_PLAN72_MAX_CHARGE_POWER_W),
                           max_discharge_power_w=options.get(CONF_PLAN72_MAX_DISCHARGE_POWER_W))
         result.update(source_plan_generation=source.get("plan_generation"),
                       source_input_fingerprint=source.get("input_fingerprint"),
-                      source_status=source.get("status"), source_consistent=blocker is None)
+                      source_status=source.get("status"), source_consistent=blocker is None,
+                      source_blocker=blocker, prestart_revalidation_required=True)
         for slot, detail in result["scheduler_slots"].items():
             if detail.get("origin") != AUTOMATIC:
                 continue

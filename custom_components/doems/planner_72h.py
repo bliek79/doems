@@ -1033,17 +1033,8 @@ def _compact_windows(model,windows,trace,trading=False):
         if trading and first.origin!="trade":
             i+=1
             continue
-        # Never average safety energy across different import tariffs: that
-        # would undo the cheapest-feasible allocation selected above.
-        if first.origin == "safety":
-            if first.start.replace(minute=0, second=0, microsecond=0) != (second.end - timedelta(microseconds=1)).replace(minute=0, second=0, microsecond=0):
-                i += 1
-                continue
-            begin = int((first.start - model.stamps[0]).total_seconds() / 900)
-            end = int((second.end - model.stamps[0]).total_seconds() / 900)
-            if len({model.prices[j][0] for j in range(begin, end)}) != 1:
-                i += 1
-                continue
+        # Alpha84 groups consecutive actions of the same purpose across
+        # tariff and clock-hour boundaries. Replay the merged command below.
         attempts+=1
         energy=sum(w.power_kw*(w.end-w.power_start).total_seconds()/3600 for w in (first,second))
         duration=(second.end-first.power_start).total_seconds()/3600
@@ -1063,9 +1054,8 @@ def _compact_windows(model,windows,trace,trading=False):
                     and (manual_trial[key]["battery_energy_kwh"] >= old["battery_energy_kwh"]-_EPS
                          if next(p.action for p in model.manual if p.id==key)=="discharge" else True)
                     for key,old in manual_before.items())
-        # Compaction may reduce switching, never increase route costs or
-        # displace free solar. Apply this to safety as well as trading.
-        safe &= sum(r["cost"] for r in trial) <= sum(r["cost"] for r in trace) + _EPS
+        # Safety compaction follows Alpha84 contiguous commands; trading
+        # still checks profitability below. Never displace free solar.
         safe &= all(r["charge_from_solar_kwh"] >= old["charge_from_solar_kwh"] - _EPS
                     for r, old in zip(trial, trace))
         # Removing a preparation interval changes downstream SOC too. A merge

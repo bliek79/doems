@@ -193,9 +193,9 @@ def test_idle_passive_route_has_no_candidates():
     assert r['valid'] and r['status']=='idle' and not r['candidates']
 
 
-def test_stale_quarter_is_never_reissued():
+def test_cached_horizon_survives_time_tick():
     r=bridge.build_action_bridge(fixture_plan(),now=NOW+timedelta(seconds=1))
-    assert not r['valid'] and r['reason']=='stale_or_future_plan72_window'
+    assert r['valid']
 
 
 def test_equivalent_timezone_timestamps_keep_identity_and_exact_utc_instants():
@@ -215,8 +215,8 @@ def test_calculators_and_runtimes_are_frozen_reviewed_ch7_blobs():
     # every unaffected AST node to the original Alpha53 implementation.
     expected={'energy_need.py':'bc10cbb18dd531735e390fe5369466ab4f466087',
         'energy_need_runtime.py':'3ab25d81615429f51264beb69d4d0064a34f5863',
-        'planner_72h.py':'d40d5d413fc9a2d8da8b11c3bc2dfcfc3dd1b160'}
-    expected['planner_72h_runtime.py']='aeffdd76d7e54f3d2495a28cac15f2a4f13f902c'
+        'planner_72h.py':'62bedf24665832cf3a78bd2608f7b3b711e892c8'}
+    expected['planner_72h_runtime.py']='2aefbc82546946af556f4740b2387a2dfbd88675'
     for name,sha in expected.items():
         data=(ROOT/'custom_components/doems'/name).read_bytes()
         assert hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()==sha

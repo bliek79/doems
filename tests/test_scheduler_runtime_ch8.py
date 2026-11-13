@@ -106,8 +106,10 @@ def test_source_invalidation_and_coherent_recovery(store_module,monkeypatch,muta
         await e.runtime.async_setup();assert e.runtime.snapshot['scheduler_ready']
         saved=e.source.snapshot;e.source.snapshot={**saved,**mutation};e.source.emit()
         await asyncio.sleep(0)
-        assert not e.runtime.snapshot['scheduler_ready']
-        assert e.runtime.snapshot['scheduler_reason']==reason
+        assert e.runtime.snapshot['scheduler_ready']
+        assert not e.runtime.snapshot['source_consistent']
+        assert e.runtime.snapshot['source_blocker']==reason
+        assert e.runtime.snapshot['execution_enabled'] is False
         e.source.snapshot=saved;e.source.emit();await asyncio.sleep(0)
         assert e.runtime.snapshot['scheduler_ready'] and e.store.revision==0
         await e.runtime.async_shutdown()
@@ -203,7 +205,7 @@ def test_scheduler_ticks_do_not_recompute_real_plan72(environment,monkeypatch):
         assert plan72.calculation_count==count and not plan72._worker_task
         hass.states.values['sensor.battery_soc'].state='unavailable'
         plan72._battery_changed(None);await asyncio.sleep(0)
-        assert runtime.snapshot['scheduler_reason']=='source_not_ready'
+        assert runtime.snapshot['source_blocker']=='source_not_ready'
         hass.states.values['sensor.battery_soc'].state='60'
         plan72._battery_changed(None);await finish(plan72);await asyncio.sleep(0)
         assert runtime.snapshot['source_consistent']
@@ -239,7 +241,7 @@ def test_actual_writer_refill_expiry_and_restored_automatic_slots(store_module,m
         runtime=e.module.SchedulerRuntime(e.hass,e.entry,restored,e.source,e.bridge)
         e.clock.now=start;await runtime.async_setup()
         assert runtime.snapshot['scheduler_selected_slot']==1
-        e.clock.now=start+timedelta(microseconds=1);runtime._tick(start)
+        e.clock.now=start+timedelta(minutes=10,microseconds=1);runtime._tick(start)
         assert runtime.snapshot['scheduler_slots'][1]['status']=='verlopen'
         # Only the existing Store performs cleanup, after the read-only diagnosis.
         await restored.async_release_expired_automatic_plans();await asyncio.sleep(0)
@@ -254,7 +256,8 @@ def test_disabled_planning_keeps_diagnostics_and_never_selects(store_module,monk
         e=prepare(store_module,monkeypatch);e.store._plans[1]=plan()
         runtime=e.module.SchedulerRuntime(e.hass,e.entry,e.store,None,None)
         await runtime.async_setup()
-        assert runtime.snapshot['scheduler_reason']=='planning_not_enabled'
-        assert not runtime.snapshot['scheduler_ready']
+        assert runtime.snapshot['source_blocker']=='planning_not_enabled'
+        assert runtime.snapshot['scheduler_ready']
+        assert runtime.snapshot['execution_enabled'] is False
         await runtime.async_shutdown()
     asyncio.run(scenario())

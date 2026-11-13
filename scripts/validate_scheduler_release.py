@@ -5,12 +5,16 @@ import json
 from validate_plan_store_release import PRESERVED_BLOBS as CH7_BLOBS
 from validate_action_bridge_release import ROOT, git_blob_sha
 
-VERSION = "0.3.0-alpha.8.1"
-BASE_COMMIT = "bc348852c8254eba51d159ca84f1a0d2fbecf736"
+VERSION = "0.3.0-alpha.8.2"
+BASE_COMMIT = "67786036bb2b92f30f693dee1754db32bac5c028"
 WIRING = {"custom_components/doems/__init__.py", "custom_components/doems/sensor.py",
           "custom_components/doems/binary_sensor.py"}
 PRESERVED_BLOBS = {name: digest for name, digest in CH7_BLOBS.items() if name not in WIRING}
 
+# Authorized Alpha84 corrections; retain all other chapter-7 source locks.
+PRESERVED_BLOBS.update({'custom_components/doems/planner_72h.py': '62bedf24665832cf3a78bd2608f7b3b711e892c8', 'custom_components/doems/planner_72h_runtime.py': '2aefbc82546946af556f4740b2387a2dfbd88675', 'custom_components/doems/planner_action_bridge.py': 'f77629bf8e3f21750f5c9b791758cc84ac1122eb', 'custom_components/doems/plan_store_writer.py': '2528beca1092d5eb2056c05dea34d0396179bc99'})
+
+PRESERVED_BLOBS["custom_components/doems/plan_store.py"] = "d8400b8006f1857023a37aec4fd18c034456dd09"
 
 def validate():
     component = ROOT / "custom_components/doems"
