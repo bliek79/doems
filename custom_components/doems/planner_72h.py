@@ -1069,10 +1069,11 @@ def _compact_windows(model,windows,trace,trading=False):
                         for r, old in zip(trial, trace))
             # Removing a preparation interval changes downstream SOC too. A merge
             # must not make a later, previously complete charge stop at capacity.
-            safe &= all(w.action != "charge" or
+            capacity_safe = all(w.action != "charge" or
                         trial[int((w.start - model.stamps[0]).total_seconds() / 900)]["stored_start_kwh"]
                         + w.power_kw * (w.end - w.power_start).total_seconds() / 3600 * model.b.charge_eff
                         <= model.b.capacity + _EPS for w in others + [merged])
+            safe &= capacity_safe
             if trading:
                 safe &= all(sum(s["duration_hours"] for r in trial for s in r["segments"]
                              if s.get("window_id")==w.id and s["action"] in {"safety_charge","trade_charge","trade_discharge"})
@@ -1088,7 +1089,9 @@ def _compact_windows(model,windows,trace,trading=False):
                 safe &= sum(r["discharge_to_grid_trade_kwh"] for r in trial)>=sum(r["discharge_to_grid_trade_kwh"] for r in trace)-_EPS
                 allowed={j for j,t in enumerate(model.stamps) if merged.action=="charge" and merged.start<=t<merged.end}
                 safe &= all(j in allowed or r["grid_import_for_home_kwh"]<=old["grid_import_for_home_kwh"]+_EPS for j,(r,old) in enumerate(zip(trial,trace)))
-            if safe:
+            # A lower step is only a remedy for upward-rounding capacity
+            # failure. Do not add another full replay for unrelated failures.
+            if safe or capacity_safe:
                 break
         if safe:
             windows=sorted(others+[merged],key=lambda w:w.start)

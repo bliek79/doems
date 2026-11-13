@@ -12,7 +12,7 @@ WIRING = {"custom_components/doems/__init__.py", "custom_components/doems/sensor
 PRESERVED_BLOBS = {name: digest for name, digest in CH7_BLOBS.items() if name not in WIRING}
 
 # Authorized Alpha84 corrections; retain all other chapter-7 source locks.
-PRESERVED_BLOBS.update({'custom_components/doems/planner_72h.py': '6cd89aef7d29a9dc1af6d752365564e41579922f', 'custom_components/doems/planner_72h_runtime.py': '2aefbc82546946af556f4740b2387a2dfbd88675', 'custom_components/doems/planner_action_bridge.py': 'f77629bf8e3f21750f5c9b791758cc84ac1122eb', 'custom_components/doems/plan_store_writer.py': '2528beca1092d5eb2056c05dea34d0396179bc99'})
+PRESERVED_BLOBS.update({'custom_components/doems/planner_72h.py': 'dcc0576c3a93f39e90406eba629af3f26156fe56', 'custom_components/doems/planner_72h_runtime.py': '2aefbc82546946af556f4740b2387a2dfbd88675', 'custom_components/doems/planner_action_bridge.py': 'f77629bf8e3f21750f5c9b791758cc84ac1122eb', 'custom_components/doems/plan_store_writer.py': '2528beca1092d5eb2056c05dea34d0396179bc99'})
 
 PRESERVED_BLOBS["custom_components/doems/plan_store.py"] = "d8400b8006f1857023a37aec4fd18c034456dd09"
 
