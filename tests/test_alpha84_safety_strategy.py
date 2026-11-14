@@ -64,7 +64,13 @@ def test_cheaper_future_window_is_used_if_battery_can_safely_reach_it():
     # Alpha84 regression: a cheaper midday valley beats the earlier night dip.
     tariff = prices(lambda i: .1 if 72 <= i < 84 else .2 if 24 <= i < 28 else .45)
     plan = run(home=.15 / 4, soc_percent=60, tariff=tariff, practical_windows=True)
-    assert plan['reserve_satisfied']
+    # The cheap valley is reachable without crossing the reserve. The final
+    # command replay may expose a later deficit after target arrival; do not
+    # hide that deficit or fragment the chosen group to force 'ready'.
+    assert all(r['reserve_min_gap_kwh'] <= 1e-5 for r in plan['timeline'][:72])
+    assert plan['status'] == 'limited'
+    assert plan['reason'] == 'remaining_physical_shortfall'
+    assert plan['remaining_charge_need_kwh'] > plan['remaining_charge_need_tolerance_kwh']
     assert sum(r['charge_from_grid_safety_kwh'] for r in plan['timeline'][72:84]) > 0
     assert sum(r['charge_from_grid_safety_kwh'] for r in plan['timeline'][24:28]) == 0
     reference = alpha84_selected_hours(60, .15, lambda i: .1 if 18 <= i < 21 else .2 if i == 6 else .45)

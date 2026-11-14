@@ -6,6 +6,7 @@ on:
       - doems3-ch8-scheduler-implementation
       - doems3-ch8-alpha84-corrections
       - doems3-ch8-compaction-rounding-fix
+      - doems3-ch8-full-chain-window-grouping
   workflow_dispatch:
 
 permissions:

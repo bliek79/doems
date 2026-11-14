@@ -37,7 +37,9 @@ def assert_windows(plan):
         assert all(s['battery_power_w']==0 and s['stored_start_kwh']==s['stored_end_kwh'] for s in preparation)
         powered=[s for s in matching if s['action'] in {'safety_charge','trade_charge','trade_discharge'}]
         assert w['projected_power_duration_h']==pytest.approx(sum(s['duration_hours'] for s in powered))
-        assert w['projected_power_duration_h']==pytest.approx(w['planned_power_duration_h'], abs=1e-7)
+        assert w['projected_power_duration_h'] <= w['planned_power_duration_h'] + 1e-7
+        if w.get('allocation_energy_kwh') is None:
+            assert w['projected_power_duration_h']==pytest.approx(w['planned_power_duration_h'], abs=1e-7)
         assert w['target_soc']==pytest.approx(powered[-1]['stored_end_kwh']/7.2*100)
         assert w['planned_energy_kwh']==pytest.approx(sum(abs(s['battery_power_w'])*s['duration_hours']/1000 for s in powered))
 
@@ -50,9 +52,17 @@ def assert_windows(plan):
 def test_three_original_route_conflicts_now_have_complete_consistent_windows(case,home,solar):
     plan=practical(home=home,solar=solar,tariff=prices(lambda i:.1 if i%96<24 else .3))
     assert_windows(plan)
-    assert plan['status']=='ready'
-    assert plan['reserve_satisfied'] and plan['reserve_breach_count']==0
-    assert plan['remaining_charge_need_kwh']<=plan['remaining_charge_need_tolerance_kwh']
+    if case == 'variable':
+        # Whole-group commands can expose a real later shortage; keep it
+        # visible instead of silently retaining independent quarter commands.
+        assert plan['status'] == 'limited'
+        assert plan['reason'] == 'remaining_physical_shortfall'
+        assert not plan['reserve_satisfied']
+        assert plan['remaining_charge_need_kwh'] > plan['remaining_charge_need_tolerance_kwh']
+    else:
+        assert plan['status']=='ready'
+        assert plan['reserve_satisfied'] and plan['reserve_breach_count']==0
+        assert plan['remaining_charge_need_kwh']<=plan['remaining_charge_need_tolerance_kwh']
     # Distinct tariff windows must stay distinct. A global <20 cap rewarded
     # the former long-window extension across expensive quarters. Capacity is
     # bounded by the native 288 quarters; only three live slots are exposed.
@@ -125,13 +135,14 @@ def test_manual_overlap_is_never_replaced_by_automatic_window():
     assert_conserved(plan)
 
 
-def test_profitable_export_uses_full_power_phase_and_preserves_fixed_route_reserve():
+def test_profitable_export_can_end_at_target_and_preserves_route_reserve():
     baseline=practical(home=0,tariff=prices(.1,.6))
     traded=practical(home=0,tariff=prices(.1,.6),trade_enabled=True)
     assert_windows(traded)
     assert traded['trade']['profitable'] and traded['trade']['accepted_count']>0
     assert traded['reserve_satisfied']
-    assert all(w['projected_power_duration_h']==pytest.approx(w['planned_power_duration_h'],abs=1e-7) for w in traded['action_windows'])
+    assert all(w['projected_power_duration_h'] <= w['planned_power_duration_h']+1e-7 for w in traded['action_windows'])
+    assert all(w['energy_shortfall_kwh'] < 1e-5 for w in traded['action_windows'])
     savings=sum(r['cost'] for r in baseline['timeline'])-sum(r['cost'] for r in traded['timeline'])
     assert traded['trade']['total_horizon_cost_saving']==pytest.approx(savings)
     assert savings/traded['totals']['discharge_to_grid_trade_kwh']>=.10-1e-6
@@ -175,14 +186,15 @@ def test_window_bounds_and_energy_conservation_across_capacity_and_power_cases(s
         assert plan['status']=='limited'
 
 
-def test_pair_trade_requires_real_purchase_and_full_duration_sale():
+def test_pair_trade_requires_real_purchase_and_delivered_sale_energy():
     plan=practical(home=0,soc_percent=10,tariff=prices(lambda i:.02 if i<4 else .3,
         lambda i:.8 if 8<=i<12 else .01),trade_enabled=True)
     assert_windows(plan)
     assert plan['trade']['profitable']
     assert plan['totals']['charge_from_grid_trade_kwh']>0
     assert plan['totals']['discharge_to_grid_trade_kwh']>0
-    assert all(w['projected_power_duration_h']>=w['planned_power_duration_h']-1e-7 for w in plan['action_windows'])
+    assert all(w['projected_power_duration_h'] <= w['planned_power_duration_h']+1e-7 for w in plan['action_windows'])
+    assert all(w['energy_shortfall_kwh'] < 1e-5 for w in plan['action_windows'])
 
 
 def test_optional_trade_preserves_pv_storage_opportunities_and_reserve():
@@ -206,7 +218,7 @@ def test_safety_compaction_crosses_hour_and_tariff_boundaries():
     windows = [model._Window(str(i), 'charge', 'safety', stamps[i],
                               stamps[i]+timedelta(minutes=15), 1.0, 7.1) for i in range(2)]
     before, _ = route.simulate({}, windows=windows)
-    merged, after = model._compact_windows(route, windows, before)
+    merged, after = model._group_action_windows(route, windows, before)
     assert len(merged) == 1
     assert merged[0].start == stamps[0] and merged[0].end == stamps[2]
     assert merged[0].power_start == stamps[0] + timedelta(minutes=2)
@@ -241,17 +253,17 @@ def test_reported_three_near_full_charge_slots_merge_without_overfill():
     route, windows, before = reported_near_full_route()
     assert [row['soc_end'] for row in before[:3]] == pytest.approx(
         [90.77245851046699, 91.51995851046699, 99.99162517713366])
-    merged, after = model._compact_windows(route, windows, before)
+    merged, after = model._group_action_windows(route, windows, before)
     assert len(merged) == 1
     assert merged[0].start == windows[0].start and merged[0].end == windows[-1].end
-    assert merged[0].power_kw == 1.97
+    assert merged[0].power_kw == 1.98
     detailed, _ = route.simulate({}, windows=merged, detail=True)
     described = model._describe_windows(route, merged, detailed)[0]
     assert described['max_runtime_h'] == .75
-    assert described['planned_energy_kwh'] == pytest.approx(1.97 * 43 / 60)
+    assert described['planned_energy_kwh'] == pytest.approx(.6933333333333334+.0585+.663)
     assert described['energy_shortfall_kwh'] == pytest.approx(0)
-    assert described['projected_power_duration_h'] == pytest.approx(43/60)
-    assert described['command_target_soc'] == 100
+    assert described['projected_power_duration_h'] < 43/60
+    assert described['command_target_soc'] == pytest.approx(99.99162517713366)
     assert described['projected_end_soc'] < 100
     preparations = [s for r in detailed for s in r['segments'] if s['action']=='safety_preparation']
     assert sum(s['duration_hours'] for s in preparations) == pytest.approx(2/60)
@@ -259,8 +271,8 @@ def test_reported_three_near_full_charge_slots_merge_without_overfill():
     assert all(model._need(r,route.b) <= model._need(old,route.b)+1e-9 for r,old in zip(after,before))
 
 
-def test_lower_rounding_must_not_create_a_later_household_shortfall():
+def test_group_target_preserves_energy_for_later_household_demand():
     route, windows, before = reported_near_full_route(drain_after=True)
-    merged, after = model._compact_windows(route, windows, before)
-    assert len(merged) == 3
+    merged, after = model._group_action_windows(route, windows, before)
+    assert len(merged) == 1
     assert sum(r['uncovered_home_kwh'] for r in after) <= sum(r['uncovered_home_kwh'] for r in before)+1e-9

@@ -9,7 +9,7 @@ from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import json
-from math import isfinite
+from math import ceil, isfinite
 from typing import Any
 
 CONTRACT_VERSION = "doems_action_bridge_v1"
@@ -268,7 +268,18 @@ def _candidate(w: dict, parts: list, p: dict, source: dict, horizon: tuple,
         if any(_number(w.get(key)) < 0 for key in (
                 "requested_energy_kwh", "planned_energy_kwh", "energy_shortfall_kwh")):
             raise ValueError("negative_window_energy")
-        requested = power*usable/1000
+        allocation = w.get("allocation_energy_kwh")
+        if allocation is None:
+            requested = power*usable/1000
+        else:
+            requested = _number(allocation)
+            if requested <= 0:
+                raise ValueError("invalid_group_allocation")
+            expected_target = (min(cap, initial + requested*eta) if charge else
+                               max(floor, initial - requested/eta))
+            _equal(command_target, expected_target/cap*100, "group_target_energy_mismatch")
+            expected_power = max(100, min(limit, ceil(requested/usable*100)/100*1000))
+            _equal(power, expected_power, "group_power_energy_mismatch", 1e-5)
         shortfall = max(0., requested-delivered)
         _equal(w.get("requested_energy_kwh"), requested, "requested_energy_mismatch")
         _equal(w.get("planned_energy_kwh"), delivered, "planned_energy_mismatch")

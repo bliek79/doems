@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
-from math import isfinite
+from math import ceil, isfinite
 from hashlib import sha256
 import json
 from typing import Any, Iterable
@@ -113,6 +113,7 @@ class _Window:
     end: datetime
     power_kw: float
     target: float
+    allocation_energy_kwh: float | None = None
 
     @property
     def power_start(self):
@@ -730,8 +731,8 @@ def _safety_windows(model):
         # Alpha84 allocates each deficit by (import price, latest time),
         # replaying the whole route after every accepted allocation. Extending
         # an old command first bypasses that ordering and buys expensive energy.
-        # Keep allocation quarters independent; compaction is a separate,
-        # price-preserving operation after all deadlines have been resolved.
+        # Keep allocation quarters independent. Build complete contiguous
+        # action groups only after safety and trading allocations are finished.
         last_full = max((i for i in range(deadline)
                          if trace[i]["max_soc"] >= 100 - _TOL), default=-1)
         available = sorted(range(last_full + 1, deadline + 1),
@@ -856,7 +857,6 @@ def _safety_windows(model):
             blocked.add(deadline)
         if diagnostics["search_limited"]:
             break
-    windows,trace = _compact_windows(model,windows,trace)
     diagnostics['minimum_actionable_safety_hour_kwh'] = .10
     diagnostics['suppressed_safety_windows'] = suppressed
     diagnostics['reopened_safety_hours'] = reopened
@@ -1006,7 +1006,6 @@ def _trade_windows(model, windows, baseline, minimum_margin, enabled):
         diagnostic["total_horizon_cost_saving"]+=saving
         diagnostic["total_traded_export_kwh"]+=exported
         diagnostic["aggregate_expected_margin"]=diagnostic["total_horizon_cost_saving"]/diagnostic["total_traded_export_kwh"]
-    windows,current = _compact_windows(model,windows,current,trading=True)
     if diagnostic["profitable"]:
         diagnostic["total_horizon_cost_saving"] = sum(r["cost"] for r in baseline)-sum(r["cost"] for r in current)
         diagnostic["total_traded_export_kwh"] = sum(r["discharge_to_grid_trade_kwh"] for r in current)-sum(r["discharge_to_grid_trade_kwh"] for r in baseline)
@@ -1014,91 +1013,67 @@ def _trade_windows(model, windows, baseline, minimum_margin, enabled):
     return windows,diagnostic
 
 
-def _compact_windows(model,windows,trace,trading=False):
-    """Merge actual adjacent commands only after a complete route replay.
+def _group_action_windows(model, windows, trace):
+    """Group the complete chronological chain before building any commands.
 
-    Strict comparisons against the current route prevent spending another
-    numerical-tolerance budget. No merge across a manual or passive gap.
+    Alpha84 groups consecutive allocations with the same action and purpose,
+    then sums the entire group's energy and applies one handoff allowance.
+    Native source resolution here is 15 minutes rather than Alpha84's hour.
+    Target arrival may end a command early; the window is a maximum duration.
+    Plan72 alone replays every resulting command and publishes actual flows.
     """
-    windows=sorted(windows,key=lambda w:w.start)
-    _,manual_before=model.simulate({},windows=windows)
-    i=0
-    attempts=0
-    while i+1<len(windows) and attempts<288:
-        first,second=windows[i:i+2]
-        if (first.end!=second.start or first.action!=second.action or first.origin!=second.origin
-                or (second.end-first.start)>timedelta(hours=12)):
-            i+=1
-            continue
-        if trading and first.origin!="trade":
-            i+=1
-            continue
-        # Alpha84 groups consecutive actions of the same purpose across
-        # tariff and clock-hour boundaries. Replay the merged command below.
-        attempts+=1
-        energy=sum(w.power_kw*(w.end-w.power_start).total_seconds()/3600 for w in (first,second))
-        duration=(second.end-first.power_start).total_seconds()/3600
-        step=max(10,int((energy/duration*100-1e-9)//1)+1)
-        limit=int((model.b.charge_kw if first.action=="charge" else model.b.discharge_kw)*100)
-        others=windows[:i]+windows[i+2:]
-        # Prefer Alpha84's upward 10 W rounding. Near capacity it may add
-        # energy that the route cannot store. For safety charging only, also
-        # try the adjacent lower step; accept it only after the SAME complete
-        # replay proves no additional reserve, household or manual shortfall.
-        steps = [min(step, limit)]
-        lower = int((energy / duration * 100 + _EPS) // 1)
-        if not trading and first.origin == "safety" and first.action == "charge" and 10 <= lower < steps[0]:
-            steps.append(lower)
-        safe = False
-        for candidate_step in steps:
-            merged=replace(first,end=second.end,power_kw=candidate_step/100)
-            if merged.action=="charge":
-                initial=trace[int((merged.start-model.stamps[0]).total_seconds()/900)]["stored_start_kwh"]
-                if initial+merged.power_kw*duration*model.b.charge_eff>model.b.capacity+_TOL:
-                    continue
-            trial,manual_trial=model.simulate({},windows=others+[merged],detail=trading)
-            safe=all(_need(r,model.b)<=_need(old,model.b)+_EPS for r,old in zip(trial,trace))
-            safe &= all((not old["target_reached"] or manual_trial[key]["target_reached"])
-                        and (manual_trial[key]["remaining_target_kwh"] or 0)<= (old["remaining_target_kwh"] or 0)+_EPS
-                        and (manual_trial[key]["battery_energy_kwh"] >= old["battery_energy_kwh"]-_EPS
-                             if next(p.action for p in model.manual if p.id==key)=="discharge" else True)
-                        for key,old in manual_before.items())
-            # Safety compaction follows Alpha84 contiguous commands; trading
-            # still checks profitability below. Never displace free solar.
-            safe &= all(r["charge_from_solar_kwh"] >= old["charge_from_solar_kwh"] - _EPS
-                        for r, old in zip(trial, trace))
-            # Removing a preparation interval changes downstream SOC too. A merge
-            # must not make a later, previously complete charge stop at capacity.
-            capacity_safe = all(w.action != "charge" or
-                        trial[int((w.start - model.stamps[0]).total_seconds() / 900)]["stored_start_kwh"]
-                        + w.power_kw * (w.end - w.power_start).total_seconds() / 3600 * model.b.charge_eff
-                        <= model.b.capacity + _EPS for w in others + [merged])
-            safe &= capacity_safe
-            if trading:
-                safe &= all(sum(s["duration_hours"] for r in trial for s in r["segments"]
-                             if s.get("window_id")==w.id and s["action"] in {"safety_charge","trade_charge","trade_discharge"})
-                            >=(w.end-w.power_start).total_seconds()/3600-1e-7 for w in others+[merged])
-                # Optional exports must keep the complete commanded power phase.
-                if merged.action=="discharge":
-                    endpoint=int((merged.end-model.stamps[0]).total_seconds()/900)-1
-                    initial=trace[int((merged.start-model.stamps[0]).total_seconds()/900)]["stored_start_kwh"]
-                    if initial-merged.power_kw*duration/model.b.discharge_eff < model.b.reserve-_EPS:
-                        safe=False
-                safe &= sum(r["cost"] for r in trial)<=sum(r["cost"] for r in trace)+_EPS
-                safe &= all(r["charge_from_solar_kwh"]>=old["charge_from_solar_kwh"]-_EPS for r,old in zip(trial,trace))
-                safe &= sum(r["discharge_to_grid_trade_kwh"] for r in trial)>=sum(r["discharge_to_grid_trade_kwh"] for r in trace)-_EPS
-                allowed={j for j,t in enumerate(model.stamps) if merged.action=="charge" and merged.start<=t<merged.end}
-                safe &= all(j in allowed or r["grid_import_for_home_kwh"]<=old["grid_import_for_home_kwh"]+_EPS for j,(r,old) in enumerate(zip(trial,trace)))
-            # A lower step is only a remedy for upward-rounding capacity
-            # failure. Do not add another full replay for unrelated failures.
-            if safe or capacity_safe:
-                break
-        if safe:
-            windows=sorted(others+[merged],key=lambda w:w.start)
-            trace,manual_before=trial,manual_trial
+    groups = []
+    for window in sorted(windows, key=lambda w: w.start):
+        if (groups and groups[-1][-1].end == window.start
+                and groups[-1][-1].action == window.action
+                and groups[-1][-1].origin == window.origin
+                and window.end - groups[-1][0].start <= timedelta(hours=12)):
+            groups[-1].append(window)
         else:
-            i+=1
-    return windows,trace
+            groups.append([window])
+
+    # Freeze the allocation energy before changing any command. Never derive
+    # later group energy from a partly rewritten route or from three slot views.
+    source, _ = model.simulate({}, windows=windows, detail=True)
+    allocations = {}
+    for row in source:
+        for segment in row["segments"]:
+            identity = segment.get("window_id")
+            if identity is None:
+                continue
+            energy = (segment["charge_from_grid_safety_kwh"]
+                      + segment["charge_from_grid_trade_kwh"]
+                      if segment["action"].endswith("charge")
+                      and not segment["action"].endswith("discharge")
+                      else segment["discharge_to_grid_kwh"])
+            allocations[identity] = allocations.get(identity, 0.0) + energy
+
+    result = []
+    current = trace
+    for index, group in enumerate(groups):
+        first, last = group[0], group[-1]
+        if len(group) == 1:
+            result.append(first)
+            continue
+        energy = sum(allocations.get(w.id, 0.0) for w in group)
+        duration = (last.end - first.power_start).total_seconds() / 3600
+        limit = model.b.charge_kw if first.action == "charge" else model.b.discharge_kw
+        if energy <= _EPS or limit < .1:
+            result.extend(group)
+            continue
+        # Alpha84's single upward 10 W rounding, bounded by the device limit.
+        power = max(.1, min(limit, ceil(energy / duration * 100) / 100))
+        begin = int((first.start - model.stamps[0]).total_seconds() / 900)
+        initial = current[begin]["stored_start_kwh"]
+        target = (min(model.b.capacity, initial + energy * model.b.charge_eff)
+                  if first.action == "charge" else
+                  max(model.b.minimum, initial - energy / model.b.discharge_eff))
+        result.append(replace(first, end=last.end, power_kw=power, target=target,
+                              allocation_energy_kwh=energy))
+        tail = [w for later in groups[index+1:] for w in later]
+        current, _ = model.simulate({}, windows=result + tail)
+    current, _ = model.simulate({}, windows=result)
+    return result, current
 
 
 def _describe_windows(model,windows,timeline):
@@ -1114,7 +1089,8 @@ def _describe_windows(model,windows,timeline):
         flows={key:sum(s[key] for s in powered) for key in _FLOWS}
         delivered=(sum(flows[f"charge_from_grid_{x}_kwh"] for x in ("safety","trade","manual"))+flows["charge_from_solar_kwh"]
                    if w.action=="charge" else flows["discharge_to_home_kwh"]+flows["discharge_to_grid_kwh"])
-        requested=w.power_kw*requested_hours
+        requested=(w.allocation_energy_kwh if w.allocation_energy_kwh is not None
+                   else w.power_kw*requested_hours)
         shortfall=max(0.,requested-delivered)
         result.append({"id":w.id,"action":w.action,"purpose":w.origin+"_"+w.action,
             "origin":"automatic_72h_planner","start_time":w.start.isoformat(),"power_start_time":w.power_start.isoformat(),
@@ -1125,6 +1101,7 @@ def _describe_windows(model,windows,timeline):
             "target_soc":powered[-1]["stored_end_kwh"]/model.b.capacity*100,
             "command_target_soc":w.target/model.b.capacity*100,
             "projected_end_soc":next(r["soc_end"] for r in timeline if r["end"]==w.end.isoformat()),
+            "allocation_energy_kwh":w.allocation_energy_kwh,
             "requested_energy_kwh":requested,"planned_energy_kwh":delivered,
             "energy_shortfall_kwh":shortfall,"flow_energy_basis":"ac","flows":flows,
             "limited":shortfall>_TOL,"reason":"target_or_capacity_limited" if shortfall>_TOL else "complete_window",
@@ -1183,6 +1160,8 @@ def calculate_plan72(home_slots, solar_slots, price_slots, *, now, soc_percent,
     if practical_windows:
         windows, baseline, window_search = _safety_windows(model)
         windows, trade = _trade_windows(model, windows, baseline, margin, trade_enabled)
+        allocated, _ = model.simulate({}, windows=windows)
+        windows, _ = _group_action_windows(model, windows, allocated)
         timeline, manual_progress = model.simulate({}, windows=windows, detail=True)
     else:
         # Retained pure Alpha52 API for numeric regression/oracle comparisons.

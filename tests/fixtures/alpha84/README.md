@@ -23,3 +23,11 @@ Git blob: `e95a7354cab59464a573f20b154fbc63fbd9de11`.
 SHA-256: `d8b05058215667e33f721e2a3ee362318e9bd2ccfdbdddfcb5253422e500faf7`.
 Only HA time utilities and the Store/constant imports are supplied by test doubles.
 The entire evaluator is executed unchanged; its unused slot_status helper is not called.
+
+## Full-chain grouping oracle (Alpha 8.4)
+
+`planner_action_bridge.py` is byte-for-byte from the same Alpha84 commit.
+SHA-256: `17488870d97fbebb8cb9611da171df6bac2b16d2b7f0030cf649f64c05c47162`.
+The complete Bridge runs with only HA utilities and configuration constants
+supplied by the test. The comparison precedes its three-slot preview and checks
+duration, rounded power, allocated energy and command target at source precision.

@@ -5,14 +5,14 @@ import json
 from validate_plan_store_release import PRESERVED_BLOBS as CH7_BLOBS
 from validate_action_bridge_release import ROOT, git_blob_sha
 
-VERSION = "0.3.0-alpha.8.3"
-BASE_COMMIT = "782736687976d09181c4704eff1dcd8ff7c2db0f"
+VERSION = "0.3.0-alpha.8.4"
+BASE_COMMIT = "68cf6d05047df2907c368164bd0a9e1c0ec8ac9e"
 WIRING = {"custom_components/doems/__init__.py", "custom_components/doems/sensor.py",
           "custom_components/doems/binary_sensor.py"}
 PRESERVED_BLOBS = {name: digest for name, digest in CH7_BLOBS.items() if name not in WIRING}
 
 # Authorized Alpha84 corrections; retain all other chapter-7 source locks.
-PRESERVED_BLOBS.update({'custom_components/doems/planner_72h.py': 'dcc0576c3a93f39e90406eba629af3f26156fe56', 'custom_components/doems/planner_72h_runtime.py': '2aefbc82546946af556f4740b2387a2dfbd88675', 'custom_components/doems/planner_action_bridge.py': 'f77629bf8e3f21750f5c9b791758cc84ac1122eb', 'custom_components/doems/plan_store_writer.py': '2528beca1092d5eb2056c05dea34d0396179bc99'})
+PRESERVED_BLOBS.update({'custom_components/doems/planner_72h.py': '4ec0b7ab854d068ad82fa0f8ef73a492ef494233', 'custom_components/doems/planner_72h_runtime.py': '2aefbc82546946af556f4740b2387a2dfbd88675', 'custom_components/doems/planner_action_bridge.py': 'e365e4f413c0fea4868a0c8835fefdebdfc5bf92', 'custom_components/doems/plan_store_writer.py': '2528beca1092d5eb2056c05dea34d0396179bc99'})
 
 PRESERVED_BLOBS["custom_components/doems/plan_store.py"] = "d8400b8006f1857023a37aec4fd18c034456dd09"
 

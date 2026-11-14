@@ -166,3 +166,31 @@ De geïsoleerde reproductie met de aangeleverde vermogens en SOC-stappen vormt n
 De geplande energie is 1,411833 kWh; de verwachte eind-SOC wordt opnieuw berekend,
 terwijl het commandodoel 100% blijft. De volledige liveprognose was niet beschikbaar;
 de praktijktest staat dus nog open. Er zijn geen nieuwe entiteiten of unique-ID's.
+
+## Alpha 8.4 — volledige keten vóór slottoewijzing
+
+De paarsgewijze samenvoeging en de neerwaartse vermogensuitwijk van Alpha 8.3
+zijn vervangen. Na alle safety-/handelsallocaties wordt de volledige tijdreeks
+gegroepeerd op aansluiting, actie en doel. Pas daarna krijgt iedere groep één
+energiehoeveelheid, één voorbereiding, een omhoog afgerond vermogen en een
+energie-afgeleid commandodoel. De bestaande maximale looptijd blijft gelden;
+DOEMS behoudt kwartieren waar Alpha84 uren gebruikt. Losstaande commando's
+houden hun bestaande contract. De drie slots beperken uitsluitend de preview
+en toewijzing, niet de groepering of de achterliggende kandidaten.
+
+Plan72 simuleert de volledige gegroepeerde route. De maximumduur hoeft niet
+volledig benut te worden als het doel eerder wordt bereikt. Commandodoel-SOC,
+verwachte eind-SOC, geleverde energie en eventuele tekorten blijven afzonderlijk.
+De Bridge valideert ook `allocation_energy_kwh` bij gegroepeerde bronvensters.
+Dit is een bronattribuut, geen nieuwe entiteit of unique-ID.
+
+Een eerdere doelstop kan bij later verbruik een reservekort zichtbaar maken.
+De route meldt dan `limited` met de werkelijke tekortenergie. De tolerantie en
+SOC-grenzen zijn niet verruimd. De variabele verbruiks-/zonregressie toont circa
+0,0124 kWh tekort; deze wordt niet meer als een gegarandeerd complete route
+gepresenteerd. Dit blijft van belang bij de latere veiligheidsketen.
+
+Vergelijking met de ongewijzigde Alpha84-Bridge is toegevoegd als testorakel.
+Daarnaast controleert een keten van twintig bronplannen dat vijf volledige
+vensters ontstaan vóór de preview van drie slots en twee overflowkandidaten.
+De volledige liveketen moet na installatie opnieuw worden beoordeeld.
