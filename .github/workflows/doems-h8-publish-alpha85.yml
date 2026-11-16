@@ -55,9 +55,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cd staging
-          sha256sum -c SHA256SUMS.txt
-          test "$(sha256sum doems.zip | cut -d' ' -f1)" = "$EXPECTED_SHA256"
+          (cd staging && sha256sum -c SHA256SUMS.txt)
+          test "$(sha256sum staging/doems.zip | cut -d' ' -f1)" = "$EXPECTED_SHA256"
           python - <<'PY'
           import hashlib,json,os,pathlib,zipfile
           base=pathlib.Path("staging")
