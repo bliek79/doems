@@ -30,6 +30,9 @@ jobs:
               print(f'valid: {path}')
           PY
       - name: Validate Alpha7.7 release contract
+        # Alpha7.7's exact frozen version is not a valid gate for newer PRs.
+        # Preserve historical contract only on its original push lane.
+        if: github.event_name == 'push'
         run: |
           test -f RELEASE_NOTES_0.1.0-alpha.7.7.md
           test -f examples/prices_p4_forecast_card.yaml
