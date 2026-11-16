@@ -290,3 +290,45 @@ native 15-minute execution, precision and the two-minute handoff are still
 **not accepted as full strategy equivalence**. The complete review, 3.12/3.13
 matrix and protected-source/release checks still block publication. No main
 merge, version/tag/release, Home Assistant change or physical execution.
+
+## 2026-11-16 — Acceptance clarification: different forecasts are expected (user-confirmed)
+
+**Leading project constraint:** the original Anker EMS and DOEMS use different
+forecast sources. Consequently, their live forecast values, predicted
+consumption/solar yield, SOC trajectories, charge quantities and chosen
+real-world start times **will normally differ**. Their absolute live
+outputs **must never be a cross-project equality/release gate**. Prior
+wording suggesting otherwise is superseded by this decision.
+
+**What must match:** planning **strategy and responsibilities**, not
+prediction outputs: safety first and before action creation; original
+best chronological buy/sell pair, applicable tie-breaks and trade
+conditions; manual / due / active protection during allocation;
+connected eligible quarters grouped **before** three-slot selection;
+original Scheduler and Plan Store responsibilities; execution buffer,
+SOC safety, identities and deadlines. Retain DOEMS's own forecast input
+and distinct 15-minute prices. Do not average tariffs into hourly prices.
+
+**How to verify:** use constructed *equal-input* fixtures for
+algorithmic comparisons where time resolution and constraints are
+controlled. Verify decision rules, reasons for acceptance/rejection,
+energy preservation and source-to-native mapping, rather than demanding
+bitwise identical SOC or hourly flow totals between an hourly oracle
+and 15-minute physical commands. Explain deviations attributable to
+time granularity, the unchanged execution-preparation buffer, or
+bounded physical delivery; treat genuinely unexplained decisions under
+equivalent normalized input as defects. Compare each product's
+**forecast-dependent live output against its own source data**, not
+against the other product's live forecast.
+
+**Release gate correction:** differences caused solely by *different
+live forecasts* or demonstrably different 60-minute/15-minute physical
+resolution are **NOT** reasons to withhold release. This does **not**
+waive actual same-input strategy bugs, unfinished functional criteria
+or the three separately failing reviewed-source/release-contract tests.
+The independent GitHub matrix at run `43914837429` passed 917 functional
+tests on Python 3.12 and 3.13; the three protected checks failed because
+approved hashes/contracts still reflect older source. Review and
+rebaseline those only against the intended, justified code changes,
+with no test-expectation laundering. No merge/release/live validation
+is claimed by this clarification.
