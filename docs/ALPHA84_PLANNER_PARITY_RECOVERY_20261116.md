@@ -33,3 +33,18 @@ Gas-price source failure, accepted trade-route diagnosis, Anker capacity `state_
 
 ## Recovery required
 To resume **exactly** from the prior point, provide a Git bundle/archive of the prior local-only repair branch at `da07656` (including uncommitted changes, if any). Without it, the planner changes must be independently recreated and full-chain verified from the two checked-out source trees. Never publish a repair release before the entire functionality gate and the Python 3.12/3.13 release gates are green. No new installable version has been issued.
+
+## Recovered from user-provided handoff ZIP — 2026-11-16
+
+The previously unavailable Git history **has now been independently restored locally** from `DOEMS_reparatie_da07656_overdracht(1).zip` (archive SHA256 `cf4956c28ed68586b7ec89b8f88d069a49aa66e8f148636b9abbbf8b4570261f`).
+
+- Checked `SHA256SUMS.txt`: all four internal files passed.
+- `git clone ... --branch doems3-alpha84-planner-parity` succeeded; `git bundle verify` and `git fsck --full` passed; working tree clean.
+- Complete branch HEAD: `da07656d06cc2417e6d17d550633d10beb18a3ac` exactly, descended through all five local repair commits from Alpha 8.4 `95cc001`.
+- Changes since Alpha 8.4: 17 paths. This is the actual recovered prior checkpoint, **not** rebuilt speculative code.
+- Targeted local Python 3.13 tests for planning port/oracle, grouping, bundle and first integration: **26 passed**. One existing active worker runtime regression passed. Full suite is not reported green (Python 3.12 unavailable, `voluptuous` absent; excluding that configuration test, a lengthy partial run was interrupted before completion).
+- The 3 failures recorded in the historical `897 passed, 3 failed` log remain unresolved review/source-hash/release gates. Core functional concerns including manual-aware pre-allocation and mixed-purpose command migration remain open.
+- **GitHub branch content is NOT yet the recovered checkpoint.** The recovery branch contains the Alpha 8.4 baseline and documentation/workflow only. The local Git bundle and source ZIP contain the restored changes; do not imply this checkout has already been pushed to GitHub.
+- No new tag, release, main merge or Home Assistant change.
+
+This addendum supersedes the earlier statement that the Git bundle was still missing, but does not change release/acceptance status.
