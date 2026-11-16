@@ -55,7 +55,7 @@ def _ceil_quarter(now: datetime) -> datetime:
 def _empty(reason: str, manual: dict | None = None) -> dict:
     return {
         "status": "invalid", "valid": False, "reason": reason,
-        "observational_only": True, "execution_enabled": False,
+        "observational_only": True, "execution_enabled": False, "physical_execution_authority": False,
         "action_windows": [], "action_window_count": 0,
         "timeline": [], "slot_count": 0, "horizon_hours": None,
         "start": None, "end": None, "start_soc": None, "end_soc": None,
@@ -102,6 +102,7 @@ class _Manual:
     target: float
     origin: str = "manual"
     power_start: datetime | None = None
+    source_safety_kwh: tuple[tuple[str, float], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -114,6 +115,9 @@ class _Window:
     power_kw: float
     target: float
     allocation_energy_kwh: float | None = None
+    # Source allocation for a combined Alpha84 safety/trade charge. The
+    # battery sees one command; attribution must remain separate.
+    source_safety_kwh: tuple[tuple[str, float], ...] = ()
 
     @property
     def power_start(self):
@@ -192,12 +196,29 @@ def _manual_inputs(plans, now, start, end, battery):
                 diagnostic["skipped_count"] += 1
                 continue
             origin = raw.get("origin", "manual")
-            if origin not in {"manual", "safety", "trade"}:
+            if origin not in {"manual", "safety", "trade", "mixed"}:
                 raise ValueError("invalid_constraint_origin")
+            source_safety = ()
+            if origin == "mixed":
+                raw_split = raw.get("source_safety_quarters")
+                if not isinstance(raw_split, list) or not raw_split:
+                    raise ValueError("missing_mixed_safety_allocation")
+                entries = []
+                for entry in raw_split:
+                    if not isinstance(entry, dict):
+                        raise ValueError("invalid_mixed_safety_allocation")
+                    when = _time(entry.get("time"))
+                    energy = _finite(entry.get("energy_kwh"))
+                    if when < begin or when >= finish or energy < 0:
+                        raise ValueError("invalid_mixed_safety_allocation")
+                    entries.append((when.isoformat(), energy))
+                if len(set(stamp for stamp, _ in entries)) != len(entries):
+                    raise ValueError("duplicate_mixed_safety_quarter")
+                source_safety = tuple(entries)
             power_start = _time(raw["power_start_time"]) if raw.get("power_start_time") else begin
             if not begin <= power_start < finish:
                 raise ValueError("invalid_constraint_power_start")
-            plan = _Manual(identifier, action, max(start, begin), finish, power / 1000, battery.capacity * target / 100, origin, power_start)
+            plan = _Manual(identifier, action, max(start, begin), finish, power / 1000, battery.capacity * target / 100, origin, power_start, source_safety)
             accepted.append(plan)
             item.update(status="accepted", reason="projected", action=action,
                         start=plan.start.isoformat(), end=plan.end.isoformat())
@@ -248,7 +269,7 @@ class _Model:
             actions, origins = [], []
             manual_ids = []
 
-            def piece(begin, duration, mode="self_consumption", origin="passive", power=None, target=None, manual_id=None, window_id=None):
+            def piece(begin, duration, mode="self_consumption", origin="passive", power=None, target=None, manual_id=None, window_id=None, source_mix=()):
                 nonlocal stored, smallest, largest, uncovered, limited
                 if duration <= _EPS:
                     return
@@ -266,7 +287,16 @@ class _Model:
                     input_energy = rate * actual_duration
                     solar_charge = min(surplus, rate) * actual_duration
                     values["charge_from_solar_kwh"] = solar_charge
-                    values[f"charge_from_grid_{origin}_kwh"] = input_energy - solar_charge
+                    grid_input = input_energy - solar_charge
+                    if origin == "mixed":
+                        # Keep Alpha84's safety-before-trade allocation for
+                        # the single physical setpoint. A limited command
+                        # reduces trade before reserved safety energy.
+                        safety_input = min(grid_input, dict(source_mix).get(stamp.isoformat(), 0.0))
+                        values["charge_from_grid_safety_kwh"] = safety_input
+                        values["charge_from_grid_trade_kwh"] = grid_input - safety_input
+                    else:
+                        values[f"charge_from_grid_{origin}_kwh"] = grid_input
                     values["grid_import_for_home_kwh"] = deficit * actual_duration
                     values["solar_export_kwh"] = max(0.0, surplus * actual_duration - solar_charge)
                     stored += input_energy * b.charge_eff
@@ -370,7 +400,8 @@ class _Model:
                     elif current.power_start is not None and begin < current.power_start:
                         piece(begin, duration, "preparation", current.origin)
                     else:
-                        piece(begin, duration, current.action, current.origin, current.power_kw, current.target, current.id)
+                        piece(begin, duration, current.action, current.origin, current.power_kw, current.target, current.id,
+                              source_mix=current.source_safety_kwh)
             elif windows:
                 current_windows = [w for w in windows if w.start < finish and w.end > stamp]
                 boundaries = sorted({stamp, finish,
@@ -386,7 +417,8 @@ class _Model:
                         piece(begin, duration, "preparation", current.origin, window_id=current.id)
                     else:
                         piece(begin, duration, current.action, current.origin,
-                              current.power_kw, current.target, window_id=current.id)
+                              current.power_kw, current.target, window_id=current.id,
+                              source_mix=current.source_safety_kwh)
             else:
                 duration = safety.get(index, 0.0)
                 origin = "safety"
@@ -1081,7 +1113,7 @@ def _describe_windows(model,windows,timeline):
     result=[]
     for w in windows:
         parts=[s for r in timeline for s in r["segments"] if s.get("window_id")==w.id]
-        powered=[s for s in parts if s["action"] in {"safety_charge","trade_charge","trade_discharge"}]
+        powered=[s for s in parts if s["action"] in {"safety_charge","trade_charge","mixed_charge","trade_discharge"}]
         if not powered:
             continue
         actual_hours=sum(s["duration_hours"] for s in powered)
@@ -1107,6 +1139,9 @@ def _describe_windows(model,windows,timeline):
             "limited":shortfall>_TOL,"reason":"target_or_capacity_limited" if shortfall>_TOL else "complete_window",
             "source_quarters":[r["start"] for r in timeline if any(s.get("window_id")==w.id for s in r["segments"])],
             "observational_only":True,"physical_execution_authority":False})
+        if w.origin == "mixed":
+            result[-1]["source_safety_quarters"] = [
+                {"time": stamp, "energy_kwh": value} for stamp, value in w.source_safety_kwh]
     for window in result:
         window["planner_identity"] = window["id"]
         window["planner_signature"] = sha256(json.dumps(window,sort_keys=True,
@@ -1118,7 +1153,8 @@ def calculate_plan72(home_slots, solar_slots, price_slots, *, now, soc_percent,
                      capacity_kwh, min_soc_percent, reserve_percent,
                      charge_efficiency=0.92, discharge_efficiency=0.92,
                      max_charge_power_w, max_discharge_power_w,
-                     minimum_trade_margin=0.10, trade_enabled=True, manual_plans=(), practical_windows=False):
+                     minimum_trade_margin=0.10, trade_enabled=True, manual_plans=(), practical_windows=False,
+                     strategy_factory=None, execution_buffer_percent=None):
     """Return a complete observational plan or a structured invalid result.
 
     Forecast rows use timezone-aware ``start`` and ``energy_kwh``; prices use
@@ -1133,15 +1169,20 @@ def calculate_plan72(home_slots, solar_slots, price_slots, *, now, soc_percent,
         now = _time(now)
         start = _ceil_quarter(now)
         stamps = [start + timedelta(minutes=15 * i) for i in range(QUARTERS)]
-        soc, capacity, minimum, reserve, eta_in, eta_out, charge_w, discharge_w, margin = map(_finite, (
+        # Alpha84 uses a separate 2% execution buffer for deliberate export;
+        # the older pure Alpha52 API retains its zero-buffer contract.
+        configured_buffer = (2.0 if strategy_factory is not None else 0.0)
+        if execution_buffer_percent is not None:
+            configured_buffer = execution_buffer_percent
+        soc, capacity, minimum, reserve, eta_in, eta_out, charge_w, discharge_w, margin, execution_buffer = map(_finite, (
             soc_percent, capacity_kwh, min_soc_percent, reserve_percent,
             charge_efficiency, discharge_efficiency, max_charge_power_w,
-            max_discharge_power_w, minimum_trade_margin,
+            max_discharge_power_w, minimum_trade_margin, configured_buffer,
         ))
         if (not isinstance(practical_windows, bool) or not 0 <= soc <= 100 or capacity <= 0 or not 0 <= minimum < 100
                 or not 0 <= reserve <= 100 - minimum or not 0 < eta_in <= 1
                 or not 0 < eta_out <= 1 or charge_w < 0 or discharge_w < 0 or margin < 0
-                or not isinstance(trade_enabled, bool)):
+                or not isinstance(trade_enabled, bool) or not 0 <= execution_buffer <= 10):
             return _empty("invalid_battery_configuration")
         battery = _Battery(capacity, capacity * soc / 100, capacity * minimum / 100,
                            capacity * (minimum + reserve) / 100, eta_in, eta_out,
@@ -1157,7 +1198,116 @@ def calculate_plan72(home_slots, solar_slots, price_slots, *, now, soc_percent,
     model = _Model(stamps, home, solar, prices, battery, manual)
     windows = []
     window_search = {}
-    if practical_windows:
+    if practical_windows and strategy_factory is not None:
+        forecast = [dict(time=stamp.isoformat(), home_consumption_kwh=home[i],
+                        solar_kwh=solar[i], import_price=prices[i][0],
+                        export_price=prices[i][1], price_source=prices[i][2])
+                    for i, stamp in enumerate(stamps)]
+        # Reserve *both time and projected battery energy* for persistent
+        # manual, due and active plans before Alpha84 ranks cheap windows or
+        # selects its single chronological trade pair. The underlying physical
+        # commitment is first computed by this native Plan72 simulator.
+        protected = {}
+        if manual:
+            native_commitments, _ = model.simulate({}, detail=True)
+            for index, slot in enumerate(model.by_slot):
+                if not slot:
+                    continue
+                row = native_commitments[index]
+                protected[stamps[index].isoformat()] = dict(
+                    stored_delta_kwh=row['stored_end_kwh'] - row['stored_start_kwh'],
+                    charge_from_solar_kwh=row['charge_from_solar_kwh'],
+                    discharge_to_home_kwh=row['discharge_to_home_kwh'],
+                    discharge_to_grid_kwh=row['discharge_to_grid_kwh'],
+                    grid_import_for_home_kwh=row['grid_import_for_home_kwh'],
+                    solar_export_kwh=row['solar_export_kwh'],
+                    solar_to_home_kwh=row['solar_to_home_kwh'])
+        bundle = strategy_factory(forecast, now=now, soc_percent=soc,
+            capacity_kwh=capacity, min_soc_percent=minimum, reserve_percent=reserve,
+            charge_efficiency=eta_in, discharge_efficiency=eta_out,
+            max_charge_power_w=charge_w, max_discharge_power_w=discharge_w,
+            minimum_trade_margin=margin, trade_enabled=trade_enabled,
+            protected_intervals=protected,
+            execution_buffer_percent=execution_buffer)
+        suppressed = []
+        source_rows = {row["time"]: row for row in bundle["plan72"]["auto_plan_72h_plan"]}
+        # Native Plan72 owns physical SOC. Source Alpha84 owns which candidate
+        # and how much AC energy is requested, but its source SOC targets were
+        # calculated assuming every prior source action ran at source volume.
+        # Earlier commands may be power-limited by the bridge's two-minute
+        # handoff; determine subsequent targets from the *actual* causal
+        # native projection rather than reusing the stale source SOC.
+        native_before, _ = model.simulate({}, windows=windows)
+        for index, candidate in enumerate(bundle['action_bridge']['auto_bridge_candidates']):
+            if not candidate.get('valid'):
+                suppressed.append(dict(start=candidate.get('start_time'),
+                    end=candidate.get('planned_end_time'),
+                    reason='source_candidate_invalid',
+                    validation_reasons=list(candidate.get('validation_reasons') or [])))
+                continue  # A later independently valid source action must remain visible.
+            begin, finish = _time(candidate['start_time']), _time(candidate['planned_end_time'])
+            if any(p.start < finish and p.end > begin for p in manual):
+                suppressed.append(dict(start=begin.isoformat(), end=finish.isoformat(),
+                                       reason='protected_plan_overlap'))
+                continue
+            purpose = candidate['purpose']
+            origin = ('mixed' if purpose == 'veiligheidsladen+handelsladen'
+                      else 'safety' if purpose == 'veiligheidsladen' else 'trade')
+            action = 'charge' if candidate['action'] == 'laden' else 'discharge'
+            source_safety = tuple((stamp,
+                max(0.0, source_rows[stamp]['charge_from_grid_safety_kwh']))
+                for stamp in candidate['source_hours']
+                if stamp in source_rows) if origin == 'mixed' else ()
+            index_at_start = int((begin - start).total_seconds() // 900)
+            if not 0 <= index_at_start < QUARTERS:
+                suppressed.append(dict(start=begin.isoformat(), end=finish.isoformat(),
+                                       reason='source_outside_native_horizon'))
+                continue
+            native_start_energy = native_before[index_at_start]['stored_start_kwh']
+            requested_ac = candidate['expected_energy_kwh']
+            native_target = (
+                min(capacity, native_start_energy + requested_ac * eta_in)
+                if action == 'charge'
+                else max(battery.minimum,
+                         battery.reserve + capacity * execution_buffer / 100,
+                         native_start_energy - requested_ac / eta_out)
+            )
+            windows.append(_Window('alpha84_' + str(index) + '_' + begin.isoformat(),
+                action, origin, begin, finish, candidate['power_w']/1000,
+                native_target, requested_ac, source_safety))
+            native_before, _ = model.simulate({}, windows=windows)
+        timeline, manual_progress = model.simulate({}, windows=windows, detail=True)
+        preview = bundle['planner_preview']
+        source_trade = [c for c in bundle['action_bridge']['auto_bridge_candidates']
+                        if c.get('purpose') in ('handelsladen',
+                            'veiligheidsladen+handelsladen', 'handel_ontladen')]
+        profitable = bool(preview.get('planner_preview_trade_profitable', False))
+        has_pair = bool(preview.get('planner_preview_best_charge_time')
+                        and preview.get('planner_preview_best_discharge_time'))
+        accepted_trade = sum(w.origin in {'trade', 'mixed'} for w in windows)
+        source_safety_first = bool(preview.get('planner_preview_safety_charge_needed'))
+        trade_reason = ('disabled' if not trade_enabled else
+            'source_safety_priority' if source_safety_first else
+            'no_chronological_price_pair' if not has_pair else
+            'source_pair_unprofitable' if not profitable else
+            'source_trade_candidates_unavailable' if source_trade and not accepted_trade else
+            'alpha84_best_pair')
+        trade = dict(enabled=trade_enabled, profitable=profitable,
+            reason=trade_reason, search_method='alpha84_best_pair',
+            candidate_count=len(source_trade), accepted_count=accepted_trade,
+            suppressed_count=max(0, len(source_trade) - accepted_trade),
+            source_pair_available=has_pair,
+            source_strategy_reason='safety_first' if source_safety_first else
+                'single_best_chronological_pair')
+        for key in ('best_charge_time', 'best_discharge_time', 'best_charge_price',
+                    'best_discharge_price', 'effective_charge_cost', 'expected_margin'):
+            trade[key] = preview.get('planner_preview_' + key)
+        window_search = dict(method='alpha84_energy_allocation_then_grouping',
+                             search_limited=False, suppressed=suppressed,
+                             protected_interval_count=len(protected),
+                             source_candidate_count=len(bundle['action_bridge']['auto_bridge_candidates']),
+                             eligible_command_count=len(windows))
+    elif practical_windows:
         windows, baseline, window_search = _safety_windows(model)
         windows, trade = _trade_windows(model, windows, baseline, margin, trade_enabled)
         allocated, _ = model.simulate({}, windows=windows)
@@ -1192,7 +1342,7 @@ def calculate_plan72(home_slots, solar_slots, price_slots, *, now, soc_percent,
     return {
         "status": "limited" if limited else "ready", "valid": True,
         "reason": reason,
-        "observational_only": True, "execution_enabled": False,
+        "observational_only": True, "execution_enabled": False, "physical_execution_authority": False,
         "timeline": timeline, "slot_count": QUARTERS, "horizon_hours": 72.0,
         "start": start.isoformat(), "end": (start + timedelta(hours=72)).isoformat(),
         "start_soc": soc, "end_soc": timeline[-1]["soc_end"],
@@ -1200,7 +1350,8 @@ def calculate_plan72(home_slots, solar_slots, price_slots, *, now, soc_percent,
         "max_soc": max(row["max_soc"] for row in timeline),
         "hardware_min_soc": minimum, "reserve_target_soc": minimum + reserve,
         "safety_reserve_kwh": capacity * reserve / 100,
-        "execution_reserve_kwh": battery.reserve,
+        "execution_reserve_kwh": min(capacity, battery.reserve + capacity * execution_buffer / 100),
+        "execution_buffer_percent": execution_buffer,
         "reserve_satisfied": reserve_breaches == 0,
         "reserve_breach_count": reserve_breaches,
         "reserve_end_breach_count": reserve_end_breaches,

@@ -48,6 +48,7 @@ def bridge_plan(candidate):
         "source_plan_generation": candidate.get("source_plan_generation"),
         "source_input_fingerprint": candidate.get("source_input_fingerprint"),
         "source_window_id": candidate.get("source_window_id"),
+        "source_safety_quarters": list(candidate.get("source_safety_quarters") or []),
         "price_sources": list(candidate.get("price_sources") or []),
         "all_prices_known": bool(candidate.get("all_prices_known")),
     }

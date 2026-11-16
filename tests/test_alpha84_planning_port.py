@@ -1,0 +1,135 @@
+"""Full-output equivalence of the source port, separate from runtime parity."""
+from concurrent.futures import ThreadPoolExecutor
+import pytest
+from test_alpha84_planning_oracle import oracle
+
+port = oracle.current('alpha84_planning')
+
+
+def run_chain(rows, soc, capacity=7.2, minimum=5, *, upstream=False):
+    functions = {}
+    for module, function in (
+        ('energy_need', 'build_energy_need_analysis'),
+        ('planner_preview', 'build_planner_preview'),
+        ('planner_72h', 'build_72h_plan_preview'),
+    ):
+        if upstream:
+            env = oracle.reference(module)
+            env.update(DEFAULT_BATTERY_CAPACITY_KWH=capacity, MIN_SOC_PERCENT=minimum)
+            functions[function] = env[function]
+        else:
+            functions[function] = getattr(port, function)
+    kwargs = dict(now=oracle.NOW)
+    if not upstream:
+        kwargs.update(capacity_kwh=capacity, min_soc_percent=minimum)
+    need = functions['build_energy_need_analysis'](rows, soc, 5, **kwargs)
+    preview = functions['build_planner_preview'](rows, need, soc, 92, 92, .1,
+                                               3200, 3200, **kwargs)
+    plan = functions['build_72h_plan_preview'](rows, need, preview, soc, 92, 92,
+                                             0, 3200, 3200, **kwargs)
+    return need, preview, plan
+
+
+@pytest.mark.parametrize('scenario', list(oracle.scenarios()))
+@pytest.mark.parametrize('capacity,minimum', [(7.2, 5), (7.1, 10)])
+def test_all_fields_equal_unchanged_reference(scenario, capacity, minimum):
+    rows, soc = oracle.scenarios()[scenario]
+    assert run_chain(rows, soc, capacity, minimum) == run_chain(
+        rows, soc, capacity, minimum, upstream=True)
+
+
+def test_independent_battery_configurations_do_not_share_mutable_globals():
+    rows, soc = oracle.scenarios()['safety_valley']
+    settings = [(7.1, 5), (14.4, 10), (7.2, 5), (7.1, 5)]
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        actual = list(pool.map(lambda config: run_chain(rows, soc, *config), settings))
+    expected = [run_chain(rows, soc, *config, upstream=True) for config in settings]
+    assert actual == expected
+
+
+@pytest.mark.parametrize('soc', [5, 12, 95, 100])
+def test_solar_and_negative_tariffs_equal_reference(soc):
+    rows = oracle.forecast(lambda h: .2 if h % 24 < 8 else .4,
+        lambda h: 2.4 if 9 <= h % 24 < 15 else 0,
+        lambda h: -.1 if 10 <= h % 24 < 13 else .3,
+        lambda h: -.05 if 10 <= h % 24 < 13 else .2)
+    assert run_chain(rows, soc) == run_chain(rows, soc, upstream=True)
+
+
+def quarter_forecast(home=0, solar=0):
+    from datetime import timedelta
+    return [dict(time=(oracle.NOW + timedelta(minutes=15*i)).isoformat(),
+        home_consumption_kwh=home, solar_kwh=solar,
+        import_price=.1 if i == 2 else .4,
+        export_price=.7 if i == 30 else .05, price_source='known')
+        for i in range(288)]
+
+
+def quarter_chain(rows, now=None):
+    kwargs = dict(now=now or oracle.NOW, interval_minutes=15,
+                  capacity_kwh=7.2, min_soc_percent=5)
+    need = port.build_energy_need_analysis(rows, 50, 5, **kwargs)
+    preview = port.build_planner_preview(rows, need, 50, 92, 92, .1,
+                                        3200, 3200, **kwargs)
+    plan = port.build_72h_plan_preview(rows, need, preview, 50, 92, 92,
+                                      0, 3200, 3200, **kwargs)
+    return need, preview, plan
+
+
+def test_native_quarter_prices_select_original_best_pair_rule():
+    rows = quarter_forecast()
+    _, preview, plan = quarter_chain(rows)
+    assert preview['planner_preview_best_charge_time'] == rows[2]['time']
+    assert preview['planner_preview_best_discharge_time'] == rows[30]['time']
+    assert len(plan['auto_plan_72h_plan']) == 288
+    assert plan['auto_plan_72h_grid_trade_charge_kwh'] == .8
+    assert plan['auto_plan_72h_grid_trade_discharge_kwh'] == .8
+    assert sum(r['charge_from_grid_trade_kwh'] > 0
+               for r in plan['auto_plan_72h_plan']) == 1
+
+
+def test_two_hours_of_usable_solar_do_not_become_two_quarters():
+    rows = quarter_forecast(home=.1)
+    for i in range(4, 6):
+        rows[i]['solar_kwh'] = .2
+    for i in range(12, 20):
+        rows[i]['solar_kwh'] = .2
+    need, _, _ = quarter_chain(rows)
+    assert need['energy_need_first_usable_solar'] == rows[12]['time']
+
+
+def test_partial_quarter_uses_remaining_duration_for_power_limit():
+    from datetime import timedelta
+    rows = quarter_forecast()
+    rows[0]['import_price'] = -.2
+    _, preview, plan = quarter_chain(rows, now=oracle.NOW + timedelta(minutes=5))
+    assert preview['planner_preview_best_charge_time'] == rows[0]['time']
+    assert plan['auto_plan_72h_grid_trade_charge_kwh'] == round(3.2 * 10/60, 3)
+
+
+def test_equal_quarter_prices_keep_original_one_hour_trade_volume():
+    rows = quarter_forecast()
+    for i, row in enumerate(rows):
+        row['import_price'] = .1 if i < 4 else .4
+        row['export_price'] = .8 if 48 <= i < 52 else .05
+    _, preview, plan = quarter_chain(rows)
+    assert preview['planner_preview_best_charge_time'] == rows[0]['time']
+    assert preview['planner_preview_best_discharge_time'] == rows[48]['time']
+    assert plan['auto_plan_72h_grid_trade_charge_kwh'] == 3.2
+    assert plan['auto_plan_72h_grid_trade_discharge_kwh'] == 3.2
+    assert [i for i, r in enumerate(plan['auto_plan_72h_plan'])
+            if r['charge_from_grid_trade_kwh'] > 0] == [0, 1, 2, 3]
+    assert [i for i, r in enumerate(plan['auto_plan_72h_plan'])
+            if r['discharge_to_grid_kwh'] > 0] == [48, 49, 50, 51]
+
+
+def test_price_change_within_trade_hour_stops_before_more_expensive_quarter():
+    rows = quarter_forecast()
+    for i, row in enumerate(rows):
+        row['import_price'] = .1 if i in (0, 1) else .4
+        row['export_price'] = .8 if 48 <= i < 52 else .05
+    _, preview, plan = quarter_chain(rows)
+    assert preview['planner_preview_best_charge_time'] == rows[0]['time']
+    assert plan['auto_plan_72h_grid_trade_charge_kwh'] == 1.6
+    assert [i for i, r in enumerate(plan['auto_plan_72h_plan'])
+            if r['charge_from_grid_trade_kwh'] > 0] == [0, 1]

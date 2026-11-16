@@ -13,6 +13,12 @@ def canonical(node):
                                      if value is not None and value != []}]
     if isinstance(node, list):
         return [canonical(item) for item in node]
+    # Runtime typing annotations may contain `tuple[T, ...]`. Preserve the
+    # literal ellipsis in the AST digest instead of raising a JSON TypeError;
+    # frozen reviewed hashes still MUST be compared and will stay red until
+    # the changed production algorithms are substantively reviewed.
+    if node is Ellipsis:
+        return '...'
     return node
 
 

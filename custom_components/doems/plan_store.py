@@ -49,6 +49,7 @@ DEFAULT_PLAN: dict[str, Any] = {
     "source_plan_generation": None,
     "source_input_fingerprint": None,
     "source_window_id": None,
+    "source_safety_quarters": [],
     "lifecycle_status": "concept",
     "lifecycle_reason": None,
     "lifecycle_updated_at": None,
@@ -187,6 +188,7 @@ class AnkerEmsPlanStore:
                       "command_target_soc", "projected_end_soc", "requested_energy_kwh",
                       "energy_shortfall_kwh", "source_plan_generation", "source_input_fingerprint", "source_window_id"):
             self._plans[slot][field] = None
+        self._plans[slot]["source_safety_quarters"] = []
         self._plans[slot]["price_sources"] = []
         self._plans[slot]["all_prices_known"] = False
         self._plans[slot]["purpose"] = None
@@ -398,6 +400,7 @@ class AnkerEmsPlanStore:
                               "requested_energy_kwh", "energy_shortfall_kwh", "source_plan_generation",
                               "source_input_fingerprint", "source_window_id"):
                     new_plan[field] = proposal.get(field)
+                new_plan["source_safety_quarters"] = deepcopy(proposal.get("source_safety_quarters") or [])
 
                 # Do not write persistent storage every coordinator poll. The
                 # bridge signature changes only when the actual planner proposal

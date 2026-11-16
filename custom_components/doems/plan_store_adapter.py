@@ -38,7 +38,7 @@ def manual_constraints(store, *, now=None):
             if automatic:
                 purpose = plan.get("purpose")
                 expected = "ontladen" if purpose == "trade_discharge" else "laden"
-                if purpose not in {"safety_charge", "trade_charge", "trade_discharge"} or plan["action"] != expected:
+                if purpose not in {"safety_charge", "trade_charge", "mixed_charge", "trade_discharge"} or plan["action"] != expected:
                     raise ValueError("invalid_automatic_purpose")
             power = float(plan["power_w"])
             target = float(plan.get("command_target_soc") if automatic and plan.get("command_target_soc") is not None else plan["target_soc"])
@@ -67,6 +67,10 @@ def manual_constraints(store, *, now=None):
             "max_runtime_h": runtime,
             "lifecycle_status": "active" if status == "actief" or (now is not None and start_dt < now) else "pending",
             "power_start_time": plan.get("power_start_time") if automatic else None,
-            "origin": ("safety" if plan.get("purpose") in {"safety", "safety_charge"} else "trade") if automatic else "manual",
+            "origin": ("mixed" if plan.get("purpose") == "mixed_charge" else
+                       "safety" if plan.get("purpose") in {"safety", "safety_charge"}
+                       else "trade") if automatic else "manual",
+            "source_safety_quarters": (list(plan.get("source_safety_quarters") or [])
+                                      if automatic and plan.get("purpose") == "mixed_charge" else []),
         })
     return rows

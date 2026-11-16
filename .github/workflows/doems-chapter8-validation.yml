@@ -7,6 +7,7 @@ on:
       - doems3-ch8-alpha84-corrections
       - doems3-ch8-compaction-rounding-fix
       - doems3-ch8-full-chain-window-grouping
+      - doems3-alpha84-planner-parity
   workflow_dispatch:
 
 permissions:
@@ -28,6 +29,16 @@ jobs:
       - run: python -m compileall -q custom_components/doems scripts
       - run: python -m pytest -q --junitxml=build/test-results.xml
       - run: python scripts/validate_scheduler_release.py
+      - name: Require full Alpha84 planning parity on repair branch
+        if: github.ref_name == 'doems3-alpha84-planner-parity'
+        run: python scripts/compare_alpha84_planners.py --output build/alpha84-planner-parity.json
+      - name: Preserve differential evidence even when parity fails
+        if: always() && github.ref_name == 'doems3-alpha84-planner-parity'
+        uses: actions/upload-artifact@v4
+        with:
+          name: alpha84-parity-${{ matrix.python-version }}-${{ github.sha }}
+          path: build/alpha84-planner-parity.json
+          if-no-files-found: warn
       - name: Package exact tested source without publication
         if: matrix.python-version == '3.13'
         run: python scripts/build_scheduler_release.py
