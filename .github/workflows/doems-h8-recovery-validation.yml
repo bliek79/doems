@@ -1,0 +1,85 @@
+name: DOEMS H8 Alpha84 recovery validation (not publishable)
+on:
+  push:
+    branches: [doems3-alpha84-planner-parity-recovery-20261116]
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  functional:
+    name: Functional and parity evidence / Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install approved test dependencies
+        run: python -m pip install -r requirements-test.txt
+      - name: Python compilation
+        run: python -m compileall -q custom_components/doems scripts tests
+      - name: Functional test suite excluding three unapproved source/release gates
+        run: |
+          python -m pytest -q --junitxml=build/functional-test-results.xml \
+            --deselect=tests/test_action_bridge.py::test_calculators_and_runtimes_are_frozen_reviewed_ch7_blobs \
+            --deselect=tests/test_ch7_algorithm_regression.py::test_ch7_preserves_reviewed_strategy_algorithms \
+            --deselect=tests/test_plan_store_release.py::test_approved_release_contract_and_register_are_exact
+      - name: Full-hour and 288-quarter source/native/Bridge evidence
+        run: |
+          python scripts/verify_alpha84_repaired_chain.py --output build/alpha84-recovery-fullchain.json
+          python - <<'PY'
+          import json
+          r=json.load(open('build/alpha84-recovery-fullchain.json'))['cases']
+          assert set(r)=={'passive_control','safety_valley','repeated_trade_opportunities'}
+          for case in r.values():
+              assert len(case['input']['native_quarters'])==288
+              assert len(case['input']['original_hourly'])==72
+              assert case['native_plan72']['plan']['physical_execution_authority'] is False
+              assert case['native_plan72']['plan']['execution_enabled'] is False
+          safety=r['safety_valley']['native_plan72']['plan']
+          assert safety['valid'] and safety['reserve_satisfied']
+          assert safety['remaining_charge_need_kwh']==0
+          assert len(safety['action_windows'])==2
+          assert safety['action_windows'][1]['start_time']=='2026-11-17T12:30:00+00:00'
+          assert safety['status']=='limited'  # genuine bounded first charge retained
+          trade=r['repeated_trade_opportunities']['native_plan72']['totals']
+          assert abs(trade['charge_from_grid_trade_kwh']-3.093)<1e-6
+          assert abs(trade['discharge_to_grid_kwh']-3.093)<1e-6
+          print('Functional evidence passes; full Alpha84 strategy acceptance and source-hash release review remain open.')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doems-h8-functional-${{ matrix.python-version }}-${{ github.sha }}
+          path: build/
+          if-no-files-found: warn
+
+  protected-review:
+    name: Protected source hashes and release contract / NOT waived
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -r requirements-test.txt
+      - name: Run all three independent release blockers without changing their expectations
+        run: |
+          python -m pytest -q \
+            tests/test_action_bridge.py::test_calculators_and_runtimes_are_frozen_reviewed_ch7_blobs \
+            tests/test_ch7_algorithm_regression.py::test_ch7_preserves_reviewed_strategy_algorithms \
+            tests/test_plan_store_release.py::test_approved_release_contract_and_register_are_exact \
+            --junitxml=build/protected-gates.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doems-h8-protected-review-${{ github.sha }}
+          path: build/
+          if-no-files-found: warn
