@@ -1,0 +1,125 @@
+name: Publish DOEMS 0.3.0-alpha.8.5 from verified CI artifact
+
+on:
+  push:
+    branches:
+      - doems3-alpha84-planner-parity-recovery-20261116
+    paths:
+      - .github/workflows/doems-h8-publish-alpha85.yml
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    name: Publish immutable pre-release asset (no source rebuild)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: a9674b7e82fd7d669b3fec3a6ddbd22279cb6f32
+      TAG: v0.3.0-alpha.8.5
+      CI_RUN: "43922264398"
+      CI_ARTIFACT: scheduler-3.13-a9674b7e82fd7d669b3fec3a6ddbd22279cb6f32
+      EXPECTED_SHA256: 769f7764a73c4f7e1c8076c34550932cef88c5472596a25029262563007fbb63
+    steps:
+      - name: Require exact branch and absent tag before publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "doems3-alpha84-planner-parity-recovery-20261116"
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag already exists; refuse to replace or republish"
+            exit 1
+          fi
+          for run in 43922264398 43922264291 43922274815 43922275021; do
+            actual=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run" --jq '.conclusion')
+            source=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run" --jq '.head_sha')
+            test "$actual" = "success"
+            test "$source" = "$SOURCE_SHA"
+          done
+      - name: Check out exact tested source commit for release notes
+        uses: actions/checkout@v4
+        with:
+          ref: a9674b7e82fd7d669b3fec3a6ddbd22279cb6f32
+          persist-credentials: false
+      - name: Retrieve immutable tested artifact
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          mkdir -p staging
+          gh run download "$CI_RUN" -R "$GITHUB_REPOSITORY" -n "$CI_ARTIFACT" -D staging
+          ls -l staging
+      - name: Verify artifact bytes, manifest, provenance and disabled execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd staging
+          sha256sum -c SHA256SUMS.txt
+          test "$(sha256sum doems.zip | cut -d' ' -f1)" = "$EXPECTED_SHA256"
+          python - <<'PY'
+          import hashlib,json,os,pathlib,zipfile
+          base=pathlib.Path("staging")
+          p=json.loads((base/"RELEASE_PROVENANCE.json").read_text())
+          sha=hashlib.sha256((base/"doems.zip").read_bytes()).hexdigest()
+          assert sha==os.environ["EXPECTED_SHA256"]==p["archive_sha256"]
+          assert p["commit"]==os.environ["SOURCE_SHA"]
+          assert p["version"]=="0.3.0-alpha.8.5"
+          assert p["physical_execution_enabled"] is False
+          assert p["packaged_files"]==61
+          with zipfile.ZipFile(base/"doems.zip") as z:
+              assert z.testzip() is None
+              assert json.loads(z.read("custom_components/doems/manifest.json"))["version"]=="0.3.0-alpha.8.5"
+              assert len(z.namelist())==61
+              for name in z.namelist():
+                  assert not name.startswith("/") and ".." not in pathlib.PurePosixPath(name).parts
+          print("Exact signed-off CI artifact verified; no tests rerun or code rebuilt")
+          PY
+      - name: Prepare accurate public pre-release notes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path("RELEASE_NOTES_v0.3.0-alpha.8.5.md")
+          s=p.read_text()
+          s=s.replace(" — Chapter 8 Alpha84 strategy restoration (candidate)",
+                      " — Chapter 8 Alpha84 strategy restoration")
+          s=s.replace("**STATUS: Candidate only. No public release is created by this file.**",
+                      "**STATUS: Observer-only public alpha pre-release for Home Assistant live validation.**")
+          s=s.replace("## Validation scope before any release",
+                      "## Verified CI and required live checks")
+          s=s.replace("- Full Python 3.12/3.13 matrix, full package/provenance checks, CI and release approval.",
+                      "- Full Python 3.12/3.13 matrix: 921 tests passed on each version, zero excluded; all reviewed source hashes and release contracts passed. Installation ZIP hash and source provenance verified.")
+          s+="\n## Install and validate\n"
+          s+="Install this alpha pre-release as a Home Assistant custom integration update, then check Plan72, Bridge, Plan Store, Scheduler, manual precedence, contiguous charge windows and normal quarter-only replanning. The integration is observer-only; **no physical battery commands** are enabled. Chapters 9-12 and the unrelated gas/state_class issues remain open.\n"
+          Path("staging/RELEASE_NOTES_PUBLIC.md").write_text(s)
+          PY
+      - name: Publish pre-release on EXACT validated source commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" \
+            staging/doems.zip \
+            staging/SHA256SUMS.txt \
+            staging/RELEASE_PROVENANCE.json \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$SOURCE_SHA" \
+            --title "DOEMS v0.3.0-alpha.8.5 - Alpha84 Planning Strategy Restoration" \
+            --notes-file staging/RELEASE_NOTES_PUBLIC.md \
+            --prerelease
+      - name: Verify release tag, assets, SHA and prerelease state
+        shell: bash
+        run: |
+          set -euo pipefail
+          ref_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq '.object.sha')
+          test "$ref_sha" = "$SOURCE_SHA"
+          gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json isPrerelease,isDraft,tagName,assets \
+            --jq '{tagName,isPrerelease,isDraft,assets:[.assets[].name]}'
+          gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json isPrerelease,isDraft,tagName,assets \
+            --jq '(.isPrerelease == true) and (.isDraft == false) and (.tagName == "v0.3.0-alpha.8.5") and ([.assets[].name] | sort == ["RELEASE_PROVENANCE.json", "SHA256SUMS.txt", "doems.zip"])' | grep -x true
+          mkdir -p verify
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -D verify
+          (cd verify && sha256sum -c SHA256SUMS.txt)
+          test "$(sha256sum verify/doems.zip | cut -d' ' -f1)" = "$EXPECTED_SHA256"
+          gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json url --jq '.url'
