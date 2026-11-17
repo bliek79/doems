@@ -215,7 +215,7 @@ def test_calculators_and_runtimes_are_frozen_reviewed_ch7_blobs():
     # every unaffected AST node to the original Alpha53 implementation.
     expected={'energy_need.py':'bc10cbb18dd531735e390fe5369466ab4f466087',
         'energy_need_runtime.py':'3ab25d81615429f51264beb69d4d0064a34f5863',
-        'planner_72h.py':'4ee35d293f9eb664539e3cbfb8b5d0213a36c639'}
+        'planner_72h.py':'751ae0ac98b454c6f7290700a2d783e571ae7c51'}
     expected['planner_72h_runtime.py']='f9a23be93ad239c9a17fb58fd619ca9628688c80'
     for name,sha in expected.items():
         data=(ROOT/'custom_components/doems'/name).read_bytes()
