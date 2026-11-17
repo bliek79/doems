@@ -1108,6 +1108,105 @@ def _group_action_windows(model, windows, trace):
     return result, current
 
 
+
+def _reconcile_alpha84_physical_safety(model, source_windows):
+    """Recheck Alpha84 safety choices against *actual* quarter command timing.
+
+    Alpha84 owns the price ranking and original safety allocation.  Its source
+    projection has no two-minute command preparation; the authoritative native
+    Plan72 replay does.  If that replay reveals an avoidable reserve deadline,
+    apply Alpha84's unchanged cheapest-before-deadline / latest-on-ties rule to
+    physically available quarters, replay every proposed command, and regroup
+    the complete eligible safety chain before exposing three Store slots.
+
+    No new trading heuristic or alternate SOC route is introduced. Protected
+    manual/due/active and source trade windows are never overwritten. An
+    impossible deadline remains observable as a limited Plan72 result.
+    """
+    selected = sorted(source_windows, key=lambda w: w.start)
+    trace, _ = model.simulate({}, windows=selected)
+    repairs = []
+    impossible_deadlines = set()
+
+    def shortage(row):
+        return max(row["reserve_min_gap_kwh"], _need(row, model.b))
+
+    for _ in range(QUARTERS):  # At most one new command per physical quarter.
+        deadline = next((i for i, row in enumerate(trace)
+                         if i not in impossible_deadlines and shortage(row) > _TOL), None)
+        if deadline is None:
+            break
+        prior = shortage(trace[deadline])
+        ranked = sorted(range(deadline + 1),
+                        key=lambda i: (model.prices[i][0], -i))
+        accepted = False
+        for index in ranked:
+            begin = model.stamps[index]
+            if model.b.charge_kw < .1:
+                break
+            candidate = _Window("alpha84_physical_safety_" + begin.isoformat(),
+                                "charge", "safety", begin,
+                                begin + timedelta(minutes=15),
+                                model.b.charge_kw, model.b.capacity)
+            if not _window_free(model, candidate, selected):
+                continue
+            # The original Alpha84 minimum is per executable *window*; do not
+            # invent un-actionable single-quarter 20 Wh battery commands.
+            neighboring_safety = any(
+                w.action == "charge" and w.origin == "safety"
+                and (w.end == begin or w.start == candidate.end) for w in selected)
+            minimum_w = 100 if neighboring_safety else max(
+                100, int(ceil(.10 / (13 / 60) * 100) * 10))
+            maximum_w = int(model.b.charge_kw * 1000 // 10) * 10
+            if maximum_w < minimum_w:
+                continue
+            candidate = replace(candidate, power_kw=maximum_w / 1000)
+            proposal = sorted(selected + [candidate], key=lambda w: w.start)
+            trial, _ = model.simulate({}, windows=proposal)
+            if shortage(trial[deadline]) >= prior - _TOL:
+                continue
+            if any(shortage(trial[i]) > shortage(trace[i]) + _TOL
+                   for i in range(deadline)):
+                continue
+            # Minimise the *added* command inside its selected cheapest quarter.
+            # When maximum power cannot fully repair the deadline, retain only
+            # its physically beneficial contribution and revisit the deadline.
+            if shortage(trial[deadline]) <= _TOL:
+                lo, hi = minimum_w // 10, maximum_w // 10
+                while lo < hi:
+                    mid = (lo + hi) // 2
+                    attempt = replace(candidate, power_kw=mid / 100)
+                    tested, _ = model.simulate({}, windows=sorted(selected + [attempt], key=lambda w: w.start))
+                    if shortage(tested[deadline]) <= _TOL and all(
+                        shortage(tested[i]) <= shortage(trace[i]) + _TOL
+                        for i in range(deadline)):
+                        hi = mid
+                    else:
+                        lo = mid + 1
+                candidate = replace(candidate, power_kw=lo / 100)
+            proposed = sorted(selected + [candidate], key=lambda w: w.start)
+            current, _ = model.simulate({}, windows=proposed)
+            grouped, replay = _group_action_windows(model, proposed, current)
+            if (shortage(replay[deadline]) >= prior - _TOL
+                    or any(shortage(replay[i]) > shortage(trace[i]) + _TOL
+                           for i in range(deadline))):
+                # Grouping must be verified, not used to conceal an unchanged
+                # or worsened reserve gap.
+                continue
+            selected, trace = grouped, replay
+            repairs.append({"before": model.stamps[deadline].isoformat(),
+                            "quarter": begin.isoformat(),
+                            "import_price": model.prices[index][0],
+                            "remaining_stored_gap_kwh": shortage(trace[deadline])})
+            accepted = True
+            break
+        if not accepted:
+            impossible_deadlines.add(deadline)
+    return selected, {"physical_safety_repair_count": len(repairs),
+                      "physical_safety_repairs": repairs,
+                      "physical_safety_unresolved_deadlines": len(impossible_deadlines)}
+
+
 def _describe_windows(model,windows,timeline):
     """Serialize the EXACT commands used for the published route, not a replan."""
     result=[]
@@ -1276,6 +1375,10 @@ def calculate_plan72(home_slots, solar_slots, price_slots, *, now, soc_percent,
                 action, origin, begin, finish, candidate['power_w']/1000,
                 native_target, requested_ac, source_safety))
             native_before, _ = model.simulate({}, windows=windows)
+        # Source planning is price-authoritative; Plan72 remains the only full
+        # physical SOC/energy authority. Correct *physical* safety shortfalls
+        # before downstream Bridge/Store previews are selected.
+        windows, physical_repair = _reconcile_alpha84_physical_safety(model, windows)
         timeline, manual_progress = model.simulate({}, windows=windows, detail=True)
         preview = bundle['planner_preview']
         source_trade = [c for c in bundle['action_bridge']['auto_bridge_candidates']
@@ -1306,7 +1409,8 @@ def calculate_plan72(home_slots, solar_slots, price_slots, *, now, soc_percent,
                              search_limited=False, suppressed=suppressed,
                              protected_interval_count=len(protected),
                              source_candidate_count=len(bundle['action_bridge']['auto_bridge_candidates']),
-                             eligible_command_count=len(windows))
+                             eligible_command_count=len(windows),
+                             **physical_repair)
     elif practical_windows:
         windows, baseline, window_search = _safety_windows(model)
         windows, trade = _trade_windows(model, windows, baseline, margin, trade_enabled)
