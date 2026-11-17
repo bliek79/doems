@@ -457,3 +457,19 @@ def test_future_automatic_slot_adopts_corrected_margin_once(store_module):
         assert not (await store.async_sync_automatic_plans({1: updated}))['changed']
         assert store.revision == revision
     asyncio.run(run())
+
+
+def test_mixed_allocation_persists_without_new_slot_entity(store_module):
+    async def check():
+        store = store_module.AnkerEmsPlanStore(None, 'id')
+        proposed = proposal('mixed-identity')
+        proposed['purpose'] = 'mixed_charge'
+        proposed['source_safety_quarters'] = [
+            {'time': proposed['start_time'], 'energy_kwh': .1}]
+        await store.async_sync_automatic_plans({2: proposed})
+        restored = store_module.AnkerEmsPlanStore(None, 'id')
+        restored._store.data = store._store.data
+        await restored.async_load()
+        assert restored.get_plan(2)['source_safety_quarters'] == proposed['source_safety_quarters']
+        assert all(restored.get_plan(i)['action'] == 'geen' for i in (1, 3))
+    asyncio.run(check())

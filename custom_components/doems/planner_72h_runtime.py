@@ -46,6 +46,7 @@ from .const import (
 from .energy_forecast import ceil_quarter
 from .energy_need import calculate_energy_need
 from .planner_72h import calculate_plan72
+from .alpha84_bundle import compute_strategy_bundle
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -123,6 +124,7 @@ def _evaluate(inputs: Plan72Inputs) -> dict[str, Any]:
             now=inputs.now,
             manual_plans=[dict(item) for item in inputs.manual_plans],
             practical_windows=True,
+            strategy_factory=compute_strategy_bundle,
             **parameters,
         )
     # Retain the price provider's native resolution alongside its source kind.

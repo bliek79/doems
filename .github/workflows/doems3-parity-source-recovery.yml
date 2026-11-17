@@ -1,0 +1,37 @@
+name: DOEMS parity recovery source bundle
+on:
+  push:
+    branches:
+      - doems3-alpha84-planner-parity-recovery-20261116
+permissions:
+  contents: read
+jobs:
+  recover-source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out DOEMS Alpha 8.4 base
+        uses: actions/checkout@v4
+        with:
+          path: doems-source
+          fetch-depth: 0
+      - name: Check out frozen original Alpha84
+        uses: actions/checkout@v4
+        with:
+          repository: bliek79/dummy-os-anker-ems
+          ref: 6ff976ab8e0b3a9641c32372dc8d2fdafc55db7d
+          path: alpha84-reference
+      - name: Verify immutable reference IDs and archive sources
+        shell: bash
+        run: |
+          test "$(git -C alpha84-reference rev-parse HEAD)" = "6ff976ab8e0b3a9641c32372dc8d2fdafc55db7d"
+          git -C doems-source rev-parse HEAD > doems-head.txt
+          git -C alpha84-reference rev-parse HEAD > alpha84-head.txt
+          tar --exclude=.git -czf doems3-parity-source-bundle.tar.gz doems-source alpha84-reference doems-head.txt alpha84-head.txt
+          test -s doems3-parity-source-bundle.tar.gz
+      - name: Upload isolated recovery bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: doems3-parity-recovery-source
+          path: doems3-parity-source-bundle.tar.gz
+          retention-days: 7
+          if-no-files-found: error

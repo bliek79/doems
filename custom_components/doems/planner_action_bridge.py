@@ -18,6 +18,7 @@ SLOT_CAPACITY = 3
 _EPS = 1e-8
 _ENERGY_TOL = 1e-5  # Preserve Plan72's numerical tolerance; never round shortages away.
 _TYPES = {"safety_charge": "safety_charge", "trade_charge": "trade_charge",
+          "mixed_charge": "mixed_charge",
           "trade_discharge": "grid_discharge"}
 _FLOWS = ("charge_from_solar_kwh", "charge_from_grid_safety_kwh",
           "charge_from_grid_trade_kwh", "charge_from_grid_manual_kwh",
@@ -188,7 +189,8 @@ def _candidate(w: dict, parts: list, p: dict, source: dict, horizon: tuple,
         reserve = cap*(p["min_soc_percent"]+p["reserve_percent"])/100
         if not parts:
             raise ValueError("missing_window_segments")
-        origin = "safety" if purpose == "safety_charge" else "trade"
+        origin = ("mixed" if purpose == "mixed_charge" else
+                  "safety" if purpose == "safety_charge" else "trade")
         expected_action = "trade_discharge" if not charge else purpose
         flows = {key: 0.0 for key in _FLOWS}
         prepared, powered = 0.0, 0.0
@@ -233,7 +235,7 @@ def _candidate(w: dict, parts: list, p: dict, source: dict, horizon: tuple,
                         or values["discharge_to_grid_manual_kwh"] > _EPS):
                     raise ValueError("manual_energy_in_automatic_action")
                 _equal(values["discharge_to_grid_kwh"], values["discharge_to_grid_trade_kwh"], "grid_export_origin_mismatch")
-                if charge:
+                if charge and origin != "mixed":
                     other = "trade" if origin == "safety" else "safety"
                     _equal(values["charge_from_grid_"+other+"_kwh"], 0, "charge_origin_mismatch", _EPS)
                 elif values["discharge_to_grid_kwh"] > _EPS:
@@ -286,7 +288,10 @@ def _candidate(w: dict, parts: list, p: dict, source: dict, horizon: tuple,
         _equal(w.get("energy_shortfall_kwh"), shortfall, "energy_shortfall_mismatch")
         if delivered <= _EPS:
             raise ValueError("no_action_energy")
-        explicit = flows["charge_from_grid_"+origin+"_kwh"] if charge else flows["discharge_to_grid_trade_kwh"]
+        explicit = (flows["charge_from_grid_safety_kwh"] + flows["charge_from_grid_trade_kwh"]
+                    if origin == "mixed" else
+                    flows["charge_from_grid_"+origin+"_kwh"] if charge else
+                    flows["discharge_to_grid_trade_kwh"])
         if explicit <= _EPS:
             raise ValueError("no_explicit_grid_energy")
         if not isinstance(w.get("limited"), bool) or w["limited"] != (shortfall > _ENERGY_TOL):
@@ -358,7 +363,9 @@ def build_action_bridge(plan: dict, *, now: datetime) -> dict:
     for w in windows:
         c = _candidate(w, by_id[w["id"]], p, source,
                        (_time(plan["start"]), _time(plan["end"])), previous_end, plan["timeline"])
-        if c['valid'] and c.get('purpose') == 'safety_charge':
+        if (c['valid'] and c.get('purpose') == 'safety_charge'
+                and plan.get('action_window_search', {}).get('method')
+                    != 'alpha84_energy_allocation_then_grouping'):
             hours = {_time(row['start']).replace(minute=0, second=0, microsecond=0)
                      for row, _, _ in by_id[w['id']]}
             totals = {hour: sum(_number(row['charge_from_grid_safety_kwh'])
@@ -377,7 +384,15 @@ def build_action_bridge(plan: dict, *, now: datetime) -> dict:
             pass  # Individually invalid window already stops chronological selection.
         candidates.append(c)
     blocked_by, limited_before, eligible = None, False, []
-    recovery = plan.get("status") == "limited" or plan.get("reserve_satisfied") is not True
+    # Do not invent a blanket economic embargo from the *label* "limited".
+    # A manual target that expires under its own hard deadline, or one bounded
+    # but valid command, is independently reportable and must not suppress a
+    # physically safe later Alpha84 trade. Only actual unmet battery energy or
+    # an unsafe reserve needs the source recovery restriction.
+    unresolved = _number(plan.get('remaining_charge_need_kwh', 0.0))
+    tolerance = _number(plan.get('remaining_charge_need_tolerance_kwh', _ENERGY_TOL))
+    recovery = (plan.get("reserve_satisfied") is not True
+                or unresolved > tolerance)
     for index, c in enumerate(candidates):
         c.update(candidate_index=index, depends_on_limited_projection=limited_before)
         if blocked_by is not None:
@@ -403,9 +418,12 @@ def build_action_bridge(plan: dict, *, now: datetime) -> dict:
     elif not eligible:
         result.update(status="blocked", reason="first_candidate_invalid" if invalid else "source_route_restricts_trade")
     else:
-        limited = recovery or invalid or result["capacity_limited_count"]
+        limited = (plan.get("status") == "limited" or recovery or invalid
+                   or result["capacity_limited_count"])
         result.update(valid=True, status="limited" if limited else "ready",
             reason="chronological_prefix_before_invalid" if invalid else
             "bounded_charge_candidates" if result["capacity_limited_count"] else
-            "safety_recovery_candidates" if recovery else "action_candidates_ready")
+            "safety_recovery_candidates" if recovery else
+            "source_plan_limited_noncritical" if plan.get("status") == "limited"
+            else "action_candidates_ready")
     return result

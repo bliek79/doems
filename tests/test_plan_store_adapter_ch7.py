@@ -92,3 +92,18 @@ def test_future_revisable_automatic_does_not_double_count_generated_route():
         origin='automatic_72h_planner', lifecycle_status='pending')}),
         now=datetime(2026,10,30,12,tzinfo=timezone.utc))
     assert result == []
+
+
+def test_active_mixed_automatic_retains_source_safety_allocation():
+    from datetime import datetime, timezone
+    split = [{"time": "2026-11-01T11:00:00+00:00", "energy_kwh": .1}]
+    result = MODULE.manual_constraints(Store({1: planned(
+        origin='automatic_72h_planner', lifecycle_status='actief', purpose='mixed_charge',
+        power_start_time='2026-11-01T11:02:00+00:00',
+        planned_end_time='2026-11-01T11:15:00+00:00',
+        command_target_soc=82, source_safety_quarters=split)}),
+        now=datetime(2026, 11, 1, 11, 5, tzinfo=timezone.utc))
+    assert result[0]['origin'] == 'mixed'
+    assert result[0]['source_safety_quarters'] == split
+    assert result[0]['target_soc'] == 82
+    assert result[0]['lifecycle_status'] == 'active'
