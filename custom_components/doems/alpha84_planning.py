@@ -1,15 +1,16 @@
-"""Alpha84 energy strategy, ported without changing its allocation decisions.
+"""Alpha84 energy strategy: frozen hourly oracle and quarter-price adapter.
 
-Source: dummy-os-anker-ems 0.0.1-alpha.84, commit
-6ff976ab8e0b3a9641c32372dc8d2fdafc55db7d. See ALPHA84_LICENSE.
-HA time helpers and battery constants are adapted. Source intervals can be
-60 or 15 minutes; power-to-energy conversion and horizon length follow that
-interval. The usable-solar condition remains two HOURS. Capacity and technical
-minimum are call-local parameters, so concurrent calculations cannot interfere.
-This module has no Store or battery authority. Runtime migration is unfinished;
-this port must not be presented as the active repaired planner yet.
+Original: dummy-os-anker-ems 0.0.1-alpha.84, commit
+6ff976ab8e0b3a9641c32372dc8d2fdafc55db7d (see ALPHA84_LICENSE).
+The original 60-minute decision route remains unchanged. In native 15-minute
+mode the same cheapest-feasible safety-window rule evaluates contiguous
+physical windows using every distinct quarter import price and the existing
+2-minute command preparation. This prevents treating each cheap price tick
+as a new battery start. The 72-hour SOC authority remains native Plan72;
+this module does not write to the Store or control the battery.
 """
 from __future__ import annotations
+from math import ceil
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -445,6 +446,78 @@ def build_planner_preview(
 
         breach_stored = trace[breach_index]["stored_end_kwh"]
         required_improvement = reserve_target_stored_kwh - breach_stored
+        if interval_minutes == 15 and required_improvement > interval_epsilon:
+            # Alpha84 chooses the cheapest *feasible charging hour*, not a
+            # different start/stop command at every price tick. At 15-minute
+            # resolution evaluate complete contiguous physical charge windows
+            # BEFORE action/three-slot construction. Each of the 288 distinct
+            # prices is applied to its own expected AC energy; no hourly price
+            # averaging, minimum-duration heuristic or new trade rule is used.
+            # A new physical start loses exactly the already-approved 2 minutes.
+            prices_now = [item["import_price"] for item in trace]
+            headroom_now = [item["remaining_safety_stored_headroom_kwh"]
+                            for item in trace]
+            cost_prefix = [0.0]
+            headroom_prefix = [0.0]
+            blocked_prefix = [0]
+            for j in range(breach_index + 1):
+                cost_prefix.append(cost_prefix[-1] + prices_now[j] * .25)
+                headroom_prefix.append(headroom_prefix[-1] + headroom_now[j])
+                stamp = trace[j]["time"].isoformat()
+                blocked_prefix.append(blocked_prefix[-1] + int(stamp in (protected_intervals or {})))
+            trace_schedule_before = dict(safety_schedule)
+            viable_windows = []
+            max_quarters_per_command = 12 * 60 // 15  # Existing Bridge maximum.
+            requested_ac = required_improvement / charge_eff
+            for start_index in range(breach_index + 1):
+                if blocked_prefix[start_index + 1] != blocked_prefix[start_index]:
+                    continue
+                end_limit = min(breach_index + 1, start_index + max_quarters_per_command)
+                for end_index in range(start_index + 1, end_limit + 1):
+                    if blocked_prefix[end_index] != blocked_prefix[start_index]:
+                        break
+                    if headroom_prefix[end_index] - headroom_prefix[start_index] < required_improvement - interval_epsilon:
+                        continue
+                    full_hours = .25 * (end_index - start_index)
+                    effective_hours = full_hours - 2 / 60
+                    if effective_hours <= 0:
+                        continue
+                    needed_power = requested_ac / effective_hours
+                    if needed_power > max_charge_power_w / 1000 + 1e-9:
+                        continue
+                    power_kw = max(.1, ceil(needed_power * 100 - 1e-10) / 100)
+                    if power_kw > max_charge_power_w / 1000 + 1e-9:
+                        continue
+                    # Score = sum(price_at_quarter * AC_energy_in_that_quarter).
+                    # The first quarter loses 2 minutes; subsequent ones get
+                    # their full 15 minutes under ONE physical setpoint.
+                    price_weighted_hours = (cost_prefix[end_index] - cost_prefix[start_index]
+                                            - prices_now[start_index] * 2 / 60)
+                    cost = power_kw * price_weighted_hours
+                    viable_windows.append((cost, -start_index, end_index,
+                                           start_index, power_kw))
+            if viable_windows:
+                for _, _, end_index, start_index, power_kw in sorted(viable_windows):
+                    trial_schedule = dict(safety_schedule)
+                    for j in range(start_index, end_index):
+                        seconds = 13 * 60 if j == start_index else 15 * 60
+                        increment = power_kw * (seconds / 3600) * charge_eff
+                        stamp = trace[j]["time"].isoformat()
+                        trial_schedule[stamp] = trial_schedule.get(stamp, 0.0) + increment
+                    trial_trace = _simulate_safety(trial_schedule)
+                    if (trial_trace[breach_index]["stored_end_kwh"]
+                            >= reserve_target_stored_kwh - interval_epsilon
+                            and all(trial_trace[j]["stored_end_kwh"]
+                                    >= trace[j]["stored_end_kwh"] - interval_epsilon
+                                    for j in range(breach_index))):
+                        safety_schedule = trial_schedule
+                        break
+                else:
+                    # Existing source cheapest-quarter fallback remains active
+                    # when no complete window can satisfy the physical need.
+                    pass
+                if safety_schedule != trace_schedule_before:
+                    continue
         candidates = [
             index
             for index, item in enumerate(trace[: breach_index + 1])
