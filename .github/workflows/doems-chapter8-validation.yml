@@ -8,6 +8,7 @@ on:
       - doems3-ch8-compaction-rounding-fix
       - doems3-ch8-full-chain-window-grouping
       - doems3-alpha84-planner-parity
+      - doems3-h8-contiguous-quarter-allocation
       - doems3-alpha84-planner-parity-recovery-20261116
   workflow_dispatch:
 
@@ -39,6 +40,29 @@ jobs:
         with:
           name: alpha84-parity-${{ matrix.python-version }}-${{ github.sha }}
           path: build/alpha84-planner-parity.json
+          if-no-files-found: warn
+      - name: Check frozen Alpha84 source versus active quarter-based factory and Plan72
+        if: github.ref_name == 'doems3-h8-contiguous-quarter-allocation'
+        run: |
+          python scripts/verify_alpha84_repaired_chain.py --output build/alpha84-active-fullchain.json
+          python - <<'PY'
+          import json
+          cases=json.load(open('build/alpha84-active-fullchain.json'))['cases']
+          assert set(cases)=={'passive_control','safety_valley','repeated_trade_opportunities'}
+          for label, case in cases.items():
+              assert len(case['input']['original_hourly'])==72, label
+              assert len(case['input']['native_quarters'])==288, label
+              assert case['native_plan72']['plan']['execution_enabled'] is False
+              assert case['native_plan72']['plan']['physical_execution_authority'] is False
+              assert case['native_plan72']['plan']['slot_count']==288
+          print('Full-chain strategy evidence produced; differing hourly/quarterly projections remain visible, not falsely declared equal.')
+          PY
+      - name: Preserve complete source/native quarter-price comparison
+        if: always() && github.ref_name == 'doems3-h8-contiguous-quarter-allocation'
+        uses: actions/upload-artifact@v4
+        with:
+          name: alpha84-contiguous-evidence-${{ matrix.python-version }}-${{ github.sha }}
+          path: build/alpha84-active-fullchain.json
           if-no-files-found: warn
       - name: Package exact tested source without publication
         if: matrix.python-version == '3.13'
