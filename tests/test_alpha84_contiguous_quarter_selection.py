@@ -69,3 +69,20 @@ def test_no_new_economic_trade_constraints_or_device_execution():
     assert not actual['execution_enabled']
     assert not actual['physical_execution_authority']
     assert actual['trade']['search_method']=='alpha84_best_pair'
+
+
+def test_unrelated_later_quarter_price_change_does_not_rewrite_earlier_safety_deadline():
+    common = dict(home=lambda i: .3 if i < 8 else 0,
+                  soc_percent=20, practical_windows=True,
+                  strategy_factory=bundle.compute_strategy_bundle)
+    price_at = lambda i: .20 if i < 8 else .40
+    original = run(tariff=prices(price_at), **common)
+    future_only = run(tariff=prices(lambda i: .41 if i == 201 else price_at(i)), **common)
+    assert original['reserve_satisfied'] == future_only['reserve_satisfied']
+    assert original['remaining_charge_need_kwh'] == future_only['remaining_charge_need_kwh']
+    assert [(w['start_time'], w['planned_end_time'], w['requested_energy_kwh'])
+            for w in original['action_windows']] == [
+                (w['start_time'], w['planned_end_time'], w['requested_energy_kwh'])
+                for w in future_only['action_windows']]
+    assert_conserved(original)
+    assert_conserved(future_only)
