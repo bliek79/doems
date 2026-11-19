@@ -288,6 +288,20 @@ def build_planner_preview(
         )
     price_rows.sort(key=lambda item: item["time"])
 
+    # When the four 15-minute import prices within every hour are identical,
+    # preserve Alpha84's exact hourly safety-energy allocation and its frozen
+    # numeric oracle. Only a genuinely quarter-varying price series needs the
+    # contiguous physical-window ranking rather than four independently
+    # cheapest quarter picks. This is an equality check, NOT hourly averaging.
+    quarter_price_variation_prefix: list[bool] = []
+    for j, row in enumerate(price_rows):
+        changes_inside_hour = (j > 0 and interval_minutes == 15
+            and row["time"].replace(minute=0, second=0, microsecond=0)
+                == price_rows[j-1]["time"].replace(minute=0, second=0, microsecond=0)
+            and row["import_price"] != price_rows[j-1]["import_price"])
+        quarter_price_variation_prefix.append(changes_inside_hour or
+            (quarter_price_variation_prefix[-1] if quarter_price_variation_prefix else False))
+
     prices = [row["import_price"] for row in price_rows]
     price_min = min(prices) if prices else None
     price_max = max(prices) if prices else None
@@ -446,7 +460,8 @@ def build_planner_preview(
 
         breach_stored = trace[breach_index]["stored_end_kwh"]
         required_improvement = reserve_target_stored_kwh - breach_stored
-        if interval_minutes == 15 and required_improvement > interval_epsilon:
+        if (quarter_price_variation_prefix[breach_index]
+                and required_improvement > interval_epsilon):
             # Alpha84 chooses the cheapest *feasible charging hour*, not a
             # different start/stop command at every price tick. At 15-minute
             # resolution evaluate complete contiguous physical charge windows
