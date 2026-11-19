@@ -45,3 +45,19 @@ installed Home Assistant forecast, still check if the *source* and *physical*
 windows are contiguous and if 3 Store slots are the first eligible groups.
 Physical action execution remains switched off. H8 live acceptance is still
 open until separately verified.
+
+
+## CI regression and correction (19 November)
+The first complete CI suite found one **real** compatibility regression: with
+four identical quarter prices for each hour, the approved safety-valley fixture
+changed its requested later safety energy from 2.071 to 2.044 kWh. **The
+original test expectation was not edited.** Instead the source adapter was
+corrected to retain the frozen Alpha84 allocation whenever the quarter inputs
+are hourly-identical *through the current safety deadline*. Only genuinely
+intrahour-varying tariffs before that deadline enable full-window ranking.
+This also prevents an unrelated future tariff update from rewriting earlier
+safety commitments. The approved 2.071 kWh scenario is once again unchanged.
+
+New reviewed source Git blob: ef37f2b7381497cb06e494b06de08350ce68e3b0.
+The earlier candidate hash 3a8b4a28f77c23161565e9a081a42efd97752f1e
+is superseded. CI must rerun before any release.
