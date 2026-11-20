@@ -136,10 +136,17 @@ class Hass:
         self.services = types.SimpleNamespace(async_call=forbidden)
         self.gated = gated
         self.jobs = []
+        self.background_calls = []
+        self.normal_calls = 0
         self.active_jobs = 0
         self.max_active_jobs = 0
 
     def async_create_task(self, coroutine):
+        self.normal_calls += 1
+        return asyncio.create_task(coroutine)
+
+    def async_create_background_task(self, coroutine, name, eager_start=True):
+        self.background_calls.append((name, eager_start))
         return asyncio.create_task(coroutine)
 
     async def async_add_executor_job(self, function, inputs):
@@ -618,3 +625,21 @@ def test_start_critical_near_and_due_are_one_shot(environment, monkeypatch):
         assert calls == ['start_critical', 'start_critical']
         await runtime.async_shutdown()
     asyncio.run(scenario())
+
+
+def test_plan72_uses_nonbootstrap_background_task_and_cancels_it_on_unload(environment):
+    # Home Assistant waits for hass.async_create_task but not for
+    # hass.async_create_background_task during startup. The long-running
+    # pure worker must remain abortable without granting execution authority.
+    async def run():
+        runtime, hass = setup_runtime(environment, gated=True)
+        await runtime.async_setup()
+        await wait_until(lambda: len(hass.jobs) > 0)
+        assert hass.background_calls == [('DOEMS Plan72 calculation', False)]
+        assert hass.normal_calls == 0
+        assert runtime.calculation_in_progress is True
+        assert runtime.snapshot.get('physical_execution_authority') is False
+        await runtime.async_shutdown()
+        assert runtime._worker_task is None
+        assert runtime.calculation_in_progress is False
+    asyncio.run(run())
