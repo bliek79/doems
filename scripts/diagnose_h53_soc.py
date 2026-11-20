@@ -82,7 +82,7 @@ def analyse_case(name):
         assert {k:v for k,v in item.items() if not k.startswith("soc_end_h53_")} == expected, (name,i)
     for i, item in enumerate(original_rows):
         expected = comparison["alpha84"]["plan"]["auto_plan_72h_plan"][i]
-        assert {k:v for k,v in item.items() if k!="soc_end_h53_unrounded"} == expected, (name,i)
+        assert {k:v for k,v in item.items() if not k.startswith("soc_end_h53_")} == expected, (name,i)
 
     divergences = []
     trace = []
