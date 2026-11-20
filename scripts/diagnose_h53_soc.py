@@ -121,6 +121,11 @@ def main():
               "SOURCE_VS_PHYSICAL",report["physical_mismatch_count"])
         for x in report["rounded_soc_discrepancies"]:
             print("SOC_DIFF",json.dumps(x,sort_keys=True))
+        previous_delta = 0.0
+        for x in report["every_hour"]:
+            if abs(x["raw_delta_soc_percent"] - previous_delta) > 1e-10:
+                print("RAW_SHIFT",json.dumps(x,sort_keys=True))
+            previous_delta = x["raw_delta_soc_percent"]
     assert set(reports)==set(scenarios())
 
 
