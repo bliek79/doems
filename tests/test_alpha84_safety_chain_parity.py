@@ -19,15 +19,11 @@ def test_full_safety_chain_retains_contiguous_cross_hour_prefix_and_energy():
     plan = report["native_plan72"]["plan"]
     windows = plan["action_windows"]
     assert len(windows) == 2
-    # The safety source now follows the original hour-first decisions.
-    # Derive the earliest later safety hour from the frozen Alpha84 preview,
-    # rather than locking in the earlier DOEMS-only 12:30 start.
-    reference_safety = [
-        hour["time"] for hour in report["alpha84"]["preview"]["planner_preview_safety_charge_hours"]
-        if hour["time"] >= "2026-11-17T00:00:00+00:00"
-    ]
-    assert reference_safety
-    assert windows[1]["start_time"] == min(reference_safety)
+    # H5.2: the first sub-actionable safety hour in the original Preview
+    # is NOT the first executable action. Compare the *frozen Alpha84 Bridge*
+    # decision, which starts its second 12-hour action at 12:00, not 11:00.
+    original_actions = report["alpha84"]["bridge_candidates"]
+    assert windows[1]["start_time"] == original_actions[1]["start_time"]
     assert windows[1]["planned_end_time"] == "2026-11-18T00:00:00+00:00"
     # The former literal 2.071 kWh included premature per-quarter rounding
     # propagated into source allocation. Instead verify that the actual

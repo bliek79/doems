@@ -19,7 +19,10 @@ PRESERVED_BLOBS.update({'custom_components/doems/planner_72h.py': '751ae0ac98b45
 # Keep every other inherited protected source hash unchanged.
 PRESERVED_BLOBS["custom_components/doems/solar_sensor.py"] = "4c2ec74d780d36db7fa5f38327d0582a4e7d2f59"
 
-PRESERVED_BLOBS["custom_components/doems/alpha84_planning.py"] = "5ee36b57eba81bfcb62d41e49ae493163ec80ccc"  # Reviewed 15m contiguous source only; frozen hourly parity retained.
+PRESERVED_BLOBS["custom_components/doems/alpha84_planning.py"] = "e80b5a3c31cf95711384ebc6f81f5d82bbc861bf"  # Reviewed 15m contiguous source only; frozen hourly parity retained.
+# H5.2 reviewed Alpha84 source handoff: keep original hourly oracle unchanged.
+PRESERVED_BLOBS["custom_components/doems/alpha84_bundle.py"] = "a60cadbf242b70c6c275bfc66bf03dd99aec3d3c"
+PRESERVED_BLOBS["custom_components/doems/alpha84_action_bridge.py"] = "abf789e567c0f98424d927e94cfc9d6eed425f02"
 PRESERVED_BLOBS["custom_components/doems/plan_store.py"] = "b6dfec3b0b5a2070167a7d107acaa6320a76c6a8"
 PRESERVED_BLOBS["custom_components/doems/plan_store_adapter.py"] = "d4b4ae38cd309c5cb8538e89477cfb941da580d7"
 

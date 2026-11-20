@@ -418,6 +418,30 @@ def build_planner_action_bridge(
                 safety_segment.append((at, safety))
                 safety_purpose = purpose
         close_safety_segment()
+
+        if data.get("alpha84_hour_equivalent_safety") is True:
+            # The H5.1 preview used the original Alpha84 hourly strategy.
+            # Therefore use Alpha84's *per-hour* 0.10 kWh execution cutoff
+            # before grouping. The unmodified original hourly Bridge rejects
+            # a 0.046 kWh source hour even when a larger hour follows it.
+            # Only exact lossless-hour expansion is eligible for this path.
+            hourly_safety_kwh: dict[datetime, float] = {}
+            for raw in auto_plan:
+                if not isinstance(raw, dict):
+                    continue
+                stamp = _parse_time(raw.get("time"))
+                if stamp is None:
+                    continue
+                hour = _slot_start(stamp, 60)
+                hourly_safety_kwh[hour] = (
+                    hourly_safety_kwh.get(hour, 0.0)
+                    + max(0.0, _as_float(raw.get("charge_from_grid_safety_kwh")) or 0.0)
+                )
+            for stamp in safety_by_interval:
+                safety_by_interval[stamp] = (
+                    hourly_safety_kwh.get(_slot_start(stamp, 60), 0.0)
+                    >= MIN_ACTIONABLE_SAFETY_CHARGE_KWH - 1e-9
+                )
     for raw in auto_plan:
         if not isinstance(raw, dict):
             continue
@@ -455,7 +479,15 @@ def build_planner_action_bridge(
         consecutive = row["parsed_time"] - previous["parsed_time"] == timedelta(minutes=interval_minutes)
         same_action = row["bridge_action"] == previous["bridge_action"]
         same_purpose = row["bridge_purpose"] == previous["bridge_purpose"]
-        if consecutive and same_action and same_purpose:
+        # The existing Bridge execution contract has a 12-hour maximum.
+        # Native quarter candidates must not advertise 12 hours while carrying
+        # a 13-hour source interval. Keep original 60-minute source untouched.
+        within_native_runtime = (
+            interval_minutes != 15
+            or row["parsed_time"] + timedelta(minutes=interval_minutes)
+               - segments[-1][0]["parsed_time"] <= timedelta(hours=12)
+        )
+        if consecutive and same_action and same_purpose and within_native_runtime:
             segments[-1].append(row)
         else:
             segments.append([row])

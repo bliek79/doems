@@ -90,6 +90,11 @@ def compute_strategy_bundle(forecast, *, now, soc_percent, capacity_kwh,
         max_charge_power_w, max_discharge_power_w,
         protected_intervals=protected, **common)
     actions = build_planner_action_bridge(dict(plan, forecast_ready=True,
+        # Carry the genuine Alpha84-hourly source choice to its matching
+        # actionability threshold. A small original hour must not be silently
+        # promoted by grouping with an adjacent hour before Bridge selection.
+        alpha84_hour_equivalent_safety=bool(
+            preview.get("planner_preview_alpha84_hour_equivalent_safety", False)),
         max_charge_power_w=max_charge_power_w, max_discharge_power_w=max_discharge_power_w,
         battery_capacity_kwh=capacity_kwh, charge_efficiency_percent=charge_efficiency*100,
         discharge_efficiency_percent=discharge_efficiency*100),

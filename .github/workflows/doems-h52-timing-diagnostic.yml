@@ -1,0 +1,51 @@
+name: DOEMS H5.2 timing investigation (diagnostic, no publication)
+on:
+  push:
+    branches:
+      - doems3-h5-2-safety-timing-recovery
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -r requirements-test.txt
+      - run: python -m compileall -q custom_components/doems scripts tests
+      - name: Compare source decisions and physical timing in safety_valley
+        run: python scripts/diagnose_h52_timing.py
+      - name: H5.2 exact Alpha84 executable timing, H5.1 source parity and physical reserve
+        run: python -m pytest -q tests/test_h52_safety_timing.py tests/test_h51_release_parity.py tests/test_alpha84_safety_chain_parity.py tests/test_alpha84_safety_strategy.py tests/test_alpha84_contiguous_quarter_selection.py tests/test_alpha84_physical_reserve_repair.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: h52-timing-diagnostic-${{ github.sha }}
+          path: build/h52-safety-timing-diagnostic.json
+          if-no-files-found: warn
+
+  full-regression:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install -r requirements-test.txt
+      - run: python -m compileall -q custom_components/doems scripts tests
+      - run: python -m pytest -q --junitxml=build/test-results.xml
+      - name: Enforce reviewed H5.2 source hashes without release
+        run: python scripts/validate_scheduler_release.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: h52-regression-${{ matrix.python-version }}-${{ github.sha }}
+          path: build/test-results.xml
+          if-no-files-found: warn
