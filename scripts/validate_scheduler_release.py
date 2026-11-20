@@ -15,7 +15,7 @@ PRESERVED_BLOBS = {name: digest for name, digest in CH7_BLOBS.items() if name no
 # Prior published Alpha 8.4 hashes remain recorded in docs/H8_SOURCE_HASH_REVIEW_20261116.md.
 PRESERVED_BLOBS.update({'custom_components/doems/planner_72h.py': '751ae0ac98b454c6f7290700a2d783e571ae7c51', 'custom_components/doems/planner_72h_runtime.py': 'd3885ba122e2d8e6e1cd962ea72e26c603bc9ea9', 'custom_components/doems/planner_action_bridge.py': '79cfbc8053710e0108f02407811fcea083f39df1', 'custom_components/doems/plan_store_writer.py': '44b6cda5e07f04957f4958d3ef08df92ec29e037'})
 
-PRESERVED_BLOBS["custom_components/doems/alpha84_planning.py"] = "ee6688139e6e058d269296f301bd36625096d407"  # Reviewed 15m contiguous source only; frozen hourly parity retained.
+PRESERVED_BLOBS["custom_components/doems/alpha84_planning.py"] = "baf47cff327785c975b1b5db350445048862bc0c"  # Reviewed 15m contiguous source only; frozen hourly parity retained.
 PRESERVED_BLOBS["custom_components/doems/plan_store.py"] = "6c5b2dcf106270f149c67f533a63bf199d5460a9"
 PRESERVED_BLOBS["custom_components/doems/plan_slot_assignment.py"] = "ca76ff02cca22c29be0d7f6ea490ddb270ad3250"
 PRESERVED_BLOBS["custom_components/doems/plan_store_adapter.py"] = "d4b4ae38cd309c5cb8538e89477cfb941da580d7"
