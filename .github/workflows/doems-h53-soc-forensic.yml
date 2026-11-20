@@ -1,0 +1,24 @@
+name: DOEMS H5.3 exact source SOC forensic (diagnostic only)
+on:
+  push:
+    branches:
+      - doems3-h5-3-soc-parity-recovery
+permissions:
+  contents: read
+jobs:
+  soc-evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -r requirements-test.txt
+      - name: Compare frozen original raw SOC to quarter source raw SOC
+        run: python scripts/diagnose_h53_soc.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: h53-original-vs-native-soc-${{ github.sha }}
+          path: build/h53-source-soc-forensic.json
+          if-no-files-found: warn
