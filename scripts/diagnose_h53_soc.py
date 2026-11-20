@@ -30,6 +30,12 @@ def _instrument(original: bool):
     assert body.count(needle) == 1, (path, body.count(needle))
     body = body.replace(needle,
         '"soc_end_h53_unrounded": soc_end,\n                "soc_end": round(soc_end, 1),')
+    # The following fields exist only in this in-memory compiled diagnostic.
+    body = body.replace('"soc_end_h53_unrounded": soc_end,',
+        '"soc_end_h53_unrounded": soc_end, '
+        '"soc_end_h53_stored_exact": stored_kwh, '
+        '"soc_end_h53_safety_raw_ac": grid_safety_input, '
+        '"soc_end_h53_safety_target_stored": safety_target_stored,')
     tree = ast.parse(body)
     if original:
         tree.body = [n for n in tree.body
@@ -73,7 +79,7 @@ def analyse_case(name):
     # planned flows, source action timing, or displayed SOC.
     for i, item in enumerate(quarter_rows):
         expected = comparison["source_quarter"]["plan"]["auto_plan_72h_plan"][i]
-        assert {k:v for k,v in item.items() if k!="soc_end_h53_unrounded"} == expected, (name,i)
+        assert {k:v for k,v in item.items() if not k.startswith("soc_end_h53_")} == expected, (name,i)
     for i, item in enumerate(original_rows):
         expected = comparison["alpha84"]["plan"]["auto_plan_72h_plan"][i]
         assert {k:v for k,v in item.items() if k!="soc_end_h53_unrounded"} == expected, (name,i)
@@ -98,6 +104,12 @@ def analyse_case(name):
             "frozen_charge_hour_kwh": a["charge_from_grid_safety_kwh"],
             "frozen_home_hour_kwh": a["discharge_to_home_kwh"],
         }
+        if h in (18, 19, 20, 21, 26, 57):
+            print("RAW_DETAIL", name, "hour",h, "original",
+                  json.dumps({k:v for k,v in a.items() if k.startswith("soc_end_h53_")},sort_keys=True),
+                  "quarters", json.dumps([
+                      {k:v for k,v in quarter_rows[4*h+q].items()
+                       if k.startswith("soc_end_h53_")} for q in range(4)],sort_keys=True))
         trace.append(item)
         if a["soc_end"] != b["soc_end"]:
             item["rounding_boundary_case"] = abs(delta) < 1e-9
