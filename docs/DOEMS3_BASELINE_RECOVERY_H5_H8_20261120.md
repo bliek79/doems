@@ -141,3 +141,21 @@ not an acceptable proof of Alpha84 parity.
 This is **diagnostic and test enforcement**, not a repair of the remaining
 strategic differences. Tests on the latest commits have not yet been verified
 by CI. Do not merge or release based on this checkpoint.
+
+
+## Detailed divergence capture — 20 November (latest recovery branch)
+
+The Chapter 8 validation workflow on the **draft-only H5–H8 correction
+branch** now executes the frozen original-Alpha84 versus native-15-minute
+source/physical diagnostic for all three synthetic scenarios. It logs exact
+per-category counts and up to twelve concrete discrepant field/hour records
+for each group, and uploads the full report as
+`alpha84-h5-h8-recovery-<python>-<sha>`.
+
+This is deliberate evidence capture, **not** an assertion that 65 mismatches
+have been corrected. No new economics, safety cap, strategy restriction or
+device authority has been introduced. Until the full artifacts and their
+causal classification are reviewed, the strategy parity acceptance gate
+remains open. Foundation CI on the current branch was observed passing;
+full regression CI and the new differential report must be checked at the
+final tested commit before sign-off.
