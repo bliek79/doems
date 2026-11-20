@@ -47,9 +47,13 @@ def slot_assignment(store, bridge, *, now):
     available = [i for i in range(1, 4) if _can_revise(existing[i], now)
                  or existing[i].get("action") in (None, "geen")
                  and existing[i].get("lifecycle_status") not in {"actief", "pending"}]
+    # A cancelled *empty* manual slot is free capacity, not a protected plan.
+    # Cancelling an empty slot leaves its default origin="manual" and status
+    # "geannuleerd" in persistent storage. Never reserve it indefinitely.
+    # A cancelled manual slot that still contains an action remains protected.
     available = [i for i in available if existing[i].get("origin") == "automatic_72h_planner"
                  or existing[i].get("origin") == "manual" and existing[i].get("action") in (None, "geen")
-                 and existing[i].get("lifecycle_status") == "concept"]
+                 and existing[i].get("lifecycle_status") in {"concept", "geannuleerd"}]
     candidates = bridge.get("eligible_candidates") or []
     desired, unassigned, used = {}, [], set()
     protected = {p.get("planner_identity") for i, p in existing.items()
