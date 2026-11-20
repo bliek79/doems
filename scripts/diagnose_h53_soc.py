@@ -102,6 +102,11 @@ def analyse_case(name):
             "source_home_hour_kwh": round(sum(
                 quarter_rows[4*h+i]["discharge_to_home_kwh"] for i in range(4)),9),
             "frozen_charge_hour_kwh": a["charge_from_grid_safety_kwh"],
+            "frozen_raw_charge_hour_ac_kwh": a["soc_end_h53_safety_raw_ac"],
+            "quarter_raw_charge_hour_ac_kwh": sum(
+                quarter_rows[4*h+i]["soc_end_h53_safety_raw_ac"] for i in range(4)),
+            "frozen_raw_stored_end_kwh": a["soc_end_h53_stored_exact"],
+            "quarter_raw_stored_end_kwh": b["soc_end_h53_stored_exact"],
             "frozen_home_hour_kwh": a["discharge_to_home_kwh"],
         }
         if h in (18, 19, 20, 21, 26, 57):
