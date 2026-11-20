@@ -169,3 +169,46 @@ def test_quarter_safety_preview_preserves_energy_before_72h_source_handoff():
     assert any(abs(item['candidate_battery_energy_kwh']
                    - round(item['candidate_battery_energy_kwh'], 3)) > 1e-8
                for item in selected)
+
+
+def test_h5_1_hour_equivalent_safety_allocation_matches_frozen_alpha84():
+    """Compare all 72 decision hours with the byte-verified original policy.
+
+    Source quarter energies/solar and prices are exact expansions of original
+    hours. This checks the decision itself, not merely totals or a slot preview.
+    """
+    from datetime import datetime, timedelta
+    rows, soc = oracle.scenarios()['safety_valley']
+    original = run_chain(rows, soc, upstream=True)[1]
+    quarters = []
+    for hour in rows:
+        for part in range(4):
+            quarter = dict(hour)
+            quarter['time'] = (datetime.fromisoformat(hour['time']) +
+                               timedelta(minutes=15 * part)).isoformat()
+            quarter['home_consumption_kwh'] = hour['home_consumption_kwh'] / 4
+            quarter['solar_kwh'] = hour['solar_kwh'] / 4
+            quarters.append(quarter)
+    kwargs = dict(now=oracle.NOW, interval_minutes=15,
+                  capacity_kwh=7.2, min_soc_percent=5)
+    need = port.build_energy_need_analysis(quarters, soc, 5, **kwargs)
+    preview = port.build_planner_preview(quarters, need, soc, 92, 92, .1,
+                                        3200, 3200, **kwargs)
+    native_by_hour = {}
+    for quarter in preview['planner_preview_safety_charge_hours']:
+        hour = datetime.fromisoformat(quarter['time']).replace(minute=0)
+        native_by_hour[hour] = (native_by_hour.get(hour, 0.0) +
+                                quarter['candidate_battery_energy_kwh'])
+    original_by_hour = {
+        datetime.fromisoformat(hour['time']):
+        hour['candidate_battery_energy_kwh']
+        for hour in original['planner_preview_safety_charge_hours']
+    }
+    assert native_by_hour.keys() == original_by_hour.keys()
+    for hour, expected in original_by_hour.items():
+        assert abs(native_by_hour[hour] - expected) <= 0.000002, (
+            hour, native_by_hour[hour], expected
+        )
+    assert preview['planner_preview_safety_charge_needed'] == (
+        original['planner_preview_safety_charge_needed']
+    )
