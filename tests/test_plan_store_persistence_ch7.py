@@ -473,3 +473,70 @@ def test_mixed_allocation_persists_without_new_slot_entity(store_module):
         assert restored.get_plan(2)['source_safety_quarters'] == proposed['source_safety_quarters']
         assert all(restored.get_plan(i)['action'] == 'geen' for i in (1, 3))
     asyncio.run(check())
+
+
+def test_real_writer_reuses_two_cancelled_manual_slots_with_twelve_eligible_actions(store_module):
+    """Exact user failure: 12 candidate windows, one auto pending, two empty
+    cancelled manual slots; writer must fill the remaining two persistently."""
+    async def run():
+        store = store_module.AnkerEmsPlanStore(None, 'id')
+        writer_module = importlib.import_module('store_ch7_test.plan_store_writer')
+        await store.async_sync_automatic_plans({1: proposal('a')})
+        await store.async_handoff_automatic_plans({1: 'a'})
+        await store.async_cancel_plan(2)
+        await store.async_cancel_plan(3)
+        assert [store.get_value(i, 'lifecycle_status') for i in (1, 2, 3)] == [
+            'pending', 'geannuleerd', 'geannuleerd']
+        assert [store.get_value(i, 'action') for i in (1, 2, 3)] == [
+            'laden', 'geen', 'geen']
+        candidate_list = []
+        for index in range(12):
+            identity = chr(ord('a') + index)
+            item = proposal(identity)
+            # All starts are future and distinct; the original identity 'a'
+            # must retain slot 1 rather than being moved during refresh.
+            from datetime import timedelta
+            start = datetime(2026, 10, 31, 12, tzinfo=timezone.utc) + timedelta(minutes=15*index)
+            item.update(
+                action='charge', valid=True, selection_status='eligible',
+                start_time=start.isoformat(),
+                power_start_time=(start + timedelta(minutes=2)).isoformat(),
+                planned_end_time=(start + timedelta(minutes=15)).isoformat(),
+                command_target_soc=80, projected_end_soc=65)
+            candidate_list.append(item)
+        source = types.SimpleNamespace(snapshot=dict(
+            valid=True, start='2026-10-30T12:00:00+00:00',
+            plan_generation=1, input_fingerprint='f'))
+        bridge = types.SimpleNamespace(snapshot=dict(
+            valid=True, status='ready',
+            source_plan_generation=1, source_input_fingerprint='f',
+            eligible_candidates=candidate_list))
+        writer = writer_module.PlanStoreWriter(None, store, source, bridge)
+        await writer._sync()
+        assert writer.status == 'ready'
+        assert writer.diagnostics['overflow'] == 9
+        assert [store.get_value(i, 'planner_identity') for i in (1, 2, 3)] == ['a', 'b', 'c']
+        assert [store.get_value(i, 'lifecycle_status') for i in (1, 2, 3)] == ['pending']*3
+        restored = store_module.AnkerEmsPlanStore(None, 'id')
+        restored._store.data = store._store.data
+        await restored.async_load()
+        assert [restored.get_value(i, 'planner_identity') for i in (1, 2, 3)] == ['a','b','c']
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('terminal', ['geannuleerd', 'voltooid', 'fout'])
+def test_original_alpha84_terminal_manual_action_is_refillable_without_displacing_pending(store_module, terminal):
+    async def run():
+        store = store_module.AnkerEmsPlanStore(None, 'id')
+        await store.async_set_value(2, 'action', 'ontladen')
+        if terminal == 'geannuleerd':
+            await store.async_cancel_plan(2)
+        else:
+            await store.async_mark_lifecycle(2, terminal, 'test_terminal_manual')
+        assert store.get_value(2, 'origin') == 'manual'
+        assert store.get_value(2, 'action') == 'ontladen'
+        result = await store.async_sync_automatic_plans({2: proposal('replacement')})
+        assert result['written_slots'] == [2]
+        assert store.get_value(2, 'origin') == 'automatic_72h_planner'
+        assert store.get_value(2, 'planner_identity') == 'replacement'
+    asyncio.run(run())
