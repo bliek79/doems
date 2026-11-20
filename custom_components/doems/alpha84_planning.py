@@ -598,7 +598,10 @@ def build_planner_preview(
         for item in final_trace
         if item["stored_end_kwh"] < reserve_target_stored_kwh - interval_epsilon
     ]
-    # Preserve exact native-quarter energy across Preview -> Plan72. Alpha84\n    # hourly output remains three decimals and is byte-for-byte unchanged.\n    preview_energy_digits = 6 if interval_minutes == 15 else 3\n    selected_hours: list[dict[str, Any]] = []
+    # Preserve exact native-quarter energy across Preview -> Plan72. Alpha84
+    # hourly output remains three decimals and is byte-for-byte unchanged.
+    preview_energy_digits = 6 if interval_minutes == 15 else 3
+    selected_hours: list[dict[str, Any]] = []
     for item in final_trace:
         stored = item["actual_safety_stored_kwh"]
         if stored <= interval_epsilon:
