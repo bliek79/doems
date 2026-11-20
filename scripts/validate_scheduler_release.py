@@ -15,6 +15,10 @@ PRESERVED_BLOBS = {name: digest for name, digest in CH7_BLOBS.items() if name no
 # Prior published Alpha 8.4 hashes remain recorded in docs/H8_SOURCE_HASH_REVIEW_20261116.md.
 PRESERVED_BLOBS.update({'custom_components/doems/planner_72h.py': '751ae0ac98b454c6f7290700a2d783e571ae7c51', 'custom_components/doems/planner_72h_runtime.py': 'f9a23be93ad239c9a17fb58fd619ca9628688c80', 'custom_components/doems/planner_action_bridge.py': '79cfbc8053710e0108f02407811fcea083f39df1', 'custom_components/doems/plan_store_writer.py': '44b6cda5e07f04957f4958d3ef08df92ec29e037'})
 
+# Alpha 8.8 review: only the public, read-only Solar sensor registration changes.
+# Keep every other inherited protected source hash unchanged.
+PRESERVED_BLOBS["custom_components/doems/solar_sensor.py"] = "4c2ec74d780d36db7fa5f38327d0582a4e7d2f59"
+
 PRESERVED_BLOBS["custom_components/doems/alpha84_planning.py"] = "ef37f2b7381497cb06e494b06de08350ce68e3b0"  # Reviewed 15m contiguous source only; frozen hourly parity retained.
 PRESERVED_BLOBS["custom_components/doems/plan_store.py"] = "b6dfec3b0b5a2070167a7d107acaa6320a76c6a8"
 PRESERVED_BLOBS["custom_components/doems/plan_store_adapter.py"] = "d4b4ae38cd309c5cb8538e89477cfb941da580d7"
