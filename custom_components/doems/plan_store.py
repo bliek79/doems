@@ -356,8 +356,11 @@ class AnkerEmsPlanStore:
             current_origin = str(current.get("origin") or "manual")
             current_lifecycle = str(current.get("lifecycle_status") or "").lower()
             reusable = (
+                # Empty cancelled manual slots are not an active reservation.
+                # The assignment stage also admits these slots; the durable
+                # Store must agree or it would reject the resulting proposals.
                 (current_origin == "manual" and current.get("action") in (None, "geen")
-                 and current_lifecycle == "concept")
+                 and current_lifecycle in {"concept", "geannuleerd"})
                 or
                 (current_origin == "automatic_72h_planner" and current_lifecycle == "concept")
                 or pending_revisable(current)
