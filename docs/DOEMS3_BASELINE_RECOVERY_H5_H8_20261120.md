@@ -86,3 +86,33 @@ regressions reproduce the three-slot refill.
 
 This document is a recovery checkpoint, **not** proof that the entire native
 quarter-price planner already matches every original Alpha84 strategy decision.
+
+## Native Plan72 bootstrap boundary (HA / Python 3.14)
+The user-provided 19-Nov log showed `Plan72Runtime._run_worker` outstanding
+in Home Assistant's bootstrap wait; this is not proof that the code alone
+caused every startup delay. Home Assistant's current documented async contract
+says `hass.async_create_task` is awaited during startup, whereas
+`hass.async_create_background_task` is not. The runtime now launches its
+long-running, pure 288-quarter calculation as a named **background** task,
+with unchanged generation/fingerprint verification, cancellation on
+integration unload, and no battery authority. This does NOT speed up the
+calculation itself. It prevents that calculation from directly keeping HA in
+the bootstrap wait bucket. Reference:
+https://developers.home-assistant.io/docs/asyncio/
+(which redirects to https://contributors.home-assistant.io/core/internals/asyncio/).
+The test boundary asserts background scheduling and shutdown cancellation,
+and the branch extends verification to Python 3.14 as seen in the actual log.
+
+## CI discovery: existing fixed number was based on old source precision
+The initial full-suite run after quarter-source precision correction reported
+**938 passed, one failed** on both Python 3.12 and 3.13. The failing test was
+the prior hardcoded safety-window request `2.071 kWh`, which now becomes
+`2.051 kWh` when the 15-minute source flows are no longer individually
+rounded to 3 decimals. This expected numeric was not a frozen upstream
+Alpha84 strategic decision; it was a projected physical input from the old
+rounding implementation. The test has been strengthened to compare actual
+source quarter safety energy with requested energy from the matching
+physical window, *while retaining its downstream reserve and completion
+checks*. The independent direct original-hourly strategy oracle and the
+new first-4-quarter 0.150-kWh preservation gate are not relaxed. CI must
+run again; failure remains a release blocker.
