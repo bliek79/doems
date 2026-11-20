@@ -462,7 +462,12 @@ class Plan72Runtime:
             self.snapshot["replan_reason"] = reason
         self._notify()
         if self._worker_task is None:
-            self._worker_task = self.hass.async_create_task(self._run_worker())
+            # HA waits for normal tasks during bootstrap. Plan72 may process
+            # a 288-quarter source/physical route for longer than the startup
+            # window; it must never keep the rest of HA waiting. The runtime
+            # owns cancellation on unload and never publishes a closed result.
+            self._worker_task = self.hass.async_create_background_task(
+                self._run_worker(), "DOEMS Plan72 calculation", eager_start=False)
 
     async def _run_worker(self) -> None:
         try:
