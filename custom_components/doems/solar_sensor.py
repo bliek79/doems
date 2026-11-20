@@ -51,6 +51,7 @@ def build_solar_sensors(
         DOEMSSolarForecastTimelineSensor(entry, manager),
         DOEMSSolarForecastNextQuarterSensor(entry, manager),
         DOEMSSolarForecastDailySensor(entry, manager, "today"),
+        DOEMSSolarForecastRemainingTodaySensor(entry, manager),
         DOEMSSolarForecastDailySensor(entry, manager, "tomorrow"),
         DOEMSSolarForecastModelSensor(entry, manager),
     ]
@@ -328,6 +329,33 @@ class DOEMSSolarForecastDailySensor(DOEMSSolarBaseSensor):
             "array_names": contract.get("array_names", []),
             "array_energy_kwh": self.manager.array_energy_for_local_date(target),
             "topology_signature": contract.get("topology_signature"),
+        }
+
+
+class DOEMSSolarForecastRemainingTodaySensor(DOEMSSolarBaseSensor):
+    """Expose remaining solar production today from the rolling forecast."""
+
+    _attr_name = "DOEMS Solar Forecast Remaining Today"
+    _attr_unique_id = "doems_solar_forecast_remaining_today"
+    _attr_suggested_object_id = "doems_solar_forecast_remaining_today"
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_icon = "mdi:solar-power"
+
+    @property
+    def native_value(self) -> float | None:
+        if self.manager.source_status not in {"ok", "stale"}:
+            return None
+        return self.manager.energy_for_local_date(
+            dt_util.as_local(dt_util.utcnow()).date()
+        )
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "status": self.manager.source_status,
+            "date": dt_util.as_local(dt_util.utcnow()).date().isoformat(),
+            "selection": "remaining_today_from_rolling_forecast",
         }
 
 
