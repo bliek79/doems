@@ -26,3 +26,26 @@ jobs:
           name: h52-timing-diagnostic-${{ github.sha }}
           path: build/h52-safety-timing-diagnostic.json
           if-no-files-found: warn
+
+  full-regression:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install -r requirements-test.txt
+      - run: python -m compileall -q custom_components/doems scripts tests
+      - run: python -m pytest -q --junitxml=build/test-results.xml
+      - name: Enforce reviewed H5.2 source hashes without release
+        run: python scripts/validate_scheduler_release.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: h52-regression-${{ matrix.python-version }}-${{ github.sha }}
+          path: build/test-results.xml
+          if-no-files-found: warn
