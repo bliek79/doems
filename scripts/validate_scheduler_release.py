@@ -5,7 +5,7 @@ import json
 from validate_plan_store_release import PRESERVED_BLOBS as CH7_BLOBS
 from validate_action_bridge_release import ROOT, git_blob_sha
 
-VERSION = "0.3.0-alpha.8.7"
+VERSION = "0.3.0-alpha.8.8"
 BASE_COMMIT = "95cc001d99b5951a02ca199dcbc34f13a7ff17d2"
 WIRING = {"custom_components/doems/__init__.py", "custom_components/doems/sensor.py",
           "custom_components/doems/binary_sensor.py"}
@@ -15,9 +15,9 @@ PRESERVED_BLOBS = {name: digest for name, digest in CH7_BLOBS.items() if name no
 # Prior published Alpha 8.4 hashes remain recorded in docs/H8_SOURCE_HASH_REVIEW_20261116.md.
 PRESERVED_BLOBS.update({'custom_components/doems/planner_72h.py': '751ae0ac98b454c6f7290700a2d783e571ae7c51', 'custom_components/doems/planner_72h_runtime.py': 'f9a23be93ad239c9a17fb58fd619ca9628688c80', 'custom_components/doems/planner_action_bridge.py': '79cfbc8053710e0108f02407811fcea083f39df1', 'custom_components/doems/plan_store_writer.py': '44b6cda5e07f04957f4958d3ef08df92ec29e037'})
 
-PRESERVED_BLOBS["custom_components/doems/alpha84_planning.py"] = "ef37f2b7381497cb06e494b06de08350ce68e3b0"  # Reviewed 15m contiguous source only; frozen hourly parity retained.
-PRESERVED_BLOBS["custom_components/doems/plan_store.py"] = "b6dfec3b0b5a2070167a7d107acaa6320a76c6a8"
-PRESERVED_BLOBS["custom_components/doems/plan_store_adapter.py"] = "d4b4ae38cd309c5cb8538e89477cfb941da580d7"
+PRESERVED_BLOBS["custom_components/doems/alpha84_planning.py"] = "047cc463506e6b0f2a3019afff3391e511aead74"  # Reviewed 15m contiguous source only; frozen hourly parity retained.
+PRESERVED_BLOBS["custom_components/doems/plan_store.py"] = "6c5b2dcf106270f149c67f533a63bf199d5460a9"
+PRESERVED_BLOBS["custom_components/doems/plan_slot_assignment.py"] = "ca76ff02cca22c29be0d7f6ea490ddb270ad3250"\nPRESERVED_BLOBS["custom_components/doems/plan_store_adapter.py"] = "d4b4ae38cd309c5cb8538e89477cfb941da580d7"
 
 def validate():
     component = ROOT / "custom_components/doems"
