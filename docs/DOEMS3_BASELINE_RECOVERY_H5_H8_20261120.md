@@ -116,3 +116,28 @@ physical window, *while retaining its downstream reserve and completion
 checks*. The independent direct original-hourly strategy oracle and the
 new first-4-quarter 0.150-kWh preservation gate are not relaxed. CI must
 run again; failure remains a release blocker.
+
+
+## 20 November — subsequent parity gate hardening (development only)
+
+The script `scripts/verify_alpha84_repaired_chain.py` previously recorded
+hourly-source differences while unconditionally returning success. This is
+not an acceptable proof of Alpha84 parity.
+
+- Unresolved source mismatches are now grouped by **observed field**, not
+  guessed root cause: safety charging, SOC trajectory, trade allocation, and
+  other energy flows.
+- `diagnostic.source_strategy_parity_verified` is false whenever any
+  hourly-source difference remains; `comparison_contract.accepted` remains
+  false even if this source equality passes (physical, Store, Scheduler and
+  live acceptance are separate gates).
+- `--require-source-parity` makes the diagnostic return nonzero for ANY
+  remaining hourly-source mismatches. The default remains diagnostic-only,
+  since some quarter-versus-hour timing differences may be valid and must
+  first be explained on evidence rather than artificially eliminated.
+- Regressions assert classification completeness and reject an automatic
+  acceptance claim for the known unresolved safety-valley case.
+
+This is **diagnostic and test enforcement**, not a repair of the remaining
+strategic differences. Tests on the latest commits have not yet been verified
+by CI. Do not merge or release based on this checkpoint.
