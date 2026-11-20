@@ -1,0 +1,55 @@
+name: DOEMS 3.0 H5.1 Alpha84 safety parity release
+on:
+  push:
+    branches:
+      - doems3-publish-alpha-8-9-h51
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install -r requirements-test.txt
+      - run: python -m compileall -q custom_components/doems scripts tests
+      - run: python -m pytest -q --junitxml=build/test-results.xml
+      - run: python scripts/validate_scheduler_release.py
+      - name: Require frozen Alpha84 H5.1 parity and quarter window strategy
+        run: python -m pytest -q tests/test_h51_release_parity.py tests/test_alpha84_contiguous_quarter_selection.py tests/test_alpha84_safety_strategy.py
+      - name: Package exact tested source, checksum and provenance
+        if: matrix.python-version == '3.13'
+        run: python scripts/build_scheduler_release.py
+      - uses: actions/upload-artifact@v4
+        if: matrix.python-version == '3.13'
+        with:
+          name: h51-package-${{ github.sha }}
+          path: build/
+          if-no-files-found: error
+  publish:
+    if: github.ref == 'refs/heads/doems3-publish-alpha-8-9-h51'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/download-artifact@v4
+        with:
+          name: h51-package-${{ github.sha }}
+          path: build/
+      - name: Publish immutable alpha.8.9 prerelease only after full CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/publish_h51_release.py

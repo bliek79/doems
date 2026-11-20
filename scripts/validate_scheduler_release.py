@@ -5,7 +5,7 @@ import json
 from validate_plan_store_release import PRESERVED_BLOBS as CH7_BLOBS
 from validate_action_bridge_release import ROOT, git_blob_sha
 
-VERSION = "0.3.0-alpha.8.8"
+VERSION = "0.3.0-alpha.8.9"
 BASE_COMMIT = "95cc001d99b5951a02ca199dcbc34f13a7ff17d2"
 WIRING = {"custom_components/doems/__init__.py", "custom_components/doems/sensor.py",
           "custom_components/doems/binary_sensor.py"}
@@ -19,7 +19,7 @@ PRESERVED_BLOBS.update({'custom_components/doems/planner_72h.py': '751ae0ac98b45
 # Keep every other inherited protected source hash unchanged.
 PRESERVED_BLOBS["custom_components/doems/solar_sensor.py"] = "4c2ec74d780d36db7fa5f38327d0582a4e7d2f59"
 
-PRESERVED_BLOBS["custom_components/doems/alpha84_planning.py"] = "ef37f2b7381497cb06e494b06de08350ce68e3b0"  # Reviewed 15m contiguous source only; frozen hourly parity retained.
+PRESERVED_BLOBS["custom_components/doems/alpha84_planning.py"] = "5ee36b57eba81bfcb62d41e49ae493163ec80ccc"  # Reviewed 15m contiguous source only; frozen hourly parity retained.
 PRESERVED_BLOBS["custom_components/doems/plan_store.py"] = "b6dfec3b0b5a2070167a7d107acaa6320a76c6a8"
 PRESERVED_BLOBS["custom_components/doems/plan_store_adapter.py"] = "d4b4ae38cd309c5cb8538e89477cfb941da580d7"
 
