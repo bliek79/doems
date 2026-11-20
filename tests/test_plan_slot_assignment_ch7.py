@@ -64,12 +64,48 @@ def test_invalid_bridge_fails_closed():
     assert module.slot_assignment(store, b, now=NOW)["desired"] == {}
 
 
-def test_manual_terminal_not_automatically_reused():
+def test_manual_terminal_is_released_like_the_original_alpha84_store():
+    # The upstream Alpha84 Plan Store returns terminal=True for cancelled,
+    # completed or failed manual plans, even when 'laden' remains in action.
+    # An actionable manual concept stays reserved.
     store = Store({1: plan(action="laden", lifecycle="voltooid"),
                    2: plan(action="geladen", lifecycle="concept"),
                    3: plan()})
-    result = module.slot_assignment(store, bridge("a"), now=NOW)
-    assert list(result["desired"]) == [3]
+    result = module.slot_assignment(store, bridge("a", "b"), now=NOW)
+    assert set(result["desired"]) == {1, 3}
+    assert result["desired"][1]["planner_identity"] == "a"
+    assert result["desired"][3]["planner_identity"] == "b"
+    assert 2 not in result["desired"]
+
+
+def test_cancelled_empty_manual_slots_do_not_permanently_reduce_three_slot_capacity():
+    # Mirrors the actual HA snapshot: a pending automatic slot and two
+    # cancelled empty manual slots with 12 eligible forecast actions.
+    store = Store({
+        1: plan(origin="automatic_72h_planner", action="laden",
+                lifecycle="pending", identity="a"),
+        2: plan(action="geen", lifecycle="geannuleerd"),
+        3: plan(action="geen", lifecycle="geannuleerd"),
+    })
+    names = tuple(chr(ord('a') + i) for i in range(12))
+    result = module.slot_assignment(store, bridge(*names), now=NOW)
+    assert result["valid"]
+    assert {i: item["planner_identity"] for i, item in result["desired"].items()} == {
+        1: "a", 2: "b", 3: "c"}
+    assert len([item for item in result["unassigned"]
+                if item["reason"] == "no_free_slot"]) == 9
+
+
+def test_cancelled_manual_with_action_is_terminal_but_pending_and_active_remain_protected():
+    store = Store({
+        1: plan(action="laden", lifecycle="geannuleerd"),
+        2: plan(action="ontladen", lifecycle="pending"),
+        3: plan(action="laden", lifecycle="actief"),
+    })
+    result = module.slot_assignment(store, bridge("a", "b", "c"), now=NOW)
+    assert list(result["desired"]) == [1]
+    assert result["desired"][1]["planner_identity"] == "a"
+    assert len([x for x in result["unassigned"] if x["reason"] == "no_free_slot"]) == 2
 
 
 def test_new_earlier_candidate_cannot_steal_surviving_identity_slot():
