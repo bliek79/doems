@@ -44,12 +44,21 @@ def slot_assignment(store, bridge, *, now):
     if not bridge.get("source_input_fingerprint") or bridge.get("source_plan_generation") is None:
         return {"valid": False, "reason": "missing_source_identity", "desired": {}, "unassigned": []}
     existing = {i: store.get_plan(i) for i in range(1, 4)}
-    available = [i for i in range(1, 4) if _can_revise(existing[i], now)
-                 or existing[i].get("action") in (None, "geen")
-                 and existing[i].get("lifecycle_status") not in {"actief", "pending"}]
-    available = [i for i in available if existing[i].get("origin") == "automatic_72h_planner"
-                 or existing[i].get("origin") == "manual" and existing[i].get("action") in (None, "geen")
-                 and existing[i].get("lifecycle_status") == "concept"]
+    # Alpha84 (original plan_store.py: terminal) releases both empty manual
+    # slots and cancelled/completed/failed manual plans. Pending and active
+    # manual actions remain protected. This must match the persistent Store's
+    # reusable decision exactly or the preview silently overflows 2/3 slots.
+    def manual_reusable(plan):
+        if plan.get("origin") != "manual":
+            return False
+        state = str(plan.get("lifecycle_status") or "").lower()
+        if state in {"actief", "pending"}:
+            return False
+        return (plan.get("action") in (None, "geen")
+                or state in {"geannuleerd", "voltooid", "fout"})
+
+    available = [i for i in range(1, 4)
+                 if _can_revise(existing[i], now) or manual_reusable(existing[i])]
     candidates = bridge.get("eligible_candidates") or []
     desired, unassigned, used = {}, [], set()
     protected = {p.get("planner_identity") for i, p in existing.items()

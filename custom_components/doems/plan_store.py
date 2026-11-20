@@ -356,8 +356,14 @@ class AnkerEmsPlanStore:
             current_origin = str(current.get("origin") or "manual")
             current_lifecycle = str(current.get("lifecycle_status") or "").lower()
             reusable = (
-                (current_origin == "manual" and current.get("action") in (None, "geen")
-                 and current_lifecycle == "concept")
+                # Alpha84 treats an empty or terminal manual plan as
+                # reusable, even when a cancelled manual charge retains its
+                # last action. Protect user-owned concept, pending and active
+                # *actionable* plans, never a terminal slot forever.
+                (current_origin == "manual"
+                 and current_lifecycle not in {"pending", "actief"}
+                 and (current.get("action") in (None, "geen")
+                      or current_lifecycle in {"geannuleerd", "voltooid", "fout"}))
                 or
                 (current_origin == "automatic_72h_planner" and current_lifecycle == "concept")
                 or pending_revisable(current)

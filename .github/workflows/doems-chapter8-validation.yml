@@ -9,6 +9,7 @@ on:
       - doems3-ch8-full-chain-window-grouping
       - doems3-alpha84-planner-parity
       - doems3-h8-contiguous-quarter-allocation
+      - doems3-h5-h8-anker84-baseline-correction
       - doems3-alpha84-planner-parity-recovery-20261116
   workflow_dispatch:
 
@@ -21,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12", "3.13"]
+        python-version: ["3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -63,6 +64,33 @@ jobs:
         with:
           name: alpha84-contiguous-evidence-${{ matrix.python-version }}-${{ github.sha }}
           path: build/alpha84-active-fullchain.json
+          if-no-files-found: warn
+      - name: Produce Alpha84 baseline recovery differential evidence (diagnostic only)
+        if: github.ref_name == 'doems3-h5-h8-anker84-baseline-correction'
+        run: |
+          python scripts/verify_alpha84_repaired_chain.py --output build/alpha84-h5-h8-recovery.json
+          python - <<'PY'
+          import json
+          cases = json.load(open('build/alpha84-h5-h8-recovery.json'))['cases']
+          for name, case in cases.items():
+              diagnostic = case['diagnostic']
+              grouped = diagnostic['hourly_source_differences_by_field_group']
+              print('CASE', name, 'source-vs-hour', diagnostic['hourly_source_difference_count'],
+                    'source-vs-physical', diagnostic['source_native_difference_count'])
+              for category, entries in grouped.items():
+                  print('CATEGORY', category, 'count', len(entries))
+                  for entry in entries[:12]:
+                      print('DIFF', name, category, json.dumps(entry, sort_keys=True))
+              print('TOTALS', name, 'original', json.dumps(case['alpha84']['totals'], sort_keys=True),
+                    'quarter', json.dumps(case['source_quarter']['totals'], sort_keys=True))
+          assert set(cases) == {'passive_control', 'safety_valley', 'repeated_trade_opportunities'}
+          PY
+      - name: Preserve Alpha84 H5-H8 complete diagnostic artifact
+        if: always() && github.ref_name == 'doems3-h5-h8-anker84-baseline-correction'
+        uses: actions/upload-artifact@v4
+        with:
+          name: alpha84-h5-h8-recovery-${{ matrix.python-version }}-${{ github.sha }}
+          path: build/alpha84-h5-h8-recovery.json
           if-no-files-found: warn
       - name: Package exact tested source without publication
         if: matrix.python-version == '3.13'

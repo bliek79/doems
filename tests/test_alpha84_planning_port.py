@@ -133,3 +133,82 @@ def test_price_change_within_trade_hour_stops_before_more_expensive_quarter():
     assert plan['auto_plan_72h_grid_trade_charge_kwh'] == 1.6
     assert [i for i, r in enumerate(plan['auto_plan_72h_plan'])
             if r['charge_from_grid_trade_kwh'] > 0] == [0, 1]
+
+
+def test_quarter_source_does_not_lose_household_energy_by_early_rounding():
+    # Four unchanged 0.0375-kWh quarters are one real 0.15-kWh hour.
+    # The previous 3-digit *per-quarter* export reported 4*0.037
+    # = 0.148 kWh, losing 0.002 kWh each hour before Bridge processing.
+    rows = quarter_forecast(home=0.0375)
+    _, _, plan = quarter_chain(rows)
+    first = plan['auto_plan_72h_plan'][:4]
+    assert abs(sum(row['home_consumption_kwh'] for row in first) - .15) < 1e-9
+    assert abs(sum(row['discharge_to_home_kwh'] for row in first) - .15) < 1e-9
+    assert all(row['home_consumption_kwh'] == .0375 for row in first)
+    assert len(plan['auto_plan_72h_plan']) == 288
+
+
+def test_original_60_minute_source_remains_exact_after_quarter_precision_repair():
+    rows, soc = oracle.scenarios()['safety_valley']
+    assert run_chain(rows, soc) == run_chain(rows, soc, upstream=True)
+
+
+def test_quarter_safety_preview_preserves_energy_before_72h_source_handoff():
+    # Safety decisions originate in the Alpha84 preview. Rounding each
+    # candidate to 0.001 kWh *before* source replay silently changes charge
+    # energy and can shift later SOC/deadline decisions.
+    rows = quarter_forecast(home=.0375)
+    _, preview, _ = quarter_chain(rows)
+    selected = preview['planner_preview_safety_charge_hours']
+    assert selected, 'fixture must exercise the safety path'
+    candidate_total = sum(item['candidate_battery_energy_kwh'] for item in selected)
+    assert abs(candidate_total - preview['planner_preview_safety_charge_kwh']) < .0002
+    # At 15-minute resolution a source candidate must retain sub-Wh precision
+    # where the original allocation requires it; 60-minute parity remains
+    # checked independently against frozen original Alpha84 bytes.
+    assert any(abs(item['candidate_battery_energy_kwh']
+                   - round(item['candidate_battery_energy_kwh'], 3)) > 1e-8
+               for item in selected)
+
+
+def test_h5_1_hour_equivalent_safety_allocation_matches_frozen_alpha84():
+    """Compare all 72 decision hours with the byte-verified original policy.
+
+    Source quarter energies/solar and prices are exact expansions of original
+    hours. This checks the decision itself, not merely totals or a slot preview.
+    """
+    from datetime import datetime, timedelta
+    rows, soc = oracle.scenarios()['safety_valley']
+    original = run_chain(rows, soc, upstream=True)[1]
+    quarters = []
+    for hour in rows:
+        for part in range(4):
+            quarter = dict(hour)
+            quarter['time'] = (datetime.fromisoformat(hour['time']) +
+                               timedelta(minutes=15 * part)).isoformat()
+            quarter['home_consumption_kwh'] = hour['home_consumption_kwh'] / 4
+            quarter['solar_kwh'] = hour['solar_kwh'] / 4
+            quarters.append(quarter)
+    kwargs = dict(now=oracle.NOW, interval_minutes=15,
+                  capacity_kwh=7.2, min_soc_percent=5)
+    need = port.build_energy_need_analysis(quarters, soc, 5, **kwargs)
+    preview = port.build_planner_preview(quarters, need, soc, 92, 92, .1,
+                                        3200, 3200, **kwargs)
+    native_by_hour = {}
+    for quarter in preview['planner_preview_safety_charge_hours']:
+        hour = datetime.fromisoformat(quarter['time']).replace(minute=0)
+        native_by_hour[hour] = (native_by_hour.get(hour, 0.0) +
+                                quarter['candidate_battery_energy_kwh'])
+    original_by_hour = {
+        datetime.fromisoformat(hour['time']):
+        hour['candidate_battery_energy_kwh']
+        for hour in original['planner_preview_safety_charge_hours']
+    }
+    assert native_by_hour.keys() == original_by_hour.keys()
+    for hour, expected in original_by_hour.items():
+        assert abs(native_by_hour[hour] - expected) <= 0.000002, (
+            hour, native_by_hour[hour], expected
+        )
+    assert preview['planner_preview_safety_charge_needed'] == (
+        original['planner_preview_safety_charge_needed']
+    )

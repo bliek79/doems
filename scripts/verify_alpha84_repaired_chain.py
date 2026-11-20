@@ -34,6 +34,33 @@ FLOWS = ('charge_from_solar_kwh', 'charge_from_grid_safety_kwh',
          'solar_export_kwh')
 
 
+def classify_source_differences(differences):
+    """Group observed differences by FIELD, not by assumed cause.
+
+    A matching field does not establish strategic parity. In particular, SOC
+    drift and charge timing may be either legitimate quarter resolution or an
+    incorrect safety allocation; both require explicit review.
+    """
+    grouped = {
+        'safety_allocation_review': [],
+        'soc_trajectory_review': [],
+        'trade_allocation_review': [],
+        'other_flow_review': [],
+    }
+    for item in differences:
+        field = item['field']
+        if field == 'soc_end':
+            category = 'soc_trajectory_review'
+        elif field == 'charge_from_grid_safety_kwh':
+            category = 'safety_allocation_review'
+        elif field in ('charge_from_grid_trade_kwh', 'discharge_to_grid_kwh'):
+            category = 'trade_allocation_review'
+        else:
+            category = 'other_flow_review'
+        grouped[category].append(item)
+    return grouped
+
+
 def summarize(rows):
     return {key: round(sum(row.get(key, 0) for row in rows), 6) for key in FLOWS}
 
@@ -99,6 +126,7 @@ def compare_case(original_rows, soc):
             if abs(physical-source)>tol:
                 source_native_differences.append(dict(hour=hour,field=key,
                     source=source,plan72=physical,precision_tolerance=tol))
+    grouped_source_differences = classify_source_differences(hourly_differences)
     safety_source=sum(x['charge_from_grid_safety_kwh'] for x in source_rows)
     trading_source=[sum(x[f] for x in source_rows) for f in (
         'charge_from_grid_trade_kwh','discharge_to_grid_kwh')]
@@ -120,6 +148,8 @@ def compare_case(original_rows, soc):
         diagnostic=dict(hourly_source_differences=hourly_differences,
              source_vs_physical_differences=source_native_differences,
              hourly_source_difference_count=len(hourly_differences),
+             hourly_source_differences_by_field_group=grouped_source_differences,
+             source_strategy_parity_verified=not hourly_differences,
              source_native_difference_count=len(source_native_differences),
              candidate_counts=dict(alpha84=original_bridge['auto_bridge_candidate_count'],
                  source=strategy['action_bridge']['auto_bridge_candidate_count'],
@@ -135,6 +165,8 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--case',choices=list(scenarios()),action='append')
+    parser.add_argument('--require-source-parity', action='store_true',
+        help='Fail rather than accept any unexplained hourly-vs-quarter source mismatch')
     args=parser.parse_args()
     cases={}
     for name,(rows,soc) in scenarios().items():
@@ -148,6 +180,9 @@ def main():
     args.output.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text(json.dumps(dict(status='DIAGNOSTIC_ONLY_NOT_ACCEPTED',
         cases=cases),ensure_ascii=False,indent=2,default=str)+'\n')
+    if args.require_source_parity and any(
+            case['diagnostic']['hourly_source_differences'] for case in cases.values()):
+        return 1
     return 0
 
 

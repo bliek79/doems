@@ -288,6 +288,55 @@ def build_planner_preview(
         )
     price_rows.sort(key=lambda item: item["time"])
 
+    # When every quarter is an exact expansion of hourly source data,
+    # calculate safety allocation with the frozen Alpha84 hourly strategy.
+    # This is a lossless resolution adapter, not a new allocation policy:
+    # genuinely different intrahour prices, household load, solar or protected
+    # commitments continue through the native quarter-price allocator below.
+    alpha84_hourly_safety: dict[str, float] | None = None
+    if (interval_minutes == 15 and now_utc == current_hour
+            and not protected_intervals and len(price_rows) == 288):
+        # Later price changes after the last forecast energy activity cannot
+        # alter an already-required safety charge. Keep this causal boundary
+        # independent of unrelated future tariff updates.
+        active_hours = [i // 4 for i, row in enumerate(price_rows)
+                        if (row["home_consumption_kwh"] or 0.0) > 0
+                        or (row["solar_kwh"] or 0.0) > 0]
+        last_active_hour = max(active_hours, default=-1)
+        hourly_source = []
+        for index in range(0, len(price_rows), 4):
+            group = price_rows[index:index + 4]
+            first = group[0]
+            if (first["time"].minute != 0 or len(group) != 4
+                    or any(row["time"] != first["time"] + timedelta(minutes=15 * offset)
+                           or (index // 4 <= last_active_hour
+                               and row["import_price"] != first["import_price"])
+                           or row["home_consumption_kwh"] != first["home_consumption_kwh"]
+                           or row["solar_kwh"] != first["solar_kwh"]
+                           for offset, row in enumerate(group))):
+                break
+            hourly_source.append(dict(
+                time=first["time"].isoformat(),
+                home_consumption_kwh=sum(row["home_consumption_kwh"] or 0.0 for row in group),
+                solar_kwh=sum(row["solar_kwh"] or 0.0 for row in group),
+                import_price=first["import_price"],
+                export_price=first["export_price"],
+                price_source=first["price_source"],
+            ))
+        if len(hourly_source) == 72:
+            hourly_reference = build_planner_preview(
+                hourly_source, energy_need, soc, charge_efficiency_percent,
+                discharge_efficiency_percent, minimum_trade_margin,
+                max_charge_power_w, max_discharge_power_w, now=now_utc,
+                capacity_kwh=capacity_kwh, min_soc_percent=min_soc_percent,
+                interval_minutes=60,
+            )
+            if hourly_reference["planner_preview_status"] == "ready":
+                alpha84_hourly_safety = {
+                    row["time"]: float(row["candidate_battery_energy_kwh"])
+                    for row in hourly_reference["planner_preview_safety_charge_hours"]
+                }
+
     # When the four 15-minute import prices within every hour are identical,
     # preserve Alpha84's exact hourly safety-energy allocation and its frozen
     # numeric oracle. Only a genuinely quarter-varying price series needs the
@@ -436,14 +485,23 @@ def build_planner_preview(
         return trace
 
     safety_schedule: dict[str, float] = {}
-    initial_trace = _simulate_safety(safety_schedule)
+    if alpha84_hourly_safety is not None:
+        # Four consecutive quarters carry one original hour's stored-energy
+        # request; the native replay still owns its real intrahour SOC trace.
+        # Avoid running an independent quarter-level cheap-tick optimiser on
+        # the exact same input, which changed the Alpha84 hourly decisions.
+        for first, stored in alpha84_hourly_safety.items():
+            hour = _parse_time(first)
+            for quarter in range(4):
+                safety_schedule[(hour + timedelta(minutes=15 * quarter)).isoformat()] = stored / 4
+    initial_trace = _simulate_safety({})
     initial_breach_count = sum(
         1
         for item in initial_trace
         if item["stored_end_kwh"] < reserve_target_stored_kwh - interval_epsilon
     )
 
-    max_iterations = max(1, len(price_rows) * 4)
+    max_iterations = (0 if alpha84_hourly_safety is not None else max(1, len(price_rows) * 4))
     for _ in range(max_iterations):
         trace = _simulate_safety(safety_schedule)
         breach_index = next(
@@ -598,6 +656,9 @@ def build_planner_preview(
         for item in final_trace
         if item["stored_end_kwh"] < reserve_target_stored_kwh - interval_epsilon
     ]
+    # Preserve exact native-quarter energy across Preview -> Plan72. Alpha84
+    # hourly output remains three decimals and is byte-for-byte unchanged.
+    preview_energy_digits = 6 if interval_minutes == 15 else 3
     selected_hours: list[dict[str, Any]] = []
     for item in final_trace:
         stored = item["actual_safety_stored_kwh"]
@@ -611,9 +672,9 @@ def build_planner_preview(
                 "export_price": item["export_price"],
                 "price_source": item["price_source"],
                 "max_battery_energy_kwh": round(
-                    item["maximum_safety_stored_kwh"], 3
+                    item["maximum_safety_stored_kwh"], preview_energy_digits
                 ),
-                "candidate_battery_energy_kwh": round(stored, 3),
+                "candidate_battery_energy_kwh": round(stored, preview_energy_digits),
                 "effective_delivered_cost": round(
                     item["import_price"] / roundtrip_eff, 6
                 ),
@@ -780,7 +841,7 @@ def build_planner_preview(
             round(tradable_kwh, 3) if tradable_kwh is not None else None
         ),
         "planner_preview_safety_charge_needed": safety_charge_needed,
-        "planner_preview_safety_charge_kwh": round(selected_safety_stored_kwh, 3),
+        "planner_preview_safety_charge_kwh": round(selected_safety_stored_kwh, preview_energy_digits),
         "planner_preview_safety_charge_hours": selected_hours,
         "planner_preview_safety_charge_hour_count": len(selected_hours),
         "planner_preview_safety_schedule_sufficient": safety_schedule_sufficient,
@@ -1434,6 +1495,7 @@ def build_72h_plan_preview(
         total_grid_import_for_home += grid_home
         total_solar_export += solar_export
 
+        energy_digits = 6 if interval_minutes == 15 else 3
         plan.append(
             {
                 "time": hour.isoformat(),
@@ -1443,17 +1505,17 @@ def build_72h_plan_preview(
                 "price_source": row["price_source"],
                 "import_price_source": row["import_price_source"],
                 "export_price_source": row["export_price_source"],
-                "solar_kwh": round(solar, 3),
-                "home_consumption_kwh": round(home, 3),
-                "solar_to_home_kwh": round(solar_to_home, 3),
-                "charge_from_solar_kwh": round(solar_charge_input, 3),
-                "charge_from_grid_safety_kwh": round(grid_safety_input, 3),
-                "charge_from_grid_trade_kwh": round(grid_trade_input, 3),
-                "charge_from_grid_kwh": round(grid_safety_input + grid_trade_input, 3),
-                "discharge_to_home_kwh": round(discharge_to_home, 3),
-                "discharge_to_grid_kwh": round(discharge_to_grid, 3),
-                "grid_import_for_home_kwh": round(grid_home, 3),
-                "solar_export_kwh": round(solar_export, 3),
+                "solar_kwh": round(solar, energy_digits),
+                "home_consumption_kwh": round(home, energy_digits),
+                "solar_to_home_kwh": round(solar_to_home, energy_digits),
+                "charge_from_solar_kwh": round(solar_charge_input, energy_digits),
+                "charge_from_grid_safety_kwh": round(grid_safety_input, energy_digits),
+                "charge_from_grid_trade_kwh": round(grid_trade_input, energy_digits),
+                "charge_from_grid_kwh": round(grid_safety_input + grid_trade_input, energy_digits),
+                "discharge_to_home_kwh": round(discharge_to_home, energy_digits),
+                "discharge_to_grid_kwh": round(discharge_to_grid, energy_digits),
+                "grid_import_for_home_kwh": round(grid_home, energy_digits),
+                "solar_export_kwh": round(solar_export, energy_digits),
                 "soc_start": round(float(soc_start), 1),
                 "soc_end": round(soc_end, 1),
                 "reserve_floor_soc": round(reserve_floor_end_soc, 1),
@@ -1462,15 +1524,15 @@ def build_72h_plan_preview(
                 "execution_reserve_floor_start_soc": round(execution_floor_start_soc, 1),
                 "execution_buffer_percent": round(execution_buffer_percent, 1),
                 "execution_headroom_soc": round(execution_headroom_soc, 1),
-                "dynamic_need_until_solar_kwh": round(reserve_need_start_kwh, 3),
-                "dynamic_need_after_hour_kwh": round(reserve_need_end_kwh, 3),
+                "dynamic_need_until_solar_kwh": round(reserve_need_start_kwh, energy_digits),
+                "dynamic_need_after_hour_kwh": round(reserve_need_end_kwh, energy_digits),
                 "next_usable_solar": (
                     next_usable_solar.isoformat()
                     if next_usable_solar is not None
                     else None
                 ),
                 "solar_horizon_complete": next_usable_solar is not None,
-                "trade_reserved_kwh": round(trade_energy_reserved_kwh, 3),
+                "trade_reserved_kwh": round(trade_energy_reserved_kwh, energy_digits),
                 "action": "+".join(action_parts),
                 "observational_only": True,
             }
