@@ -159,3 +159,25 @@ causal classification are reviewed, the strategy parity acceptance gate
 remains open. Foundation CI on the current branch was observed passing;
 full regression CI and the new differential report must be checked at the
 final tested commit before sign-off.
+
+
+## H5 Alpha84 Preview -> Plan72 native-quarter energy handoff (20 November)
+
+During direct source inspection a SECOND premature round-to-0.001-kWh
+handoff was found: `alpha84_planning.build_planner_preview` serialized each
+15-minute `planner_preview_safety_charge_hours[].candidate_battery_energy_kwh`
+at three decimals. `build_72h_plan_preview` consumes that rounded field,
+so retaining six decimals only in its *final* timeline does not prevent the
+original preview allocation from being altered before physical replay.
+
+The development branch now retains six decimal places for native 15-minute
+safety candidate and headroom energies and for the corresponding preview total.
+The existing **60-minute** representation continues to use three decimals,
+and its immutable upstream Alpha84 oracle test must remain byte-equal.
+A focused preview regression exercises 288 quarter slots and guards this
+source-to-source handoff. GitHub CI must pass on the exact updated head
+before declaring this correction verified.
+
+This removes a demonstrable source precision loss; it does NOT prove
+the residual hourly-vs-quarter safety timing/SOC mismatches are strategy bugs,
+nor does it authorize physical battery execution or a release.
