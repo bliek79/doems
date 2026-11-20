@@ -598,7 +598,7 @@ def build_planner_preview(
         for item in final_trace
         if item["stored_end_kwh"] < reserve_target_stored_kwh - interval_epsilon
     ]
-    selected_hours: list[dict[str, Any]] = []
+    # Preserve exact native-quarter energy across Preview -> Plan72. Alpha84\n    # hourly output remains three decimals and is byte-for-byte unchanged.\n    preview_energy_digits = 6 if interval_minutes == 15 else 3\n    selected_hours: list[dict[str, Any]] = []
     for item in final_trace:
         stored = item["actual_safety_stored_kwh"]
         if stored <= interval_epsilon:
@@ -611,9 +611,9 @@ def build_planner_preview(
                 "export_price": item["export_price"],
                 "price_source": item["price_source"],
                 "max_battery_energy_kwh": round(
-                    item["maximum_safety_stored_kwh"], 3
+                    item["maximum_safety_stored_kwh"], preview_energy_digits
                 ),
-                "candidate_battery_energy_kwh": round(stored, 3),
+                "candidate_battery_energy_kwh": round(stored, preview_energy_digits),
                 "effective_delivered_cost": round(
                     item["import_price"] / roundtrip_eff, 6
                 ),
@@ -780,7 +780,7 @@ def build_planner_preview(
             round(tradable_kwh, 3) if tradable_kwh is not None else None
         ),
         "planner_preview_safety_charge_needed": safety_charge_needed,
-        "planner_preview_safety_charge_kwh": round(selected_safety_stored_kwh, 3),
+        "planner_preview_safety_charge_kwh": round(selected_safety_stored_kwh, preview_energy_digits),
         "planner_preview_safety_charge_hours": selected_hours,
         "planner_preview_safety_charge_hour_count": len(selected_hours),
         "planner_preview_safety_schedule_sufficient": safety_schedule_sufficient,
