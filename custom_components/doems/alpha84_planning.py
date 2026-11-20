@@ -296,13 +296,21 @@ def build_planner_preview(
     alpha84_hourly_safety: dict[str, float] | None = None
     if (interval_minutes == 15 and now_utc == current_hour
             and not protected_intervals and len(price_rows) == 288):
+        # Later price changes after the last forecast energy activity cannot
+        # alter an already-required safety charge. Keep this causal boundary
+        # independent of unrelated future tariff updates.
+        active_hours = [i // 4 for i, row in enumerate(price_rows)
+                        if (row["home_consumption_kwh"] or 0.0) > 0
+                        or (row["solar_kwh"] or 0.0) > 0]
+        last_active_hour = max(active_hours, default=-1)
         hourly_source = []
         for index in range(0, len(price_rows), 4):
             group = price_rows[index:index + 4]
             first = group[0]
             if (first["time"].minute != 0 or len(group) != 4
                     or any(row["time"] != first["time"] + timedelta(minutes=15 * offset)
-                           or row["import_price"] != first["import_price"]
+                           or (index // 4 <= last_active_hour
+                               and row["import_price"] != first["import_price"])
                            or row["home_consumption_kwh"] != first["home_consumption_kwh"]
                            or row["solar_kwh"] != first["solar_kwh"]
                            for offset, row in enumerate(group))):
