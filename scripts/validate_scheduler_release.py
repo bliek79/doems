@@ -5,7 +5,7 @@ import json
 from validate_plan_store_release import PRESERVED_BLOBS as CH7_BLOBS
 from validate_action_bridge_release import ROOT, git_blob_sha
 
-VERSION = "0.3.0-alpha.8.9"
+VERSION = "0.3.0-alpha.8.10"
 BASE_COMMIT = "95cc001d99b5951a02ca199dcbc34f13a7ff17d2"
 WIRING = {"custom_components/doems/__init__.py", "custom_components/doems/sensor.py",
           "custom_components/doems/binary_sensor.py"}
