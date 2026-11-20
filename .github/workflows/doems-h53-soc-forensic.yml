@@ -22,3 +22,28 @@ jobs:
           name: h53-original-vs-native-soc-${{ github.sha }}
           path: build/h53-source-soc-forensic.json
           if-no-files-found: warn
+
+      - name: Enforce H5.3 causal sub-Wh drift and frozen strategy parity
+        run: python -m pytest -q tests/test_h53_soc_resolution.py tests/test_h52_safety_timing.py tests/test_h51_release_parity.py
+  full-regression:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install -r requirements-test.txt
+      - run: python -m compileall -q custom_components/doems scripts tests
+      - run: python -m pytest -q --junitxml=build/test-results.xml
+      - name: Protect original Alpha84 hourly code and reviewed H5.2 bridge
+        run: python scripts/validate_scheduler_release.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: h53-regressions-${{ matrix.python-version }}-${{ github.sha }}
+          path: build/test-results.xml
+          if-no-files-found: warn
