@@ -1434,6 +1434,7 @@ def build_72h_plan_preview(
         total_grid_import_for_home += grid_home
         total_solar_export += solar_export
 
+        energy_digits = 6 if interval_minutes == 15 else 3
         plan.append(
             {
                 "time": hour.isoformat(),
@@ -1443,17 +1444,17 @@ def build_72h_plan_preview(
                 "price_source": row["price_source"],
                 "import_price_source": row["import_price_source"],
                 "export_price_source": row["export_price_source"],
-                "solar_kwh": round(solar, 3),
-                "home_consumption_kwh": round(home, 3),
-                "solar_to_home_kwh": round(solar_to_home, 3),
-                "charge_from_solar_kwh": round(solar_charge_input, 3),
-                "charge_from_grid_safety_kwh": round(grid_safety_input, 3),
-                "charge_from_grid_trade_kwh": round(grid_trade_input, 3),
-                "charge_from_grid_kwh": round(grid_safety_input + grid_trade_input, 3),
-                "discharge_to_home_kwh": round(discharge_to_home, 3),
-                "discharge_to_grid_kwh": round(discharge_to_grid, 3),
-                "grid_import_for_home_kwh": round(grid_home, 3),
-                "solar_export_kwh": round(solar_export, 3),
+                "solar_kwh": round(solar, energy_digits),
+                "home_consumption_kwh": round(home, energy_digits),
+                "solar_to_home_kwh": round(solar_to_home, energy_digits),
+                "charge_from_solar_kwh": round(solar_charge_input, energy_digits),
+                "charge_from_grid_safety_kwh": round(grid_safety_input, energy_digits),
+                "charge_from_grid_trade_kwh": round(grid_trade_input, energy_digits),
+                "charge_from_grid_kwh": round(grid_safety_input + grid_trade_input, energy_digits),
+                "discharge_to_home_kwh": round(discharge_to_home, energy_digits),
+                "discharge_to_grid_kwh": round(discharge_to_grid, energy_digits),
+                "grid_import_for_home_kwh": round(grid_home, energy_digits),
+                "solar_export_kwh": round(solar_export, energy_digits),
                 "soc_start": round(float(soc_start), 1),
                 "soc_end": round(soc_end, 1),
                 "reserve_floor_soc": round(reserve_floor_end_soc, 1),
@@ -1462,15 +1463,15 @@ def build_72h_plan_preview(
                 "execution_reserve_floor_start_soc": round(execution_floor_start_soc, 1),
                 "execution_buffer_percent": round(execution_buffer_percent, 1),
                 "execution_headroom_soc": round(execution_headroom_soc, 1),
-                "dynamic_need_until_solar_kwh": round(reserve_need_start_kwh, 3),
-                "dynamic_need_after_hour_kwh": round(reserve_need_end_kwh, 3),
+                "dynamic_need_until_solar_kwh": round(reserve_need_start_kwh, energy_digits),
+                "dynamic_need_after_hour_kwh": round(reserve_need_end_kwh, energy_digits),
                 "next_usable_solar": (
                     next_usable_solar.isoformat()
                     if next_usable_solar is not None
                     else None
                 ),
                 "solar_horizon_complete": next_usable_solar is not None,
-                "trade_reserved_kwh": round(trade_energy_reserved_kwh, 3),
+                "trade_reserved_kwh": round(trade_energy_reserved_kwh, energy_digits),
                 "action": "+".join(action_parts),
                 "observational_only": True,
             }
