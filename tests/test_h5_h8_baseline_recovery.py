@@ -56,3 +56,34 @@ def test_live_worker_routes_all_288_quarters_through_only_approved_strategy_fact
     assert kwargs["practical_windows"].value is True
     assert isinstance(kwargs["strategy_factory"], ast.Name)
     assert kwargs["strategy_factory"].id == "compute_strategy_bundle"
+
+
+def test_differential_diagnostic_groups_unresolved_causes_without_auto_approval():
+    differences = [
+        {"hour": 1, "field": "charge_from_grid_safety_kwh"},
+        {"hour": 2, "field": "soc_end"},
+        {"hour": 3, "field": "charge_from_grid_trade_kwh"},
+        {"hour": 4, "field": "grid_import_for_home_kwh"},
+    ]
+    grouped = _source.classify_source_differences(differences)
+    assert set(grouped) == {
+        "safety_allocation_review", "soc_trajectory_review",
+        "trade_allocation_review", "other_flow_review",
+    }
+    assert sum(map(len, grouped.values())) == len(differences)
+    assert grouped["safety_allocation_review"] == differences[:1]
+    assert grouped["soc_trajectory_review"] == differences[1:2]
+    assert grouped["trade_allocation_review"] == differences[2:3]
+    assert grouped["other_flow_review"] == differences[3:]
+
+
+def test_unresolved_safety_valley_source_comparison_is_not_marked_accepted():
+    hourly, soc = _source.scenarios()["safety_valley"]
+    report = _source.compare_case(hourly, soc)
+    diag = report["diagnostic"]
+    groups = diag["hourly_source_differences_by_field_group"]
+    assert sum(map(len, groups.values())) == diag["hourly_source_difference_count"]
+    assert diag["source_strategy_parity_verified"] is (
+        diag["hourly_source_difference_count"] == 0
+    )
+    assert report["comparison_contract"]["accepted"] is False
