@@ -133,3 +133,21 @@ def test_price_change_within_trade_hour_stops_before_more_expensive_quarter():
     assert plan['auto_plan_72h_grid_trade_charge_kwh'] == 1.6
     assert [i for i, r in enumerate(plan['auto_plan_72h_plan'])
             if r['charge_from_grid_trade_kwh'] > 0] == [0, 1]
+
+
+def test_quarter_source_does_not_lose_household_energy_by_early_rounding():
+    # Four unchanged 0.0375-kWh quarters are one real 0.15-kWh hour.
+    # The previous 3-digit *per-quarter* export reported 4*0.037
+    # = 0.148 kWh, losing 0.002 kWh each hour before Bridge processing.
+    rows = quarter_forecast(home=0.0375)
+    _, _, plan = quarter_chain(rows)
+    first = plan['auto_plan_72h_plan'][:4]
+    assert abs(sum(row['home_consumption_kwh'] for row in first) - .15) < 1e-9
+    assert abs(sum(row['discharge_to_home_kwh'] for row in first) - .15) < 1e-9
+    assert all(row['home_consumption_kwh'] == .0375 for row in first)
+    assert len(plan['auto_plan_72h_plan']) == 288
+
+
+def test_original_60_minute_source_remains_exact_after_quarter_precision_repair():
+    rows, soc = oracle.scenarios()['safety_valley']
+    assert run_chain(rows, soc) == run_chain(rows, soc, upstream=True)
