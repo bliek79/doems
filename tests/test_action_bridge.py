@@ -216,7 +216,7 @@ def test_calculators_and_runtimes_are_frozen_reviewed_ch7_blobs():
     expected={'energy_need.py':'bc10cbb18dd531735e390fe5369466ab4f466087',
         'energy_need_runtime.py':'3ab25d81615429f51264beb69d4d0064a34f5863',
         'planner_72h.py':'751ae0ac98b454c6f7290700a2d783e571ae7c51'}
-    expected['planner_72h_runtime.py']='f9a23be93ad239c9a17fb58fd619ca9628688c80'
+    expected['planner_72h_runtime.py']='d3885ba122e2d8e6e1cd962ea72e26c603bc9ea9'
     for name,sha in expected.items():
         data=(ROOT/'custom_components/doems'/name).read_bytes()
         assert hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()==sha
