@@ -9,6 +9,7 @@ on:
       - doems3-ch8-full-chain-window-grouping
       - doems3-alpha84-planner-parity
       - doems3-h8-contiguous-quarter-allocation
+      - doems3-h5-h8-anker84-baseline-correction
       - doems3-alpha84-planner-parity-recovery-20261116
   workflow_dispatch:
 
