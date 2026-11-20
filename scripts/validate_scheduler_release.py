@@ -17,7 +17,8 @@ PRESERVED_BLOBS.update({'custom_components/doems/planner_72h.py': '751ae0ac98b45
 
 PRESERVED_BLOBS["custom_components/doems/alpha84_planning.py"] = "047cc463506e6b0f2a3019afff3391e511aead74"  # Reviewed 15m contiguous source only; frozen hourly parity retained.
 PRESERVED_BLOBS["custom_components/doems/plan_store.py"] = "6c5b2dcf106270f149c67f533a63bf199d5460a9"
-PRESERVED_BLOBS["custom_components/doems/plan_slot_assignment.py"] = "ca76ff02cca22c29be0d7f6ea490ddb270ad3250"\nPRESERVED_BLOBS["custom_components/doems/plan_store_adapter.py"] = "d4b4ae38cd309c5cb8538e89477cfb941da580d7"
+PRESERVED_BLOBS["custom_components/doems/plan_slot_assignment.py"] = "ca76ff02cca22c29be0d7f6ea490ddb270ad3250"
+PRESERVED_BLOBS["custom_components/doems/plan_store_adapter.py"] = "d4b4ae38cd309c5cb8538e89477cfb941da580d7"
 
 def validate():
     component = ROOT / "custom_components/doems"
