@@ -842,6 +842,12 @@ def build_planner_preview(
         ),
         "planner_preview_safety_charge_needed": safety_charge_needed,
         "planner_preview_safety_charge_kwh": round(selected_safety_stored_kwh, preview_energy_digits),
+        # Provenance only: frozen Alpha84 hourly allocation was used because
+        # the quarter forecast carried no extra causal information.
+        # The original 60-minute output remains byte-for-byte unchanged.
+        **({"planner_preview_alpha84_hour_equivalent_safety": True}
+           if interval_minutes == 15 and alpha84_hourly_safety is not None
+           else {}),
         "planner_preview_safety_charge_hours": selected_hours,
         "planner_preview_safety_charge_hour_count": len(selected_hours),
         "planner_preview_safety_schedule_sufficient": safety_schedule_sufficient,
