@@ -151,3 +151,21 @@ def test_quarter_source_does_not_lose_household_energy_by_early_rounding():
 def test_original_60_minute_source_remains_exact_after_quarter_precision_repair():
     rows, soc = oracle.scenarios()['safety_valley']
     assert run_chain(rows, soc) == run_chain(rows, soc, upstream=True)
+
+
+def test_quarter_safety_preview_preserves_energy_before_72h_source_handoff():
+    # Safety decisions originate in the Alpha84 preview. Rounding each
+    # candidate to 0.001 kWh *before* source replay silently changes charge
+    # energy and can shift later SOC/deadline decisions.
+    rows = quarter_forecast(home=.0375)
+    _, preview, _ = quarter_chain(rows)
+    selected = preview['planner_preview_safety_charge_hours']
+    assert selected, 'fixture must exercise the safety path'
+    candidate_total = sum(item['candidate_battery_energy_kwh'] for item in selected)
+    assert abs(candidate_total - preview['planner_preview_safety_charge_kwh']) < .0002
+    # At 15-minute resolution a source candidate must retain sub-Wh precision
+    # where the original allocation requires it; 60-minute parity remains
+    # checked independently against frozen original Alpha84 bytes.
+    assert any(abs(item['candidate_battery_energy_kwh']
+                   - round(item['candidate_battery_energy_kwh'], 3)) > 1e-8
+               for item in selected)
