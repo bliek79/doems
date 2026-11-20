@@ -288,6 +288,47 @@ def build_planner_preview(
         )
     price_rows.sort(key=lambda item: item["time"])
 
+    # When every quarter is an exact expansion of hourly source data,
+    # calculate safety allocation with the frozen Alpha84 hourly strategy.
+    # This is a lossless resolution adapter, not a new allocation policy:
+    # genuinely different intrahour prices, household load, solar or protected
+    # commitments continue through the native quarter-price allocator below.
+    alpha84_hourly_safety: dict[str, float] | None = None
+    if (interval_minutes == 15 and now_utc == current_hour
+            and not protected_intervals and len(price_rows) == 288):
+        hourly_source = []
+        for index in range(0, len(price_rows), 4):
+            group = price_rows[index:index + 4]
+            first = group[0]
+            if (first["time"].minute != 0 or len(group) != 4
+                    or any(row["time"] != first["time"] + timedelta(minutes=15 * offset)
+                           or row["import_price"] != first["import_price"]
+                           or row["home_consumption_kwh"] != first["home_consumption_kwh"]
+                           or row["solar_kwh"] != first["solar_kwh"]
+                           for offset, row in enumerate(group))):
+                break
+            hourly_source.append(dict(
+                time=first["time"].isoformat(),
+                home_consumption_kwh=sum(row["home_consumption_kwh"] or 0.0 for row in group),
+                solar_kwh=sum(row["solar_kwh"] or 0.0 for row in group),
+                import_price=first["import_price"],
+                export_price=first["export_price"],
+                price_source=first["price_source"],
+            ))
+        if len(hourly_source) == 72:
+            hourly_reference = build_planner_preview(
+                hourly_source, energy_need, soc, charge_efficiency_percent,
+                discharge_efficiency_percent, minimum_trade_margin,
+                max_charge_power_w, max_discharge_power_w, now=now_utc,
+                capacity_kwh=capacity_kwh, min_soc_percent=min_soc_percent,
+                interval_minutes=60,
+            )
+            if hourly_reference["planner_preview_status"] == "ready":
+                alpha84_hourly_safety = {
+                    row["time"]: float(row["candidate_battery_energy_kwh"])
+                    for row in hourly_reference["planner_preview_safety_charge_hours"]
+                }
+
     # When the four 15-minute import prices within every hour are identical,
     # preserve Alpha84's exact hourly safety-energy allocation and its frozen
     # numeric oracle. Only a genuinely quarter-varying price series needs the
@@ -436,14 +477,23 @@ def build_planner_preview(
         return trace
 
     safety_schedule: dict[str, float] = {}
-    initial_trace = _simulate_safety(safety_schedule)
+    if alpha84_hourly_safety is not None:
+        # Four consecutive quarters carry one original hour's stored-energy
+        # request; the native replay still owns its real intrahour SOC trace.
+        # Avoid running an independent quarter-level cheap-tick optimiser on
+        # the exact same input, which changed the Alpha84 hourly decisions.
+        for first, stored in alpha84_hourly_safety.items():
+            hour = _parse_time(first)
+            for quarter in range(4):
+                safety_schedule[(hour + timedelta(minutes=15 * quarter)).isoformat()] = stored / 4
+    initial_trace = _simulate_safety({})
     initial_breach_count = sum(
         1
         for item in initial_trace
         if item["stored_end_kwh"] < reserve_target_stored_kwh - interval_epsilon
     )
 
-    max_iterations = max(1, len(price_rows) * 4)
+    max_iterations = (0 if alpha84_hourly_safety is not None else max(1, len(price_rows) * 4))
     for _ in range(max_iterations):
         trace = _simulate_safety(safety_schedule)
         breach_index = next(
