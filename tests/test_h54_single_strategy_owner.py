@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import importlib.util
+from types import SimpleNamespace
 from pathlib import Path
 
 from test_alpha84_worker_entrypoint_parity import environment, make_inputs
@@ -37,7 +39,11 @@ def test_actual_worker_statically_requires_original_strategy_owner():
     assert "_trade_schedule(" not in runtime
     assert "_safety_windows(" not in runtime
     assert "_trade_windows(" not in runtime
-    assert 'globals().get("compute_strategy_bundle") is not alpha84_owner' in runtime
+    setup = (ROOT / "custom_components/doems/__init__.py").read_text()
+    assert "original_alpha84_owner_present(" in setup
+    assert "entry.options.get(CONF_PLAN72_ENABLED, False)" in setup
+    assert setup.index("not original_alpha84_owner_present(") < setup.index(
+        "await _async_remove_legacy_solar_freeze_storage(hass)")
 
 
 def _source_and_kwargs(env):
@@ -52,26 +58,28 @@ def _source_and_kwargs(env):
     return source, home, solar, prices, kwargs
 
 
-def test_production_worker_fails_closed_when_source_owner_missing_or_replaced(
-    environment, monkeypatch
+def test_integration_startup_guard_rejects_missing_or_alternate_source_owner(
+    environment
 ):
-    source = make_inputs(environment, buy=range(4), sell=range(48, 52))
-    original = environment.runtime.compute_strategy_bundle
+    guard_path = ROOT / "custom_components/doems/alpha84_strategy_guard.py"
+    spec = importlib.util.spec_from_file_location("h54_strategy_guard", guard_path)
+    guard = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(guard)
+    original_factory = environment.runtime.compute_strategy_bundle
 
-    for factory in (None, lambda *a, **kw: {"fake": "alternate_strategy"}):
-        monkeypatch.setattr(environment.runtime, "compute_strategy_bundle", factory)
-        result = environment.runtime._evaluate(source)
-        assert result["valid"] is False
-        assert result["reason"] == "alpha84_strategy_source_required"
-        assert result["execution_enabled"] is False
-        assert result["physical_execution_authority"] is False
-        assert result["timeline"] == []
+    assert guard.original_alpha84_owner_present(
+        SimpleNamespace(compute_strategy_bundle=original_factory),
+        original_factory) is True
+    for replacement in (None, lambda *a, **kwargs: {"other": "strategy"}):
+        assert guard.original_alpha84_owner_present(
+            SimpleNamespace(compute_strategy_bundle=replacement),
+            original_factory) is False
+    assert guard.original_alpha84_owner_present(
+        SimpleNamespace(), original_factory) is False
+    assert guard.original_alpha84_owner_present(
+        SimpleNamespace(compute_strategy_bundle=original_factory),
+        None) is False
 
-    monkeypatch.delattr(environment.runtime, "compute_strategy_bundle")
-    result = environment.runtime._evaluate(source)
-    assert result["valid"] is False
-    assert result["reason"] == "alpha84_strategy_source_required"
-    monkeypatch.setattr(environment.runtime, "compute_strategy_bundle", original, raising=False)
 
 
 def test_approved_calculator_is_still_byte_equal_to_installed_alpha_8_10():
@@ -82,6 +90,11 @@ def test_approved_calculator_is_still_byte_equal_to_installed_alpha_8_10():
     # Chapter 7 previously approved hash; H5.4 may guard the HA worker,
     # but may never rewrite the older approved numerical/model algorithms.
     assert git_sha == "751ae0ac98b454c6f7290700a2d783e571ae7c51"
+    raw_worker = (ROOT / "custom_components/doems/planner_72h_runtime.py").read_bytes()
+    worker_sha = hashlib.sha1(
+        b"blob " + str(len(raw_worker)).encode() + b"\0" + raw_worker
+    ).hexdigest()
+    assert worker_sha == "f9a23be93ad239c9a17fb58fd619ca9628688c80"
 
 
 def test_actual_home_assistant_worker_never_calls_retired_economic_search(
