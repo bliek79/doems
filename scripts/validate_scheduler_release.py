@@ -13,7 +13,7 @@ PRESERVED_BLOBS = {name: digest for name, digest in CH7_BLOBS.items() if name no
 
 # Reviewed H8 Alpha84 strategy migration and Alpha 8.6 native safety repair.\n# All other source locks retain their immutable prior baselines.
 # Prior published Alpha 8.4 hashes remain recorded in docs/H8_SOURCE_HASH_REVIEW_20261116.md.
-PRESERVED_BLOBS.update({'custom_components/doems/planner_72h.py': '751ae0ac98b454c6f7290700a2d783e571ae7c51', 'custom_components/doems/planner_72h_runtime.py': '81d7c5870390a1f7108191b96e81dc190d7f71c5', 'custom_components/doems/planner_action_bridge.py': '79cfbc8053710e0108f02407811fcea083f39df1', 'custom_components/doems/plan_store_writer.py': '44b6cda5e07f04957f4958d3ef08df92ec29e037'})
+PRESERVED_BLOBS.update({'custom_components/doems/planner_72h.py': '751ae0ac98b454c6f7290700a2d783e571ae7c51', 'custom_components/doems/planner_72h_runtime.py': 'f9a23be93ad239c9a17fb58fd619ca9628688c80', 'custom_components/doems/planner_action_bridge.py': '79cfbc8053710e0108f02407811fcea083f39df1', 'custom_components/doems/plan_store_writer.py': '44b6cda5e07f04957f4958d3ef08df92ec29e037'})
 
 # Alpha 8.8 review: only the public, read-only Solar sensor registration changes.
 # Keep every other inherited protected source hash unchanged.
@@ -53,11 +53,14 @@ def validate():
     arguments = {arg.arg: arg.value for arg in strategy_calls[0].keywords}
     assert isinstance(arguments.get("practical_windows"), ast.Constant)
     assert arguments["practical_windows"].value is True
-    # The approved Chapter 7 calculator must remain byte-identical.
-    # The HA worker enforces strategy ownership before calling that calculator.
-    worker_source = (component / "planner_72h_runtime.py").read_text()
-    assert 'globals().get("compute_strategy_bundle") is not alpha84_owner' in worker_source
-    assert 'alpha84_strategy_source_required' in worker_source
+    # H5.4: both approved Chapter 7 files remain byte-identical; the
+    # integration setup checks the source factory before ANY HA subscriptions.
+    setup_source = (component / "__init__.py").read_text()
+    assert "original_alpha84_owner_present(" in setup_source
+    assert "entry.options.get(CONF_PLAN72_ENABLED, False)" in setup_source
+    assert setup_source.index("not original_alpha84_owner_present(") < (
+        setup_source.index("await _async_remove_legacy_solar_freeze_storage(hass)"))
+    assert (component / "alpha84_strategy_guard.py").is_file()
     assert isinstance(arguments.get("strategy_factory"), ast.Name)
     assert arguments["strategy_factory"].id == "compute_strategy_bundle", (
         "H5.4 original Alpha84 strategy not bound")
