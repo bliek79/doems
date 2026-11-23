@@ -77,7 +77,7 @@ def test_production_worker_fails_closed_when_source_owner_missing_or_replaced(
 def test_approved_calculator_is_still_byte_equal_to_installed_alpha_8_10():
     original = (ROOT / "custom_components/doems/planner_72h.py").read_bytes()
     git_sha = hashlib.sha1(
-        b"blob " + str(len(original)).encode() + b"\\0" + original
+        b"blob " + str(len(original)).encode() + b"\0" + original
     ).hexdigest()
     # Chapter 7 previously approved hash; H5.4 may guard the HA worker,
     # but may never rewrite the older approved numerical/model algorithms.
