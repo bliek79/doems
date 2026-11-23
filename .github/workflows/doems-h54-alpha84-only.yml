@@ -1,0 +1,36 @@
+name: DOEMS 3.0 H5.4 original Alpha84 single-strategy ownership
+on:
+  push:
+    branches:
+      - doems3-h5-4-single-alpha84-strategy-route
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install regression dependencies
+        run: python -m pip install -r requirements-test.txt
+      - name: Compile all Python sources
+        run: python -m compileall -q custom_components/doems scripts tests
+      - name: Verify original strategy owner and reject retired DOEMS policy
+        run: |
+          python -m pytest -q tests/test_h54_single_strategy_owner.py tests/test_alpha84_worker_entrypoint_parity.py tests/test_h51_release_parity.py tests/test_h52_safety_timing.py tests/test_h53_soc_resolution.py tests/test_alpha84_planning_port.py tests/test_alpha84_bridge_port.py tests/test_alpha84_contiguous_quarter_selection.py
+      - name: Verify release source locks and original runtime wiring
+        run: python scripts/validate_scheduler_release.py
+      - name: Run full regression suite
+        run: python -m pytest -q --junitxml=build/h54-test-results.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: h54-single-strategy-results-${{ matrix.python-version }}-${{ github.sha }}
+          path: build/h54-test-results.xml
+          if-no-files-found: warn

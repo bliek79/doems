@@ -38,6 +38,32 @@ def validate():
         json.loads(path.read_text())
     for path, expected in PRESERVED_BLOBS.items():
         assert git_blob_sha((ROOT / path).read_bytes()) == expected, f"reviewed source changed: {path}"
+    # H5.4: verify the *production* HA worker is wired to exactly the
+    # frozen Alpha84 strategy owner. Historical native optimisers exist for
+    # their old isolated regression tests but cannot be silently enabled in
+    # the Home Assistant control chain.
+    worker_ast = ast.parse((component / "planner_72h_runtime.py").read_text())
+    evaluate = next((n for n in worker_ast.body
+        if isinstance(n, ast.FunctionDef) and n.name == "_evaluate"), None)
+    assert evaluate is not None, "H5.4 missing production worker"
+    strategy_calls = [n for n in ast.walk(evaluate)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+        and n.func.id == "calculate_plan72"]
+    assert len(strategy_calls) == 1, "H5.4 ambiguous production strategy"
+    arguments = {arg.arg: arg.value for arg in strategy_calls[0].keywords}
+    assert isinstance(arguments.get("practical_windows"), ast.Constant)
+    assert arguments["practical_windows"].value is True
+    # H5.4: both approved Chapter 7 files remain byte-identical; the
+    # integration setup checks the source factory before ANY HA subscriptions.
+    setup_source = (component / "__init__.py").read_text()
+    assert "original_alpha84_owner_present(" in setup_source
+    assert "entry.options.get(CONF_PLAN72_ENABLED, False)" in setup_source
+    assert setup_source.index("not original_alpha84_owner_present(") < (
+        setup_source.index("await _async_remove_legacy_solar_freeze_storage(hass)"))
+    assert (component / "alpha84_strategy_guard.py").is_file()
+    assert isinstance(arguments.get("strategy_factory"), ast.Name)
+    assert arguments["strategy_factory"].id == "compute_strategy_bundle", (
+        "H5.4 original Alpha84 strategy not bound")
     for name in ("scheduler.py", "scheduler_runtime.py", "scheduler_entities.py"):
         source = (component / name).read_text()
         ast.parse(source)
