@@ -7,7 +7,7 @@ This test never sends a battery command or mutates Home Assistant.
 from __future__ import annotations
 
 import ast
-from datetime import datetime
+import hashlib
 from pathlib import Path
 
 from test_alpha84_worker_entrypoint_parity import environment, make_inputs
@@ -31,14 +31,13 @@ def test_actual_worker_statically_requires_original_strategy_owner():
     assert keywords["strategy_factory"].id == "compute_strategy_bundle"
     assert isinstance(keywords["practical_windows"], ast.Constant)
     assert keywords["practical_windows"].value is True
-    assert isinstance(keywords["require_alpha84_strategy"], ast.Constant)
-    assert keywords["require_alpha84_strategy"].value is True
     # The HA runtime must not import or call historical economics.
     runtime = (ROOT / "custom_components/doems/planner_72h_runtime.py").read_text()
     assert "_safety_schedule(" not in runtime
     assert "_trade_schedule(" not in runtime
     assert "_safety_windows(" not in runtime
     assert "_trade_windows(" not in runtime
+    assert 'globals().get("compute_strategy_bundle") is not alpha84_owner' in runtime
 
 
 def _source_and_kwargs(env):
@@ -50,29 +49,39 @@ def _source_and_kwargs(env):
     kwargs = dict(source.parameters)
     kwargs["now"] = source.now
     kwargs["practical_windows"] = True
-    kwargs["require_alpha84_strategy"] = True
     return source, home, solar, prices, kwargs
 
 
-def test_production_rejects_absent_alternate_or_nonpractical_source(environment):
-    _source, home, solar, prices, kwargs = _source_and_kwargs(environment)
-    calc = environment.runtime.calculate_plan72
-    alternatives = (None, lambda *a, **kw: {"fake": "alternate_strategy"})
-    for factory in alternatives:
-        result = calc(home, solar, prices,
-                      strategy_factory=factory, **kwargs)
+def test_production_worker_fails_closed_when_source_owner_missing_or_replaced(
+    environment, monkeypatch
+):
+    source = make_inputs(environment, buy=range(4), sell=range(48, 52))
+    original = environment.runtime.compute_strategy_bundle
+
+    for factory in (None, lambda *a, **kw: {"fake": "alternate_strategy"}):
+        monkeypatch.setattr(environment.runtime, "compute_strategy_bundle", factory)
+        result = environment.runtime._evaluate(source)
         assert result["valid"] is False
         assert result["reason"] == "alpha84_strategy_source_required"
         assert result["execution_enabled"] is False
         assert result["physical_execution_authority"] is False
-        assert result["action_windows"] == []
+        assert result["timeline"] == []
 
-    blocked = dict(kwargs, practical_windows=False)
-    result = calc(home, solar, prices,
-                  strategy_factory=environment.runtime.compute_strategy_bundle,
-                  **blocked)
+    monkeypatch.delattr(environment.runtime, "compute_strategy_bundle")
+    result = environment.runtime._evaluate(source)
     assert result["valid"] is False
     assert result["reason"] == "alpha84_strategy_source_required"
+    monkeypatch.setattr(environment.runtime, "compute_strategy_bundle", original)
+
+
+def test_approved_calculator_is_still_byte_equal_to_installed_alpha_8_10():
+    original = (ROOT / "custom_components/doems/planner_72h.py").read_bytes()
+    git_sha = hashlib.sha1(
+        b"blob " + str(len(original)).encode() + b"\\0" + original
+    ).hexdigest()
+    # Chapter 7 previously approved hash; H5.4 may guard the HA worker,
+    # but may never rewrite the older approved numerical/model algorithms.
+    assert git_sha == "751ae0ac98b454c6f7290700a2d783e571ae7c51"
 
 
 def test_actual_home_assistant_worker_never_calls_retired_economic_search(
@@ -99,13 +108,13 @@ def test_actual_home_assistant_worker_never_calls_retired_economic_search(
     assert result["slot_count"] == 288
     assert result["execution_enabled"] is False
     assert result["physical_execution_authority"] is False
-    # Even the pure calculator's guarded route reaches the same strategy
-    # without exposing historical extra buy/sell policy.
-    guarded = original_function(
+    # The pure calculator remains unchanged for historical tests; the
+    # Home Assistant boundary is the mandatory Alpha84-only guard.
+    raw = original_function(
         home, solar, prices,
         strategy_factory=runtime.compute_strategy_bundle,
         **kwargs
     )
-    assert guarded["valid"] is True
-    assert guarded["action_window_search"]["method"] == (
+    assert raw["valid"] is True
+    assert raw["action_window_search"]["method"] == (
         "alpha84_energy_allocation_then_grouping")
