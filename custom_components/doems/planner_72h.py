@@ -1253,8 +1253,7 @@ def calculate_plan72(home_slots, solar_slots, price_slots, *, now, soc_percent,
                      charge_efficiency=0.92, discharge_efficiency=0.92,
                      max_charge_power_w, max_discharge_power_w,
                      minimum_trade_margin=0.10, trade_enabled=True, manual_plans=(), practical_windows=False,
-                     strategy_factory=None, execution_buffer_percent=None,
-                     require_alpha84_strategy=False):
+                     strategy_factory=None, execution_buffer_percent=None):
     """Return a complete observational plan or a structured invalid result.
 
     Forecast rows use timezone-aware ``start`` and ``energy_kwh``; prices use
@@ -1265,16 +1264,6 @@ def calculate_plan72(home_slots, solar_slots, price_slots, *, now, soc_percent,
     it.  Active manual continuation starts from measured SOC without crediting
     past energy.  The supplied window is a maximum duration, not a target tracker.
     """
-    # H5.4 single strategy ownership: the live Home Assistant worker always
-    # requires the immutable Alpha84 decision chain. The older Alpha52
-    # numerical/practical solvers stay available only to their isolated
-    # historical regression callers; they must never silently become the
-    # production economic policy after a wiring/refactor mistake.
-    if require_alpha84_strategy:
-        from .alpha84_bundle import compute_strategy_bundle
-        if (practical_windows is not True
-                or strategy_factory is not compute_strategy_bundle):
-            return _empty("alpha84_strategy_source_required")
     try:
         now = _time(now)
         start = _ceil_quarter(now)
