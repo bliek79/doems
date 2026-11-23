@@ -23,7 +23,7 @@ De originele Alpha84-repository bevat:
 - `custom_components/anker_ems/energy_need.py`: energiebehoefte en
   eerstvolgende twee opeenvolgende bruikbare zonne-uren.
 - `custom_components/anker_ems/planner_preview.py`: Alpha80
-  goedkoopste-ha albare veiligheidslading en enkele beste
+  goedkoopste haalbare veiligheidslading en enkele beste
   chronologische koop/verkoopcombinatie.
 - `custom_components/anker_ems/planner_72h.py`: opeenvolgende
   SOC-projectie met solar eerst, safety vóór trade en
@@ -41,7 +41,7 @@ wordt in de bestaande regressietests byte-voor-byte vergeleken.
 
 ## Actieve Home Assistant uitvoerroute (vastgesteld)
 
-1. `__init__.py` maakt `Plan72Runtime` aan indien Plan72 actief is.
+1. `__init__.py` verifieert **vóór alle Home Assistant-subscripties** dat de echte `planner_72h_runtime` de originele `compute_strategy_bundle` gebruikt; pas daarna wordt `Plan72Runtime` aangemaakt wanneer Plan72 actief is.
 2. `planner_72h_runtime._evaluate` controleert uitsluitend complete
    native brongegevens met `calculate_energy_need`.
    Die beschrijvende kwartierfunctie heeft **geen bevoegdheid**
@@ -50,8 +50,8 @@ wordt in de bestaande regressietests byte-voor-byte vergeleken.
    `planner_72h.calculate_plan72` aan met:
    - `practical_windows=True`;
    - `strategy_factory=compute_strategy_bundle` (Alpha84);
-   - een H5.4 runtime-only eigenaarstest (zonder API- of
-     algoritmewijziging in de eerder goedgekeurde calculator).
+   - géén extra H5.4-argument: de eerder goedgekeurde worker en
+     calculator blijven beide bytegelijk.
 4. `alpha84_bundle` bouwt ongewijzigd de volledige
    Energy Need -> Preview -> Plan72 -> source Action Bridge keten,
    in die volgorde op één bron-snapshot. Forecast per 15 minuten,
@@ -84,28 +84,35 @@ Anker EMS; ze waren al niet actief in de `Plan72Runtime` van Alpha 8.10,
 maar via `calculate_plan72` zonder juiste factory nog wel
 aanroepbaar. In H5.4 wordt de productiegrens expliciet gezekerd:
 
-- De in hoofdstuk 7 afgetekende `planner_72h.py`-calculator is
-  **bytegelijk hersteld** aan de geïnstalleerde Alpha 8.10-bron,
-  Git-blob `751ae0ac98b454c6f7290700a2d783e571ae7c51`.
-  Er is geen nieuwe parameter of beleidswijziging aan de pure calculator.
-- In **alleen** de Home Assistant-worker
-  `planner_72h_runtime._evaluate` vergelijkt een fail-closed
-  broncontrole de daadwerkelijk gebruikte `compute_strategy_bundle`
-  met het origineel uit `alpha84_bundle`.
-- Als de originele strategiefunctie ontbreekt of vervangen wordt,
-  geeft de worker **geen plan**, maar een `invalid`-resultaat met
-  reden `alpha84_strategy_source_required`, zonder tijdlijn,
-  bronplan of fysieke batterijcommando's.
-- De productieaanroep blijft onveranderd
-  `practical_windows=True, strategy_factory=compute_strategy_bundle`;
-  er is geen route naar de alternatieve eigen algoritmen.
-- De releasevalidator controleert de daadwerkelijke
-  `_evaluate`-AST op de expliciete bronselectie en op de runtime-gate.
-- De regressietests vervangen alle vier oude strategiefuncties tijdelijk
-  door een foutproducerende functie; de **werkelijke** worker blijft
-  met geldige input op Alpha84 werken. Ontbrekende en alternatieve
-  factory worden afzonderlijk geweigerd. De test controleert tevens
-  de oorspronkelijke bevroren Git-blob van de calculator.
+- De in hoofdstuk 7 afgetekende bestanden zijn **allebei bytegelijk**
+  aan de geïnstalleerde Alpha 8.10-bron:
+  `planner_72h.py`, Git-blob
+  `751ae0ac98b454c6f7290700a2d783e571ae7c51`,
+  en `planner_72h_runtime.py`, Git-blob
+  `f9a23be93ad239c9a17fb58fd619ca9628688c80`.
+  Er is geen nieuwe parameter of algoritmeaanpassing aangebracht.
+- De integratie-opstart `async_setup_entry` in `__init__.py`
+  controleert vóór de eerste bron-subscriptie, Store-wijziging of
+  Scheduler-start of `planner_72h_runtime.compute_strategy_bundle`
+  exact verwijst naar de originele `alpha84_bundle.compute_strategy_bundle`.
+- De nieuwe kleine en **beleidsloze** helper
+  `alpha84_strategy_guard.original_alpha84_owner_present`
+  doet uitsluitend die referentiecontrole. Ontbreekt de originele functie
+  of is deze vervangen door een andere, dan retourneert het opstartpunt
+  `False`: er wordt **geen Plan72Runtime gestart** en er zijn
+  geen automatische acties of batterijcommando's.
+- De bestaande productieaanroep blijft bytegelijk:
+  `practical_windows=True, strategy_factory=compute_strategy_bundle`.
+  Er is geen productieroute naar de alternatieve eigen algoritmen.
+- De releasevalidator controleert de `_evaluate`-AST op de
+  oorspronkelijke bronselectie én bevestigt dat de opstartgate vóór
+  de initialisatie van Home Assistant-componenten staat.
+- De regressietests vervangen alle vier oude strategiefuncties
+  tijdelijk door foutproducerende functies; de **werkelijke**
+  worker blijft correct via Alpha84 werken. Een aparte test bewijst
+  dat de opstartgate zowel ontbrekende als alternatieve functies afwijst.
+  De twee originele goedgekeurde Git-blobs worden afzonderlijk
+  exact gecontroleerd.
 
 Hiermee wordt de resterende mogelijkheid tot **stilzwijgende
 terugval in de Home Assistant-productieplanner** weggenomen,
