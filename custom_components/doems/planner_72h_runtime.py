@@ -117,7 +117,15 @@ def _evaluate(inputs: Plan72Inputs) -> dict[str, Any]:
     if not need.get("valid"):
         result = _unavailable("energy_need_" + str(need.get("reason", "invalid")))
     else:
-        result = calculate_plan72(
+        # H5.4: fail closed at the HA integration boundary, WITHOUT changing
+        # the frozen, previously approved Plan72 calculator from Chapter 7.
+        # The original Alpha84 bundle is the only live strategy owner;
+        # historical pure/practical DOEMS algorithms remain test-only.
+        from .alpha84_bundle import compute_strategy_bundle as alpha84_owner
+        if compute_strategy_bundle is not alpha84_owner:
+            result = _unavailable("alpha84_strategy_source_required")
+        else:
+            result = calculate_plan72(
             home,
             solar,
             prices,
@@ -125,11 +133,8 @@ def _evaluate(inputs: Plan72Inputs) -> dict[str, Any]:
             manual_plans=[dict(item) for item in inputs.manual_plans],
             practical_windows=True,
             strategy_factory=compute_strategy_bundle,
-            # H5.4: no implicit fallback to the retired DOEMS economic/safety
-            # search. Production must use the frozen Alpha84 decision owner.
-            require_alpha84_strategy=True,
             **parameters,
-        )
+            )
     # Retain the price provider's native resolution alongside its source kind.
     # Match by time even for metadata; a repeated hourly tariff is not a native
     # quarter-price observation.
