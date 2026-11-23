@@ -50,7 +50,8 @@ wordt in de bestaande regressietests byte-voor-byte vergeleken.
    `planner_72h.calculate_plan72` aan met:
    - `practical_windows=True`;
    - `strategy_factory=compute_strategy_bundle` (Alpha84);
-   - `require_alpha84_strategy=True` (nieuw H5.4 eigenaarschapsgate).
+   - een H5.4 runtime-only eigenaarstest (zonder API- of
+     algoritmewijziging in de eerder goedgekeurde calculator).
 4. `alpha84_bundle` bouwt ongewijzigd de volledige
    Energy Need -> Preview -> Plan72 -> source Action Bridge keten,
    in die volgorde op één bron-snapshot. Forecast per 15 minuten,
@@ -83,24 +84,28 @@ Anker EMS; ze waren al niet actief in de `Plan72Runtime` van Alpha 8.10,
 maar via `calculate_plan72` zonder juiste factory nog wel
 aanroepbaar. In H5.4 wordt de productiegrens expliciet gezekerd:
 
-- Nieuw argument `require_alpha84_strategy` op de bestaande
-  pure calculator: standaard `False` om historische geïsoleerde
-  testinterfaces ongewijzigd te houden.
-- Home Assistant gebruikt voortaan verplicht `True`.
-- In strikte modus geeft een andere/ontbrekende factory of
-  `practical_windows=False` **geen plan** terug, maar een
-  `invalid`-resultaat met reden
-  `alpha84_strategy_source_required`. Er worden geen automatische
-  of fysieke batterijcommando's gemaakt.
-- De originele fabriekfuncties blijven hetzelfde en oudere algoritmen
-  blijven alleen voor historische regressietests in de code.
+- De in hoofdstuk 7 afgetekende `planner_72h.py`-calculator is
+  **bytegelijk hersteld** aan de geïnstalleerde Alpha 8.10-bron,
+  Git-blob `751ae0ac98b454c6f7290700a2d783e571ae7c51`.
+  Er is geen nieuwe parameter of beleidswijziging aan de pure calculator.
+- In **alleen** de Home Assistant-worker
+  `planner_72h_runtime._evaluate` vergelijkt een fail-closed
+  broncontrole de daadwerkelijk gebruikte `compute_strategy_bundle`
+  met het origineel uit `alpha84_bundle`.
+- Als de originele strategiefunctie ontbreekt of vervangen wordt,
+  geeft de worker **geen plan**, maar een `invalid`-resultaat met
+  reden `alpha84_strategy_source_required`, zonder tijdlijn,
+  bronplan of fysieke batterijcommando's.
+- De productieaanroep blijft onveranderd
+  `practical_windows=True, strategy_factory=compute_strategy_bundle`;
+  er is geen route naar de alternatieve eigen algoritmen.
 - De releasevalidator controleert de daadwerkelijke
-  `_evaluate`-AST op deze drie vereiste bronopties.
-- Een gerichte regressietest vervangt alle vier oudere algoritmen
-  tijdelijk door functies die direct falen indien aangeroepen;
-  de **echte** worker moet met normale Alpha84-input correct blijven
-  draaien. Ontbrekende/alternatieve factory en een niet-praktisch
-  venster worden afzonderlijk bewust afgewezen.
+  `_evaluate`-AST op de expliciete bronselectie en op de runtime-gate.
+- De regressietests vervangen alle vier oude strategiefuncties tijdelijk
+  door een foutproducerende functie; de **werkelijke** worker blijft
+  met geldige input op Alpha84 werken. Ontbrekende en alternatieve
+  factory worden afzonderlijk geweigerd. De test controleert tevens
+  de oorspronkelijke bevroren Git-blob van de calculator.
 
 Hiermee wordt de resterende mogelijkheid tot **stilzwijgende
 terugval in de Home Assistant-productieplanner** weggenomen,
