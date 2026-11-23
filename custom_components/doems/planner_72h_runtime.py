@@ -125,6 +125,9 @@ def _evaluate(inputs: Plan72Inputs) -> dict[str, Any]:
             manual_plans=[dict(item) for item in inputs.manual_plans],
             practical_windows=True,
             strategy_factory=compute_strategy_bundle,
+            # H5.4: no implicit fallback to the retired DOEMS economic/safety
+            # search. Production must use the frozen Alpha84 decision owner.
+            require_alpha84_strategy=True,
             **parameters,
         )
     # Retain the price provider's native resolution alongside its source kind.
