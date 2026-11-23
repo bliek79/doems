@@ -122,7 +122,7 @@ def _evaluate(inputs: Plan72Inputs) -> dict[str, Any]:
         # The original Alpha84 bundle is the only live strategy owner;
         # historical pure/practical DOEMS algorithms remain test-only.
         from .alpha84_bundle import compute_strategy_bundle as alpha84_owner
-        if compute_strategy_bundle is not alpha84_owner:
+        if globals().get("compute_strategy_bundle") is not alpha84_owner:
             result = _unavailable("alpha84_strategy_source_required")
         else:
             result = calculate_plan72(
