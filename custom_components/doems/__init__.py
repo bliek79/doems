@@ -15,6 +15,9 @@ from .energy_coordinator import DOEMSEnergyCoordinator
 from .prices_runtime import DOEMSRegisteredPricesManager
 from .planner_action_bridge_runtime import ActionBridgeRuntime
 from .planner_72h_runtime import Plan72Runtime
+from . import planner_72h_runtime as _plan72_worker_module
+from .alpha84_bundle import compute_strategy_bundle as _original_alpha84_strategy
+from .alpha84_strategy_guard import original_alpha84_owner_present
 from .plan_store import AnkerEmsPlanStore
 from .plan_store_writer import PlanStoreWriter
 from .scheduler_runtime import SchedulerRuntime
@@ -44,6 +47,15 @@ async def _async_remove_legacy_solar_freeze_storage(hass: HomeAssistant) -> None
 
 async def async_setup_entry(hass: HomeAssistant, entry: DOEMSConfigEntry) -> bool:
     """Set up DOEMS components from one config entry."""
+    # H5.4 original Anker Alpha84 owns every *production* charge/trade
+    # decision. Verify the worker before any source subscription, Store write
+    # or scheduler setup; fail closed rather than activate an old DOEMS path.
+    # The previously approved Chapter 7 Plan72 calculator AND runtime remain
+    # byte-for-byte unchanged.
+    if (entry.options.get(CONF_PLAN72_ENABLED, False)
+            and not original_alpha84_owner_present(
+                _plan72_worker_module, _original_alpha84_strategy)):
+        return False
     await _async_remove_legacy_solar_freeze_storage(hass)
 
     coordinator: DOEMSEnergyCoordinator | None = None
