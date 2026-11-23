@@ -13,7 +13,7 @@ PRESERVED_BLOBS = {name: digest for name, digest in CH7_BLOBS.items() if name no
 
 # Reviewed H8 Alpha84 strategy migration and Alpha 8.6 native safety repair.\n# All other source locks retain their immutable prior baselines.
 # Prior published Alpha 8.4 hashes remain recorded in docs/H8_SOURCE_HASH_REVIEW_20261116.md.
-PRESERVED_BLOBS.update({'custom_components/doems/planner_72h.py': '751ae0ac98b454c6f7290700a2d783e571ae7c51', 'custom_components/doems/planner_72h_runtime.py': 'f9a23be93ad239c9a17fb58fd619ca9628688c80', 'custom_components/doems/planner_action_bridge.py': '79cfbc8053710e0108f02407811fcea083f39df1', 'custom_components/doems/plan_store_writer.py': '44b6cda5e07f04957f4958d3ef08df92ec29e037'})
+PRESERVED_BLOBS.update({'custom_components/doems/planner_72h.py': 'ed6a700e7ae5afc969bb5b7e47feec3e78a56543', 'custom_components/doems/planner_72h_runtime.py': '4f955ce9b8f3b8235bb39632d78cd0850779f012', 'custom_components/doems/planner_action_bridge.py': '79cfbc8053710e0108f02407811fcea083f39df1', 'custom_components/doems/plan_store_writer.py': '44b6cda5e07f04957f4958d3ef08df92ec29e037'})
 
 # Alpha 8.8 review: only the public, read-only Solar sensor registration changes.
 # Keep every other inherited protected source hash unchanged.
@@ -38,6 +38,26 @@ def validate():
         json.loads(path.read_text())
     for path, expected in PRESERVED_BLOBS.items():
         assert git_blob_sha((ROOT / path).read_bytes()) == expected, f"reviewed source changed: {path}"
+    # H5.4: verify the *production* HA worker is wired to exactly the
+    # frozen Alpha84 strategy owner. Historical native optimisers exist for
+    # their old isolated regression tests but cannot be silently enabled in
+    # the Home Assistant control chain.
+    worker_ast = ast.parse((component / "planner_72h_runtime.py").read_text())
+    evaluate = next((n for n in worker_ast.body
+        if isinstance(n, ast.FunctionDef) and n.name == "_evaluate"), None)
+    assert evaluate is not None, "H5.4 missing production worker"
+    strategy_calls = [n for n in ast.walk(evaluate)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+        and n.func.id == "calculate_plan72"]
+    assert len(strategy_calls) == 1, "H5.4 ambiguous production strategy"
+    arguments = {arg.arg: arg.value for arg in strategy_calls[0].keywords}
+    assert isinstance(arguments.get("practical_windows"), ast.Constant)
+    assert arguments["practical_windows"].value is True
+    assert isinstance(arguments.get("require_alpha84_strategy"), ast.Constant)
+    assert arguments["require_alpha84_strategy"].value is True
+    assert isinstance(arguments.get("strategy_factory"), ast.Name)
+    assert arguments["strategy_factory"].id == "compute_strategy_bundle", (
+        "H5.4 original Alpha84 strategy not bound")
     for name in ("scheduler.py", "scheduler_runtime.py", "scheduler_entities.py"):
         source = (component / name).read_text()
         ast.parse(source)
