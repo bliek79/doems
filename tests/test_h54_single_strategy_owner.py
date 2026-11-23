@@ -71,7 +71,7 @@ def test_production_worker_fails_closed_when_source_owner_missing_or_replaced(
     result = environment.runtime._evaluate(source)
     assert result["valid"] is False
     assert result["reason"] == "alpha84_strategy_source_required"
-    monkeypatch.setattr(environment.runtime, "compute_strategy_bundle", original)
+    monkeypatch.setattr(environment.runtime, "compute_strategy_bundle", original, raising=False)
 
 
 def test_approved_calculator_is_still_byte_equal_to_installed_alpha_8_10():
